@@ -1,102 +1,141 @@
-# Interactive Earthquake Map
+# Seismo-Loader
 
-This Streamlit application displays earthquake data for a selected date range on an interactive map. The data is fetched from the USGS Earthquake Catalog API and can be filtered by magnitude and depth.
+*Add a brief intro here*
 
-![Screenshot of Earthquake Map](screenshot.jpg)
+## Set up Development
 
-
-## Features
-
-Select a date range to view earthquake data
-Filter earthquakes by minimum and maximum magnitude
-Filter earthquakes by minimum and maximum depth
-Interactive map displaying earthquake locations with color-coded markers based on magnitude
-Data table displaying details of the filtered earthquakes
-
-## Installation
-
-To run this application, you need to have Python installed. Follow the steps below to set up and run the application:
-
-Clone the repository:
+### Clone the repository:
 ```bash
-git clone https://github.com/joncutrer/earthquakemap-streamlit.git
+git clone https://github.com/AuScope/seismo-loader.git
+```
+or
+```bash
+git clone git@github.com:AuScope/seismo-loader.git
 ```
 
-Navigate to the project directory:
+### Install poetry 
+
+Refer to this link: https://python-poetry.org/docs/
+
+Alternatively,
+
+**Linux**
 ```bash
-cd interactive-earthquake-map
+curl -sSL https://install.python-poetry.org | python3 -
+```
+then, add following to .bashrc:
+```bash
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Create a virtual environment:
-```bash
-python -m venv env
+**Windows**
+powershell:
+```powershell
+(Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | python -
+```
+then, add poetry to your system path. It should be located here:
+```
+%USERPROFILE%\.poetry\bin
 ```
 
-Activate the virtual environment:
+**Optional**
+To configure poetry to create `.venv` inside project folder, run following:
 
-On Windows:
-```bash
-.\env\Scripts\activate
 ```
-On macOS and Linux:
-```bash
-source env/bin/activate
-```
-Install the required packages:
-```bash
-pip install -r requirements.txt
+poetry config virtualenvs.in-project true
 ```
 
-## Running the Application
+## Install pyenv (Optional)
+This project uses python 3.12.*. If your base python is a different version (check via `python --version`), you may get errors when trying to install via poetry. Use pyenv to manage this.
 
-Ensure you are in the project directory and the virtual environment is activated.
+**Linux**
 
-Run the Streamlit application:
-```bash
-streamlit run earthquakemap_streamlit/streamlit_app.py
+Install the required packages for building Python with the following command
+```
+sudo apt update
+
+sudo apt install -y build-essential libssl-dev zlib1g-dev libbz2-dev
+libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev
+xz-utils tk-dev libffi-dev liblzma-dev python-openssl git
 ```
 
-Open your web browser and go to `http://localhost:8501` to view the application.
+Then, install pyenv
+```
+curl https://pyenv.run | bash
+```
 
-## Usage
+After installation, add following to `.bashrc`:
+```
+export PATH="$HOME/.pyenv/bin:$PATH"
 
-### Select Date Range
+eval "$(pyenv init --path)"
 
-Use the date pickers in the sidebar to select the start and end dates for the earthquake data you want to view.
+eval "$(pyenv init -)"
+```
 
-### Filter Earthquakes
+Run .bashrc to get things updated: `source ~/.bashrc`
 
-Use the sliders in the sidebar to set the minimum and maximum magnitude and depth for the earthquakes. The map and data table will update automatically to reflect the filtered data.
 
-### Interactive Map
+### Start the project
 
-The map displays earthquake locations with color-coded markers based on magnitude:
+Install python 3.12.* if you have a different version locally:
 
-Silver: Magnitude < 1.8
-Yellow: 1.8 ≤ Magnitude < 2.4
-Orange: 2.4 ≤ Magnitude < 5
-Red: 5 ≤ Magnitude < 7
-Magenta: 7 ≤ Magnitude < 8.5
-Purple: Magnitude ≥ 8.5
-Click on a marker to view details about the earthquake, including magnitude and location.
+```
+pyenv install 3.12.0
 
-### Data Table
+pyenv global 3.12.0
+```
 
-Below the map, a data table displays detailed information about the filtered earthquakes, including the place, magnitude, time, longitude, latitude, and depth.
+Confirm your python version: `python --version`
 
-## Dependencies
+Install the packages using following.
 
-streamlit
-pandas
-requests
-folium
-streamlit-folium
-Ensure these packages are listed in the `requirements.txt` file for easy installation.
+```
+poetry install
+```
 
-## Contributing
+Start the project:
+```
+poetry shell
+```
 
-Contributions are welcome! Please open an issue or submit a pull request with your changes.
+To run the app:
 
-## License
+```
+streamlit run seismic_data/ui/app.py
+```
 
-This project is licensed under the MIT License. See the `LICENSE` file for more details.
+Alternatively, command line is configured for this project. You can also run the app, simply by:
+
+```
+seismo-loader start
+```
+
+## Build Project
+
+### Build Python Library
+
+```
+poetry build
+```
+
+### Build Installers
+
+*Need to be added*
+
+
+## Project Folder structure
+```
+seismo-loader/
+│
+├── seismic_data/      # Python package containing application code
+│   ├── models/        # Python modules for data models
+│   ├── service/       # Services for logic and backend processing
+│   ├── ui/            # UI components (Streamlit files)
+│   ├── utils/         # Utility functions and helpers
+│   ├── __init__.py    # 
+│   └── cli.py         # Command Line Interface
+│
+└── pyproject.toml     # Poetry configuration file for the whole project
+```
+
