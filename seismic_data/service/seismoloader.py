@@ -14,7 +14,7 @@ import datetime
 import multiprocessing
 import configparser
 from tqdm import tqdm
-
+import contextlib
 import obspy
 from obspy.clients.fdsn import Client
 from obspy.geodetics.base import locations2degrees
@@ -46,7 +46,7 @@ def setup_database(db_path):
         ''')
     conn.commit()
     return
-
+ttmodel = TauPyModel()
 @contextlib.contextmanager
 def safe_db_connection(db_path, max_retries=3, initial_delay=1):
     """Context manager for safe database connections with retry mechanism."""
@@ -706,120 +706,120 @@ if __name__ == "__main__":
 
 
 ################################################################# scratch/testing
-print("stopping here...")
-stophere[0] = 0
+# print("stopping here...")
+# stophere[0] = 0
 
-#####################################################
-#    OK let's test this out a little. 
-#    Ideally most of this could be input from a .cfg file to enable CLI-only interface if needed
+# #####################################################
+# #    OK let's test this out a little. 
+# #    Ideally most of this could be input from a .cfg file to enable CLI-only interface if needed
 
-#first lets's search for data within these parameters
-server = 'AUSPASS'
-from obspy.clients.fdsn import Client
-client = Client(server)
+# #first lets's search for data within these parameters
+# server = 'AUSPASS'
+# from obspy.clients.fdsn import Client
+# client = Client(server)
 
-sds_path = "./testSDS"
-db_path = sds_path + "/database.sql" #a good default... place it in the root SDS folder
+# sds_path = "./testSDS"
+# db_path = sds_path + "/database.sql" #a good default... place it in the root SDS folder
 
-## (set up files/paths)
+# ## (set up files/paths)
 
-if not os.path.exists(db_path):
-    setup_database(db_path)
-
-
-target_lat = -31
-target_lon = 125.4
-maxR = 0.3 #degrees
-time0 = UTCDateTime(2014,1,1)
-time1 = UTCDateTime(2014,1,15)
+# if not os.path.exists(db_path):
+#     setup_database(db_path)
 
 
-#this is essentially our search engine (but it doesn't filter time!)
-inv = client.get_stations(latitude=target_lat,longitude=target_lon,channel='?HZ',
-                          maxradius=maxR,starttime=time0,endtime=time1,level='channel')
-
-########now that we have a list of stations we want (inv), let's calculate the requests needed to get them
-
-requests = collect_requests(inv,time0,time1)
-
-# remove any for data we already have (requires db be updated)
-pruned_requests= prune_requests(requests, db_path)
-
-# combine these into fewer (but larger) requests
-combined_requests = combine_requests(pruned_requests)
+# target_lat = -31
+# target_lon = 125.4
+# maxR = 0.3 #degrees
+# time0 = UTCDateTime(2014,1,1)
+# time1 = UTCDateTime(2014,1,15)
 
 
-for request in combined_requests:
-    archive_request(request,client,sds_path,db_path) #db_path currently not being updated in this function (TODO)
+# #this is essentially our search engine (but it doesn't filter time!)
+# inv = client.get_stations(latitude=target_lat,longitude=target_lon,channel='?HZ',
+#                           maxradius=maxR,starttime=time0,endtime=time1,level='channel')
 
-#for now sync our db separately
-populate_database_from_sds(sds_path,db_path,1)
+# ########now that we have a list of stations we want (inv), let's calculate the requests needed to get them
 
-# clean up a smidge
-join_continuous_segments(db_path, gap_tolerance=60)
+# requests = collect_requests(inv,time0,time1)
 
-######## now let's try again, but with both N and Z channels. the Z should be skipped (via prine_requests) since we already downloaded it and it's in the database
-inv = client.get_stations(latitude=target_lat,longitude=target_lon,channel='?HZ,?HN',
-                          maxradius=maxR,starttime=time0,endtime=time1,level='channel')
+# # remove any for data we already have (requires db be updated)
+# pruned_requests= prune_requests(requests, db_path)
 
-requests = collect_requests(inv,time0,time1)
-
-pruned_requests= prune_requests(requests, db_path)
-
-combined_requests = combine_requests(pruned_requests)
+# # combine these into fewer (but larger) requests
+# combined_requests = combine_requests(pruned_requests)
 
 
+# for request in combined_requests:
+#     archive_request(request,client,sds_path,db_path) #db_path currently not being updated in this function (TODO)
 
-for request in combined_requests:
-    archive_request(request,client,sds_path,db_path) #db_path currently not being updated in this function (TODO)
+# #for now sync our db separately
+# populate_database_from_sds(sds_path,db_path,1)
 
-#for now sync our db separately
-populate_database_from_sds(sds_path,db_path,1)
+# # clean up a smidge
+# join_continuous_segments(db_path, gap_tolerance=60)
 
-# clean up a smidge
-join_continuous_segments(db_path, gap_tolerance=60)
+# ######## now let's try again, but with both N and Z channels. the Z should be skipped (via prine_requests) since we already downloaded it and it's in the database
+# inv = client.get_stations(latitude=target_lat,longitude=target_lon,channel='?HZ,?HN',
+#                           maxradius=maxR,starttime=time0,endtime=time1,level='channel')
 
+# requests = collect_requests(inv,time0,time1)
 
-################ OK let's add some EVENT data! we now need TWO searches 1) station (inv) and 2) earthquakes (cat)
-inv = client.get_stations(latitude=target_lat,longitude=target_lon,channel='?HZ,?HN,?HE',
-                          maxradius=maxR,starttime=time0,endtime=time1,level='channel') #now includes E channel
-cat = client.get_events(latitude=target_lat,longitude=target_lon,minradius=30,maxradius=90,
-                        minmagnitude=6,starttime=time0,endtime=time1) # returns just 1 event but can return thousands!
+# pruned_requests= prune_requests(requests, db_path)
 
-#n.b. the code currently separates each event... should probably change so that cat is input and it loops within
-for eq in cat:
-    print("running eq %s", eq.origins[0].time)
-    requests = collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=10,after_p_sec=120,model=ttmodel)
-    pruned_requests = prune_requests(requests, db_path)
-    combined_requests = combine_requests(pruned_requests)
-    for request in combined_requests:
-        archive_request(request,client,sds_path,db_path)
-
-
-#to see what's in our database:
-display_database_contents(db_path,150)
-
-
-###### let's try adding another FAKE event which is on the same day, but an hour before. now files should be appended without being replaced
-eq_fake = eq.copy()
-eq_fake.origins[0].time = eq_fake.origins[0].time - 3600
-
-requests = collect_requests_event(eq_fake,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=10,after_p_sec=120,model=ttmodel)
-pruned_requests = prune_requests(requests, db_path)
-combined_requests = combine_requests(pruned_requests)
-for request in combined_requests:
-    archive_request(request,client,sds_path,db_path)
+# combined_requests = combine_requests(pruned_requests)
 
 
 
-#### now what's the point of all this??? well, you can now use your "local" SDS archive as a personal server!
-if 1 == 2:
-    from obspy.clients.filesystem.sds import Client as SDS_Client
+# for request in combined_requests:
+#     archive_request(request,client,sds_path,db_path) #db_path currently not being updated in this function (TODO)
 
-    sds_server = SDS_Client(sds_path)
-    st = sds_server.get_waveforms("blah blah blah")
+# #for now sync our db separately
+# populate_database_from_sds(sds_path,db_path,1)
 
-    #otherwise people can figure their own way out or restructure however they like
+# # clean up a smidge
+# join_continuous_segments(db_path, gap_tolerance=60)
+
+
+# ################ OK let's add some EVENT data! we now need TWO searches 1) station (inv) and 2) earthquakes (cat)
+# inv = client.get_stations(latitude=target_lat,longitude=target_lon,channel='?HZ,?HN,?HE',
+#                           maxradius=maxR,starttime=time0,endtime=time1,level='channel') #now includes E channel
+# cat = client.get_events(latitude=target_lat,longitude=target_lon,minradius=30,maxradius=90,
+#                         minmagnitude=6,starttime=time0,endtime=time1) # returns just 1 event but can return thousands!
+
+# #n.b. the code currently separates each event... should probably change so that cat is input and it loops within
+# for eq in cat:
+#     print("running eq %s", eq.origins[0].time)
+#     requests = collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=10,after_p_sec=120,model=ttmodel)
+#     pruned_requests = prune_requests(requests, db_path)
+#     combined_requests = combine_requests(pruned_requests)
+#     for request in combined_requests:
+#         archive_request(request,client,sds_path,db_path)
+
+
+# #to see what's in our database:
+# display_database_contents(db_path,150)
+
+
+# ###### let's try adding another FAKE event which is on the same day, but an hour before. now files should be appended without being replaced
+# eq_fake = eq.copy()
+# eq_fake.origins[0].time = eq_fake.origins[0].time - 3600
+
+# requests = collect_requests_event(eq_fake,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=10,after_p_sec=120,model=ttmodel)
+# pruned_requests = prune_requests(requests, db_path)
+# combined_requests = combine_requests(pruned_requests)
+# for request in combined_requests:
+#     archive_request(request,client,sds_path,db_path)
+
+
+
+# #### now what's the point of all this??? well, you can now use your "local" SDS archive as a personal server!
+# if 1 == 2:
+#     from obspy.clients.filesystem.sds import Client as SDS_Client
+
+#     sds_server = SDS_Client(sds_path)
+#     st = sds_server.get_waveforms("blah blah blah")
+
+#     #otherwise people can figure their own way out or restructure however they like
 
 
 
