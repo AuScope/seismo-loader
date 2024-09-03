@@ -102,7 +102,7 @@ poetry shell
 To run the app:
 
 ```
-streamlit run seismic_data/ui/app.py
+streamlit run seismic_data/ui/main.py
 ```
 
 Alternatively, command line is configured for this project. You can also run the app, simply by:

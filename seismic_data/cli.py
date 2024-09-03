@@ -10,7 +10,7 @@ def cli():
 @cli.command()
 def start():
     print(dirname)
-    path_to_run = os.path.join(dirname, "ui", "app.py")
+    path_to_run = os.path.join(dirname, "ui", "main.py")
     os.system(f"streamlit run {path_to_run}")
 
 if __name__ == "__main__":

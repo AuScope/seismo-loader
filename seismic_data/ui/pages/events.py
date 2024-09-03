@@ -5,16 +5,7 @@ import folium
 from streamlit_folium import st_folium
 from datetime import datetime, timedelta
 
-
-
-st.set_page_config(
-    page_title="Interactive Earthquake Map",
-    page_icon="🌎",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-
+st.set_page_config(layout="wide")
 
 # Function to fetch earthquake data for a specific date range and filters
 @st.cache_data
