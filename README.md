@@ -138,4 +138,3 @@ seismo-loader/
 │
 └── pyproject.toml     # Poetry configuration file for the whole project
 ```
-

@@ -3,7 +3,10 @@ import pandas as pd
 import requests
 import folium
 from streamlit_folium import st_folium
+from folium.plugins import Draw
 from datetime import datetime, timedelta
+
+from seismic_data.ui.components.card import create_card
 
 st.set_page_config(layout="wide")
 
@@ -109,8 +112,23 @@ def main():
         st.subheader(f"Showing {num_filtered_earthquakes} of {total_earthquakes} earthquakes")
         
         if not filtered_df.empty:
+            c1, c2 = st.columns([2,1])
             st_map = plot_earthquakes_on_map(filtered_df)
-            st_folium(st_map, width=1400, height=700)
+            Draw(
+                draw_options={
+                    'polyline': False,  # Users can draw lines
+                    'rectangle': True,  # Users can draw rectangles (boxes)
+                    'polygon': False,    # Users can draw polygons
+                    'circle': True,    # Users can draw circles
+                    'marker': False     # Users can place markers
+                },
+                edit_options={'edit': False},
+                export=False
+            ).add_to(st_map)
+            with c1:
+                output = create_card("Events", st_folium, st_map, use_container_width=True)
+            with c2:
+                st.write(output)
         else:
             st.warning("No earthquakes found for the selected magnitude and depth range.")
         
