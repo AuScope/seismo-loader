@@ -123,6 +123,26 @@ poetry build
 
 *Need to be added*
 
+## Docker Development
+To develop and run the application using Docker, follow these steps:
+
+### Prerequisites
+- Install Docker Application on your system
+
+### Build and Run the Docker Container
+
+1. Navigate to the project root directory:
+```bash
+cd seismo-loader
+```
+
+2. Build and run the Docker container:
+```bash
+docker compose up --build
+```
+The application should now be running and accessible at `http://localhost:8501`.
+
+
 
 ## Project Folder structure
 ```
