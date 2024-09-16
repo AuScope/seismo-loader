@@ -6,135 +6,75 @@ from streamlit_folium import st_folium
 from folium.plugins import Draw
 from datetime import datetime, timedelta
 
-from seismic_data.ui.components.card import create_card
+
+from seismic_data.models.events import EventFilter
+from seismic_data.service.events import get_event_data, event_response_to_df
+from seismic_data.ui.helpers.map import create_map, add_data_points
+from seismic_data.ui.helpers.events import event_filter_menu
 
 st.set_page_config(layout="wide")
 
-# Function to fetch earthquake data for a specific date range and filters
-@st.cache_data
-def get_earthquake_data(start_date, end_date, min_magnitude, max_magnitude, min_depth, max_depth):
-    url = (
-        "https://earthquake.usgs.gov/fdsnws/event/1/query"
-        "?format=geojson"
-        f"&starttime={start_date}"
-        f"&endtime={end_date}"
-        f"&minmagnitude={min_magnitude}"
-        f"&maxmagnitude={max_magnitude}"
-        f"&mindepth={min_depth}"
-        f"&maxdepth={max_depth}"
-    )
-    response = requests.get(url)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        st.error(f"Failed to fetch data: {response.status_code}")
-        return None
 
-# Convert the earthquake data to a pandas DataFrame
-def earthquake_data_to_df(data):
-    features = data['features']
-    records = []
-    for feature in features:
-        properties = feature['properties']
-        geometry = feature['geometry']['coordinates']
-        record = {
-            'place': properties['place'],
-            'magnitude': properties['mag'],
-            'time': pd.to_datetime(properties['time'], unit='ms'),
-            'longitude': geometry[0],
-            'latitude': geometry[1],
-            'depth': geometry[2]
-        }
-        records.append(record)
-    return pd.DataFrame(records)
-
-# Get color based on magnitude
-def get_marker_color(magnitude):
-    if magnitude < 1.8:
-        return 'silver'
-    elif 1.8 <= magnitude < 2.4:
-        return 'yellow'
-    elif 2.4 <= magnitude < 5:
-        return 'orange'
-    elif 5 <= magnitude < 7:
-        return 'red'
-    elif 7 <= magnitude < 8.5:
-        return 'magenta'
-    else:
-        return 'purple'
-
-# Plot the earthquakes on an interactive map
-def plot_earthquakes_on_map(df):
-    map_center = [df['latitude'].mean(), df['longitude'].mean()]
-    m = folium.Map(location=map_center, zoom_start=2)
-    
-    for _, row in df.iterrows():
-        color = get_marker_color(row['magnitude'])
-        folium.CircleMarker(
-            location=[row['latitude'], row['longitude']],
-            radius=5,
-            popup=f"Magnitude: {row['magnitude']}, Place: {row['place']}",
-            color=color,
-            fill=True,
-            fill_color=color
-        ).add_to(m)
-    
-    return m
-
-# Streamlit app
-def main():
-    st.title("Earthquake Data")
-    st.markdown("This app displays earthquake data for a selected date range on an interactive map.")
-    
-    # Sidebar date input
-    st.sidebar.header("Select Date Range")
-    start_date = st.sidebar.date_input("Start Date", datetime.now() - timedelta(days=1))
-    end_date = st.sidebar.date_input("End Date", datetime.now())
-    
-    if start_date > end_date:
-        st.sidebar.error("Error: End Date must fall after Start Date.")
-    
-    st.sidebar.header("Filter Earthquakes")
-    min_magnitude = st.sidebar.slider("Min Magnitude", min_value=0.0, max_value=10.0, value=2.4, step=0.1)
-    max_magnitude = st.sidebar.slider("Max Magnitude", min_value=0.0, max_value=10.0, value=10.0, step=0.1)
-    min_depth = st.sidebar.slider("Min Depth (km)", min_value=0.0, max_value=250.0, value=0.0, step=1.0)
-    max_depth = st.sidebar.slider("Max Depth (km)", min_value=0.0, max_value=250.0, value=200.0, step=1.0)
-    
-    data = get_earthquake_data(start_date, end_date, min_magnitude, max_magnitude, min_depth, max_depth)
-    
+def handle_get_events(base_map, event_filter: EventFilter):
+    # GET DATA
+    data = get_event_data(event_filter.model_dump())     
+    components = {}
     if data:
-        df = earthquake_data_to_df(data)
+        df = event_response_to_df(data)
         total_earthquakes = len(df)
         
-        filtered_df = df
-        num_filtered_earthquakes = len(filtered_df)
+        components['subheader'] = f"Showing {total_earthquakes} events"
         
-        st.subheader(f"Showing {num_filtered_earthquakes} of {total_earthquakes} earthquakes")
-        
-        if not filtered_df.empty:
-            c1, c2 = st.columns([2,1])
-            st_map = plot_earthquakes_on_map(filtered_df)
-            Draw(
-                draw_options={
-                    'polyline': False,  # Users can draw lines
-                    'rectangle': True,  # Users can draw rectangles (boxes)
-                    'polygon': False,    # Users can draw polygons
-                    'circle': True,    # Users can draw circles
-                    'marker': False     # Users can place markers
-                },
-                edit_options={'edit': False},
-                export=False
-            ).add_to(st_map)
-            with c1:
-                output = create_card("Events", st_folium, st_map, use_container_width=True)
-            with c2:
-                st.write(output)
+        if not df.empty:
+            base_map = add_data_points(base_map, df, col_color='magnitude')
+            components['dataframe'] = df
         else:
-            st.warning("No earthquakes found for the selected magnitude and depth range.")
-        
-        st.dataframe(filtered_df)
+            components['warning'] = "No earthquakes found for the selected magnitude and depth range."
     else:
-        st.error("No data available.")
+        components['error'] = "No data available."
+
+    components['map'] = base_map
+    return components
+
+
+
+def main():
+    # INIT event_filter object
+    event_filter = EventFilter()
+
+    # INIT side menu
+    event_filter = event_filter_menu(event_filter)
+
+    # INIT MAP  
+    if 'event_map' not in st.session_state:
+        st.session_state.event_map = {'map': create_map()}
+
+    # INIT Button
+    clicked = st.button("Get Events")
+
+    # INIT Layout
+    c1, c2 = st.columns([2,1])
+    
+
+    # Handle Button Clicked
+    if clicked:
+        st.session_state.event_map = {'map': create_map()}
+        st.session_state.event_map = handle_get_events(st.session_state.event_map.get('map'), event_filter)
+
+    if 'subheader' in st.session_state['event_map']:
+        st.subheader(st.session_state['event_map']['subheader'])
+    if 'dataframe' in st.session_state['event_map']:
+        st.dataframe(st.session_state['event_map']['dataframe'])
+    if 'warning' in st.session_state['event_map']:
+        st.warning(st.session_state['event_map']['warning'])
+    if 'error' in st.session_state['event_map']:
+        st.error(st.session_state['event_map']['error'])
+
+    with c1:
+        # output = create_card("Events", st_folium, st_map, use_container_width=True)
+        output = st_folium(st.session_state.event_map.get('map'), use_container_width=True)
+    with c2:
+        st.write(output)
 
 if __name__ == "__main__":
     main()
