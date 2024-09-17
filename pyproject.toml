@@ -5,11 +5,8 @@ description = ""
 authors = ["Ben Motevalli <mot032@csiro.au>"]
 readme = "README.md"
 
-[tool.poetry.scripts]
-seismo-loader = "seismic_data.cli:cli"
-
 [tool.poetry.dependencies]
-python = "^3.12"
+python = ">=3.12,<3.14"
 streamlit = "^1.35.0"
 pandas = "^2.2.2"
 folium = "^0.16.0"
@@ -26,3 +23,6 @@ pydantic = "^2.9.1"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+pyinstaller = "^6.10.0"
