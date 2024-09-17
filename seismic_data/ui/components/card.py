@@ -20,7 +20,9 @@ def create_card(title, content_func, *args, **kwargs):
                 st.markdown(f"<h3 style='margin-left:20px;'>{title}</h3>", unsafe_allow_html=True)
             
             # Execute the function to generate content
-            output = content_func(*args, **kwargs)
+            c1, c2 = st.columns([100,1])
+            with c1:
+                output = content_func(*args, **kwargs)
             
             # Applying CSS styles to the card
             chat_plh_style = """
