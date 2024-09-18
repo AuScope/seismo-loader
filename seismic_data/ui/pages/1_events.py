@@ -50,6 +50,17 @@ def refresh_map(reset_areas = False):
     if len(st.session_state.event_filter.areas) > 0:
         st.session_state.event_map = handle_get_events(st.session_state.event_map.get('map'), st.session_state.event_filter)
 
+def update_event_filter_with_rectangles(df_rect):
+    new_rectangles = [RectangleArea(**row.to_dict()) for _, row in df_rect.iterrows()]
+    st.session_state.event_filter.areas = [
+        area for area in st.session_state.event_filter.areas if not isinstance(area, RectangleArea)
+    ] + new_rectangles
+
+def update_event_filter_with_circles(df_circ):
+    new_circles = [CircleArea(**row.to_dict()) for _, row in df_circ.iterrows()]
+    st.session_state.event_filter.areas = [
+        area for area in st.session_state.event_filter.areas if not isinstance(area, CircleArea)
+    ] + new_circles
 
 def right_card():
     lst_rect = []
@@ -61,18 +72,24 @@ def right_card():
             lst_rect.append(area.model_dump())
     
     st.write("Rectangle Areas")
-    st.session_state.df_rect = pd.DataFrame(
-        lst_rect,
-        columns=RectangleArea.model_fields
-    )
-    st.session_state.df_rect = st.data_editor(st.session_state.df_rect) #, num_rows="dynamic")
+
+    original_df_rect = pd.DataFrame(lst_rect, columns=RectangleArea.model_fields)
+    st.session_state.df_rect = st.data_editor(original_df_rect)
 
     st.write("Circle Areas")
-    df_circ = pd.DataFrame(
-        lst_circ,
-        columns=CircleArea.model_fields
-    )
-    edited_df_circ = st.data_editor(df_circ) #, num_rows="dynamic")
+    original_df_circ = pd.DataFrame(lst_circ, columns=CircleArea.model_fields)
+    st.session_state.df_circ = st.data_editor(original_df_circ)
+
+    rect_changed = not original_df_rect.equals(st.session_state.df_rect)
+    circ_changed = not original_df_circ.equals(st.session_state.df_circ)
+    if rect_changed or circ_changed:
+        if rect_changed:
+            update_event_filter_with_rectangles(st.session_state.df_rect)
+        if circ_changed:
+            update_event_filter_with_circles(st.session_state.df_circ)      
+        refresh_map(reset_areas=False)
+        st.rerun()
+
 
     # favorite_command = edited_df.loc[edited_df["rating"].idxmax()]["command"]
     # st.markdown(f"Your favorite command is **{favorite_command}** 🎈")
