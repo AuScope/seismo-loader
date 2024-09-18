@@ -6,7 +6,7 @@ authors = ["Ben Motevalli <mot032@csiro.au>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.12,<3.14"
+python = ">=3.10,<3.11"
 streamlit = "^1.35.0"
 pandas = "^2.2.2"
 folium = "^0.16.0"
