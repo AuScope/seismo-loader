@@ -121,7 +121,7 @@ def create_map(map_center=[-25.0000, 135.0000], areas = []):
         if isinstance(area, RectangleArea):
             folium.Rectangle(
                 bounds=[[area.min_lat, area.min_lng], [area.max_lat, area.max_lng]],
-                color="green",
+                color=area.color,
                 fill=True,
                 fill_opacity=0.5
             ).add_to(m)
@@ -130,7 +130,7 @@ def create_map(map_center=[-25.0000, 135.0000], areas = []):
             folium.Circle(
                 location=[area.lat, area.lng],
                 radius=area.radius,
-                color="green",
+                color=area.color,
                 fill=True,
                 fill_opacity=0.5
             ).add_to(m)
@@ -155,15 +155,24 @@ def get_marker_color(magnitude):
 
 def add_data_points(base_map, df, col_color = 'magnitude'):
     
+    marker_info = {} 
     for _, row in df.iterrows():
         color = get_marker_color(row[col_color])
         folium.CircleMarker(
             location=[row['latitude'], row['longitude']],
             radius=5,
-            popup=f"{col_color.capitalize()}: {row[col_color]}, Place: {row['place']}",
+            # popup=f"{col_color.capitalize()}: {row[col_color]}, Place: {row['place']}",
+            popup=f"Latitude: {row['latitude']}<br>Longitude: {row['longitude']}<br>{col_color.capitalize()}: {row[col_color]}<br>Place: {row['place']}",
             color=color,
             fill=True,
             fill_color=color
         ).add_to(base_map)
-    
-    return base_map
+
+        marker_info[(row['latitude'], row['longitude'])] = {
+            "Latitude": row['latitude'],
+            "Longitude": row['longitude'],
+            "Magnitude": row[col_color],
+            "Place": row['place']
+        }
+
+    return base_map, marker_info

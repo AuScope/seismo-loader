@@ -25,8 +25,10 @@ def handle_get_events(base_map, event_filter: EventFilter):
         components['subheader'] = f"Showing {total_earthquakes} events"
         
         if not df.empty:
-            base_map = add_data_points(base_map, df, col_color='magnitude')
+            base_map, marker_info = add_data_points(base_map, df, col_color='magnitude')
             components['dataframe'] = df
+            components['marker_info'] = marker_info  
+
         else:
             components['warning'] = "No earthquakes found for the selected magnitude and depth range."
     else:
@@ -48,55 +50,106 @@ def refresh_map(reset_areas = False):
     
     st.session_state.event_map = {'map': create_map(areas=st.session_state.event_filter.areas)}
     if len(st.session_state.event_filter.areas) > 0:
-        st.session_state.event_map = handle_get_events(st.session_state.event_map.get('map'), st.session_state.event_filter)
-
-def update_event_filter_with_rectangles(df_rect):
+        result = handle_get_events(st.session_state.event_map.get('map'), st.session_state.event_filter)
+        st.session_state.event_map = result
+        st.session_state.marker_info = result.get('marker_info', {}) 
+        
+def update_event_filter_with_rectangles(df_rect, area_type: str):
     new_rectangles = [RectangleArea(**row.to_dict()) for _, row in df_rect.iterrows()]
     st.session_state.event_filter.areas = [
-        area for area in st.session_state.event_filter.areas if not isinstance(area, RectangleArea)
+        area for area in st.session_state.event_filter.areas 
+        if not (isinstance(area, RectangleArea) and area.type == area_type)
     ] + new_rectangles
 
-def update_event_filter_with_circles(df_circ):
+
+def update_event_filter_with_circles(df_circ, area_type: str):
     new_circles = [CircleArea(**row.to_dict()) for _, row in df_circ.iterrows()]
     st.session_state.event_filter.areas = [
-        area for area in st.session_state.event_filter.areas if not isinstance(area, CircleArea)
+        area for area in st.session_state.event_filter.areas 
+        if not (isinstance(area, CircleArea) and area.type == area_type)
     ] + new_circles
 
-def right_card():
-    lst_rect = []
-    lst_circ = []
-    for area in st.session_state.event_filter.areas:
-        if isinstance(area, CircleArea):
-            lst_circ.append(area.model_dump())
-        if isinstance(area, RectangleArea):
-            lst_rect.append(area.model_dump())
-    
-    st.write("Rectangle Areas")
 
-    original_df_rect = pd.DataFrame(lst_rect, columns=RectangleArea.model_fields)
-    st.session_state.df_rect = st.data_editor(original_df_rect)
+def update_circle_areas(area_type: str):
+    # Filter circle areas by type
+    lst_circ = [area.model_dump() for area in st.session_state.event_filter.areas
+                if isinstance(area, CircleArea) and area.type == area_type]
 
-    st.write("Circle Areas")
-    original_df_circ = pd.DataFrame(lst_circ, columns=CircleArea.model_fields)
-    st.session_state.df_circ = st.data_editor(original_df_circ)
+    if lst_circ:
+        st.write(f"Circle Areas ({area_type.capitalize()})")
+        original_df_circ = pd.DataFrame(lst_circ, columns=CircleArea.model_fields)
+        if 'type' in original_df_circ.columns:
+            original_df_circ = original_df_circ.drop(columns=['type'])
 
-    rect_changed = not original_df_rect.equals(st.session_state.df_rect)
-    circ_changed = not original_df_circ.equals(st.session_state.df_circ)
-    if rect_changed or circ_changed:
-        if rect_changed:
-            update_event_filter_with_rectangles(st.session_state.df_rect)
+        st.session_state.df_circ = st.data_editor(original_df_circ, key=f"circ_{area_type}")
+
+        # Check if circle areas have changed
+        circ_changed = not original_df_circ.equals(st.session_state.df_circ)
+
         if circ_changed:
-            update_event_filter_with_circles(st.session_state.df_circ)      
-        refresh_map(reset_areas=False)
-        st.rerun()
+            update_event_filter_with_circles(st.session_state.df_circ, area_type)
+            refresh_map(reset_areas=False)
+            st.rerun()
+
+def update_rectangle_areas(area_type: str):
+    # Filter rectangle areas by type
+    lst_rect = [area.model_dump() for area in st.session_state.event_filter.areas
+                if isinstance(area, RectangleArea) and area.type == area_type]
+
+    if lst_rect:
+        st.write(f"Rectangle Areas ({area_type.capitalize()})")
+        original_df_rect = pd.DataFrame(lst_rect, columns=RectangleArea.model_fields)
+        if 'type' in original_df_rect.columns:
+            original_df_rect = original_df_rect.drop(columns=['type'])
+
+        st.session_state.df_rect = st.data_editor(original_df_rect, key=f"rect_{area_type}")
+
+        # Check if rectangle areas have changed
+        rect_changed = not original_df_rect.equals(st.session_state.df_rect)
+
+        if rect_changed:
+            update_event_filter_with_rectangles(st.session_state.df_rect, area_type)
+            refresh_map(reset_areas=False)
+            st.rerun()
 
 
-    # favorite_command = edited_df.loc[edited_df["rating"].idxmax()]["command"]
-    # st.markdown(f"Your favorite command is **{favorite_command}** 🎈")
+def station_card():
+    
+    update_circle_areas("station")
 
+
+    if 'clicked_marker_info' in st.session_state:
+        st.write("Latest Selected Event:")
+        marker_info = st.session_state.clicked_marker_info
+        st.write(marker_info)
+
+        radius = st.text_input("Enter the radius for the point (km)", value="1000")
+
+        if st.button("Add station area"):
+            try:
+                radius_value = float(radius)*1000
+                lat = marker_info["Latitude"]
+                lng = marker_info["Longitude"]
+
+                new_circle = CircleArea(lat=lat, lng=lng, radius=radius_value , type="station")
+                st.session_state.event_filter.areas.append(new_circle)
+
+                refresh_map(reset_areas=False)
+                del st.session_state.clicked_marker_info
+
+                st.success(f"Circle area added with radius {radius_value} km at ({lat}, {lng})")
+                st.rerun()
+            except ValueError:
+                st.error("Please enter a valid number for the radius")
+
+def right_card():
+    
+    update_rectangle_areas("event")
+    update_circle_areas("event")
+
+    # Display the current event filter state
     st.write(st.session_state.event_filter.model_dump())
 
-    # st.rerun()
 
 def main():
     # INIT event_filter object
@@ -134,8 +187,23 @@ def main():
         output = create_card(None, st_folium, st.session_state.event_map.get('map'), use_container_width=True, height=600)
         # output = st_folium(st.session_state.event_map.get('map'), use_container_width=True, height=600)
         st.session_state.current_areas = get_selected_areas(output)
+        
+        if output and output.get('last_object_clicked') is not None:
+            clicked_lat_lng = (output['last_object_clicked'].get('lat'), output['last_object_clicked'].get('lng'))
+            
+            if clicked_lat_lng in st.session_state.marker_info:
+                st.session_state.clicked_marker_info = st.session_state.marker_info[clicked_lat_lng]
+
+
     with c2_map:
-        create_card(None, right_card)
+        tab1, tab2 = st.tabs(["Filter state", "Station"])
+
+        with tab1:
+            create_card(None, right_card)
+
+        with tab2:
+            create_card(None, station_card)
+
         # st.write(st.session_state.event_filter.model_dump())
         # st.write(output)
     
