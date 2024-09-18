@@ -32,6 +32,7 @@ def create_card(title, content_func, *args, **kwargs):
                 box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Shadow for 3D effect */
                 border: 1px solid #ddd; /* Light grey border */
                 margin: 10px 0; /* Margin around the card */
+                padding: 10px;
             };
             </style>
             """

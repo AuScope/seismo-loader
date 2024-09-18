@@ -1,8 +1,11 @@
 import streamlit as st
 from streamlit_folium import st_folium
+import pandas as pd
+from copy import deepcopy
 
 from seismic_data.ui.components.card import create_card
 from seismic_data.models.events import EventFilter
+from seismic_data.models.common import CircleArea, RectangleArea
 from seismic_data.service.events import get_event_data, event_response_to_df
 from seismic_data.ui.components.map import create_map, add_data_points
 from seismic_data.ui.pages.helpers.events import event_filter_menu
@@ -34,7 +37,6 @@ def handle_get_events(base_map, event_filter: EventFilter):
 
 
 def refresh_map(reset_areas = False):
-    
     if "current_areas" not in st.session_state:
         st.session_state.current_areas = []
 
@@ -43,10 +45,41 @@ def refresh_map(reset_areas = False):
     else:
         st.session_state.event_filter.areas.extend(st.session_state.current_areas)
     
+    
+    st.session_state.event_map = {'map': create_map(areas=st.session_state.event_filter.areas)}
     if len(st.session_state.event_filter.areas) > 0:
-        st.session_state.event_map = {'map': create_map(areas=st.session_state.event_filter.areas)}
         st.session_state.event_map = handle_get_events(st.session_state.event_map.get('map'), st.session_state.event_filter)
 
+
+def right_card():
+    lst_rect = []
+    lst_circ = []
+    for area in st.session_state.event_filter.areas:
+        if isinstance(area, CircleArea):
+            lst_circ.append(area.model_dump())
+        if isinstance(area, RectangleArea):
+            lst_rect.append(area.model_dump())
+    
+    st.write("Rectangle Areas")
+    st.session_state.df_rect = pd.DataFrame(
+        lst_rect,
+        columns=RectangleArea.model_fields
+    )
+    st.session_state.df_rect = st.data_editor(st.session_state.df_rect) #, num_rows="dynamic")
+
+    st.write("Circle Areas")
+    df_circ = pd.DataFrame(
+        lst_circ,
+        columns=CircleArea.model_fields
+    )
+    edited_df_circ = st.data_editor(df_circ) #, num_rows="dynamic")
+
+    # favorite_command = edited_df.loc[edited_df["rating"].idxmax()]["command"]
+    # st.markdown(f"Your favorite command is **{favorite_command}** 🎈")
+
+    st.write(st.session_state.event_filter.model_dump())
+
+    # st.rerun()
 
 def main():
     # INIT event_filter object
@@ -85,7 +118,7 @@ def main():
         # output = st_folium(st.session_state.event_map.get('map'), use_container_width=True, height=600)
         st.session_state.current_areas = get_selected_areas(output)
     with c2_map:
-        create_card(None, st.write, st.session_state.event_filter.model_dump())
+        create_card(None, right_card)
         # st.write(st.session_state.event_filter.model_dump())
         # st.write(output)
     
