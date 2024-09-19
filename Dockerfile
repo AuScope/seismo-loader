@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.10-slim
 
 WORKDIR /app
 
@@ -13,13 +13,14 @@ COPY pyproject.toml poetry.lock* ./
 
 RUN poetry config virtualenvs.create false \
     && poetry install --no-interaction --no-ansi
+RUN pip install jupyter seaborn
 
 COPY . .
 
 # Expose port for Streamlit
-EXPOSE 8501
+EXPOSE 8501 8888
 
 ENV PYTHONPATH=/app
 
 # Run the Streamlit app
-CMD ["poetry", "run", "streamlit", "run", "seismic_data/ui/main.py"]
+CMD ["sh", "-c", "poetry run streamlit run seismic_data/ui/main.py & jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root"]
