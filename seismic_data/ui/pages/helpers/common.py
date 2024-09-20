@@ -45,6 +45,6 @@ def get_selected_areas(map_output) -> List[RectangleArea | CircleArea]:
                 )
                 continue
 
-            raise ValueError(f"Geometry Type {geo.get("geometry").get('type')} not supported!")
+            raise ValueError(f"Geometry Type {geo.get('geometry').get('type')} not supported!")
         
     return lst_locs
