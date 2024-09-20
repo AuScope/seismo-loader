@@ -6,27 +6,27 @@ class RectangleArea(BaseModel):
     max_lat: float
     min_lng: float
     max_lng: float
-    type   : Literal["station", "event"] = "event"
 
     @property
     def color(self) -> str:
-        if self.type == "station":
-            return "red"
-        elif self.type == "event":
-            return "green"
-        return "blue"  
+        return "green"  
 
 
 class CircleArea(BaseModel):
     lat   : float
     lng   : float
     radius: float
-    type  : Literal["station", "event"] = "event"
 
     @property
     def color(self) -> str:
-        if self.type == "station":
-            return "red"
-        elif self.type == "event":
-            return "green"
-        return "blue"  
+        return "green"  
+
+class DonutArea(BaseModel):
+    lat   : float
+    lng   : float
+    min_radius : float
+    max_radius : float
+
+    @property
+    def color(self) -> str:
+        return "red"  

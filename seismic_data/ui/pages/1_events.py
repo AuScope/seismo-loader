@@ -5,7 +5,7 @@ from copy import deepcopy
 
 from seismic_data.ui.components.card import create_card
 from seismic_data.models.events import EventFilter
-from seismic_data.models.common import CircleArea, RectangleArea
+from seismic_data.models.common import CircleArea, RectangleArea, DonutArea
 from seismic_data.service.events import get_event_data, event_response_to_df
 from seismic_data.ui.components.map import create_map, add_data_points
 from seismic_data.ui.pages.helpers.events import event_filter_menu
@@ -53,102 +53,185 @@ def refresh_map(reset_areas = False):
         result = handle_get_events(st.session_state.event_map.get('map'), st.session_state.event_filter)
         st.session_state.event_map = result
         st.session_state.marker_info = result.get('marker_info', {}) 
+      
+
         
-def update_event_filter_with_rectangles(df_rect, area_type: str):
+def update_event_filter_with_rectangles(df_rect):
     new_rectangles = [RectangleArea(**row.to_dict()) for _, row in df_rect.iterrows()]
     st.session_state.event_filter.areas = [
         area for area in st.session_state.event_filter.areas 
-        if not (isinstance(area, RectangleArea) and area.type == area_type)
+        if not (isinstance(area, RectangleArea) )
     ] + new_rectangles
 
 
-def update_event_filter_with_circles(df_circ, area_type: str):
+def update_event_filter_with_circles(df_circ):
     new_circles = [CircleArea(**row.to_dict()) for _, row in df_circ.iterrows()]
     st.session_state.event_filter.areas = [
         area for area in st.session_state.event_filter.areas 
-        if not (isinstance(area, CircleArea) and area.type == area_type)
+        if not (isinstance(area, CircleArea) )
     ] + new_circles
 
+def update_event_filter_with_donuts(df_donut):
+    new_donuts = [DonutArea(**row.to_dict()) for _, row in df_donut.iterrows()]
 
-def update_circle_areas(area_type: str):
-    # Filter circle areas by type
+    st.session_state.event_filter.areas = [
+        area for area in st.session_state.event_filter.areas 
+        if not isinstance(area, DonutArea)
+    ] + new_donuts
+
+def update_circle_areas():
     lst_circ = [area.model_dump() for area in st.session_state.event_filter.areas
-                if isinstance(area, CircleArea) and area.type == area_type]
+                if isinstance(area, CircleArea) ]
 
     if lst_circ:
-        st.write(f"Circle Areas ({area_type.capitalize()})")
+        st.write(f"Circle Areas")
         original_df_circ = pd.DataFrame(lst_circ, columns=CircleArea.model_fields)
-        if 'type' in original_df_circ.columns:
-            original_df_circ = original_df_circ.drop(columns=['type'])
+        st.session_state.df_circ = st.data_editor(original_df_circ, key=f"circ_area")
 
-        st.session_state.df_circ = st.data_editor(original_df_circ, key=f"circ_{area_type}")
-
-        # Check if circle areas have changed
         circ_changed = not original_df_circ.equals(st.session_state.df_circ)
 
         if circ_changed:
-            update_event_filter_with_circles(st.session_state.df_circ, area_type)
+            update_event_filter_with_circles(st.session_state.df_circ)
             refresh_map(reset_areas=False)
             st.rerun()
 
-def update_rectangle_areas(area_type: str):
-    # Filter rectangle areas by type
+def update_rectangle_areas():
     lst_rect = [area.model_dump() for area in st.session_state.event_filter.areas
-                if isinstance(area, RectangleArea) and area.type == area_type]
+                if isinstance(area, RectangleArea) ]
 
     if lst_rect:
-        st.write(f"Rectangle Areas ({area_type.capitalize()})")
+        st.write(f"Rectangle Areas")
         original_df_rect = pd.DataFrame(lst_rect, columns=RectangleArea.model_fields)
-        if 'type' in original_df_rect.columns:
-            original_df_rect = original_df_rect.drop(columns=['type'])
+        st.session_state.df_rect = st.data_editor(original_df_rect, key=f"rect_area")
 
-        st.session_state.df_rect = st.data_editor(original_df_rect, key=f"rect_{area_type}")
-
-        # Check if rectangle areas have changed
         rect_changed = not original_df_rect.equals(st.session_state.df_rect)
 
         if rect_changed:
-            update_event_filter_with_rectangles(st.session_state.df_rect, area_type)
+            update_event_filter_with_rectangles(st.session_state.df_rect)
             refresh_map(reset_areas=False)
             st.rerun()
 
+def update_donut_areas():
+    # Display and allow editing of all donut areas
+    lst_donut = [area.model_dump() for area in st.session_state.event_filter.areas if isinstance(area, DonutArea)]
+
+    if lst_donut:
+        st.write("Station Areas from selected events")
+        original_df_donut = pd.DataFrame(lst_donut, columns=DonutArea.model_fields)
+
+        st.session_state.df_donut = st.data_editor(original_df_donut, key="donut_area")
+
+        donut_changed = not original_df_donut.equals(st.session_state.df_donut)
+
+        if donut_changed:
+            update_event_filter_with_donuts(st.session_state.df_donut)
+            refresh_map(reset_areas=False)
+            st.rerun()
+
+def update_all_station_areas(min_radius, max_radius):
+    # Convert radius values to meters
+    min_radius_value = float(min_radius) * 1000
+    max_radius_value = float(max_radius) * 1000
+
+    # Update all donut areas with the new radius values
+    for area in st.session_state.event_filter.areas:
+        if isinstance(area, DonutArea):
+            area.min_radius = min_radius_value
+            area.max_radius = max_radius_value
 
 def station_card():
-    
-    update_circle_areas("station")
+      
 
 
+    # Text input for global radius values
+    min_radius = st.text_input("Enter the minimum radius for all areas (km)", value="0")
+    max_radius = st.text_input("Enter the maximum radius for all areas (km)", value="1000")
+
+    # Update the map when radius values change
+    if 'prev_min_radius' not in st.session_state:
+        st.session_state.prev_min_radius = min_radius
+    if 'prev_max_radius' not in st.session_state:
+        st.session_state.prev_max_radius = max_radius
+
+    if min_radius != st.session_state.prev_min_radius or max_radius != st.session_state.prev_max_radius:
+        update_all_station_areas(min_radius, max_radius)
+        refresh_map(reset_areas=False)
+        st.session_state.prev_min_radius = min_radius
+        st.session_state.prev_max_radius = max_radius
+        st.rerun()
+
+    # Check if a marker was clicked
     if 'clicked_marker_info' in st.session_state:
         st.write("Latest Selected Event:")
+
+        # Display the selected marker information in a table with background color
         marker_info = st.session_state.clicked_marker_info
-        st.write(marker_info)
+        df_marker = pd.DataFrame([marker_info])
 
-        radius = st.text_input("Enter the radius for the point (km)", value="1000")
+        # Custom CSS to style the header of the table
+        st.markdown(
+            """
+            <style>
+            thead tr {
+                background-color: #dff0d8 !important; /* Light green background */
+                color: black !important;
+            }
+            th {
+                text-align: left !important;
+            }
+            div[data-testid="stTable"] {
+                margin-top: -15px !important;  /* Reduce space between table and button */
+                margin-bottom: -15px !important;
+             }
+            </style>
+            </style>
+            """, 
+            unsafe_allow_html=True
+        )
 
+        # Render the table with the applied style
+        st.markdown('<div class="highlighted-table">', unsafe_allow_html=True)
+        st.table(df_marker)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # Add station area button
         if st.button("Add station area"):
             try:
-                radius_value = float(radius)*1000
+                # Convert radius values to meters
+                min_radius_value = float(min_radius) * 1000
+                max_radius_value = float(max_radius) * 1000
+
+                if min_radius_value >= max_radius_value:
+                    st.error("Minimum radius should be less than the maximum radius.")
+                    return
+
+                # Get the latitude and longitude of the clicked marker
                 lat = marker_info["Latitude"]
                 lng = marker_info["Longitude"]
 
-                new_circle = CircleArea(lat=lat, lng=lng, radius=radius_value , type="station")
-                st.session_state.event_filter.areas.append(new_circle)
+                # Add a new donut-shaped area
+                new_donut = DonutArea(lat=lat, lng=lng, min_radius=min_radius_value, max_radius=max_radius_value)
+                st.session_state.event_filter.areas.append(new_donut)
 
                 refresh_map(reset_areas=False)
                 del st.session_state.clicked_marker_info
 
-                st.success(f"Circle area added with radius {radius_value} km at ({lat}, {lng})")
+                st.success(f"Donut-shaped area added with min radius {min_radius_value / 1000} km and max radius {max_radius_value / 1000} km at ({lat}, {lng})")
                 st.rerun()
             except ValueError:
-                st.error("Please enter a valid number for the radius")
+                st.error("Please enter valid numbers for the radii.")
+
+    # Call to update_donut_areas for managing the areas in the editor
+    update_donut_areas()
 
 def right_card():
     
-    update_rectangle_areas("event")
-    update_circle_areas("event")
+    update_rectangle_areas()
+    update_circle_areas()
 
     # Display the current event filter state
     st.write(st.session_state.event_filter.model_dump())
+
 
 
 def main():
@@ -216,9 +299,10 @@ def main():
     if 'dataframe' in st.session_state['event_map']:
         st.dataframe(st.session_state['event_map']['dataframe'])
 
-    
-    
         
 
 if __name__ == "__main__":
     main()
+    
+    
+        
