@@ -672,35 +672,36 @@ def get_stations(settings: SeismoLoaderSettings):
         # User has specified this specific pre-existing (filepath) inventory to use
         inv = obspy.read_inventory(inventory)
 
-    elif (not inventory and \
-    settings.station.geo_constraint.geo_type == GeoConstraintType.BOUNDING):
-        ## TODO Test if all variables exist / error if not
-        
-        inv = station_client.get_stations(
-            network=net,station=sta,
-            location=loc,channel=cha,
-            starttime=starttime,endtime=endtime,
-            minlatitude= settings.station.geo_constraint.coords.min_lat, # float(config['STATION']['minlatitude']),
-            maxlatitude=settings.station.geo_constraint.coords.max_lat,
-            minlongitude=settings.station.geo_constraint.coords.min_lng,
-            maxlongitude=settings.station.geo_constraint.coords.max_lng,
-            includerestricted= settings.station.include_restricted, # config['STATION']['includerestricted'],
-            level=settings.station.level.value
-        )
-    elif not (inventory and \
-    settings.station.geo_constraint.geo_type == GeoConstraintType.CIRCLE):
-        ## TODO Test if all variables exist / error if not
-        inv = station_client.get_stations(
-            network=net,station=sta,
-            location=loc,channel=cha,
-            starttime=starttime,endtime=endtime,
-            latitude= settings.station.geo_constraint.coords.lat, # float(config['STATION']['latitude']),
-            longitude= settings.station.geo_constraint.coords.lng, # float(config['STATION']['longitude']),
-            minradius= settings.station.geo_constraint.coords.min_radius, # float(config['STATION']['minradius']),
-            maxradius=settings.station.geo_constraint.coords.max_radius, # float(config['STATION']['maxradius']),
-            includerestricted=settings.station.include_restricted, # config['STATION']['includerestricted'],
-            level=settings.station.level.value
-        )
+    elif (not inventory and settings.station.geo_constraint):
+        for geo in settings.station.geo_constraint:
+            if geo.geo_type == GeoConstraintType.BOUNDING:
+                    ## TODO Test if all variables exist / error if not                    
+                    inv = station_client.get_stations(
+                        network=net,station=sta,
+                        location=loc,channel=cha,
+                        starttime=starttime,endtime=endtime,
+                        minlatitude =geo.coords.min_lat, # float(config['STATION']['minlatitude']),
+                        maxlatitude =geo.coords.max_lat,
+                        minlongitude=geo.coords.min_lng,
+                        maxlongitude=geo.coords.max_lng,
+                        includerestricted= settings.station.include_restricted, # config['STATION']['includerestricted'],
+                        level=settings.station.level.value
+                    )
+            elif geo.geo_type == GeoConstraintType.CIRCLE:
+                ## TODO Test if all variables exist / error if not
+                inv = station_client.get_stations(
+                    network=net,station=sta,
+                    location=loc,channel=cha,
+                    starttime=starttime,endtime=endtime,
+                    latitude = geo.coords.lat, # float(config['STATION']['latitude']),
+                    longitude= geo.coords.lng, # float(config['STATION']['longitude']),
+                    minradius= geo.coords.min_radius, # float(config['STATION']['minradius']),
+                    maxradius= geo.coords.max_radius, # float(config['STATION']['maxradius']),
+                    includerestricted=settings.station.include_restricted, # config['STATION']['includerestricted'],
+                    level=settings.station.level.value
+                )
+            else:
+                print(f"Unknown Geometry type: {geo.geo_type}")
 
     else: # No geographic constraint, search via inventory alone
         inv = station_client.get_stations(
@@ -712,8 +713,6 @@ def get_stations(settings: SeismoLoaderSettings):
 
     # Remove unwanted stations or networks
     if settings.station.common_config.exclude_stations: # config['STATION']['exclude_stations']:
-        print("XXXXXXXXXX")
-        print(settings.station.common_config.exclude_stations)
         # exclude_list = config['STATION']['exclude_stations'].split(',') #format is NN.STA
         for ele in settings.station.common_config.exclude_stations:
             # n,s = ele.split('.')
@@ -748,52 +747,55 @@ def get_events(settings: SeismoLoaderSettings):
         event_client = waveform_client
 
     catalog = []
-    if settings.event.geo_constraint.geo_type == GeoConstraintType.CIRCLE: # config['EVENT']['search_type'].lower() == 'radial':
-        try:
-            catalog = event_client.get_events(
-                starttime=starttime,endtime=endtime,
-                minmagnitude= settings.event.min_magnitude, # float(config['EVENT']['minmagnitude']),
-                maxmagnitude= settings.event.max_magnitude, # float(config['EVENT']['maxmagnitude']),
+    for geo in settings.event.geo_constraint:        
+        if geo.geo_type == GeoConstraintType.CIRCLE: # config['EVENT']['search_type'].lower() == 'radial':
+            try:
+                cat = event_client.get_events(
+                    starttime=starttime,endtime=endtime,
+                    minmagnitude= settings.event.min_magnitude, # float(config['EVENT']['minmagnitude']),
+                    maxmagnitude= settings.event.max_magnitude, # float(config['EVENT']['maxmagnitude']),
 
-                latitude= settings.event.geo_constraint.coords.lat, # float(config['EVENT']['latitude']),
-                longitude=settings.event.geo_constraint.coords.lng, # float(config['EVENT']['longitude']),
-                minradius=settings.event.geo_constraint.coords.min_radius, # loat(config['EVENT']['minsearchradius']),
-                maxradius=settings.event.geo_constraint.coords.max_radius, # float(config['EVENT']['maxsearchradius']),
+                    latitude = geo.coords.lat, # float(config['EVENT']['latitude']),
+                    longitude= geo.coords.lng, # float(config['EVENT']['longitude']),
+                    minradius= geo.coords.min_radius, # loat(config['EVENT']['minsearchradius']),
+                    maxradius= geo.coords.max_radius, # float(config['EVENT']['maxsearchradius']),
 
-                #TODO add catalog,contributor
-                includeallorigins= settings.event.include_all_origins, # False,
-                includeallmagnitudes= settings.event.include_all_magnitudes, # False,
-                includearrivals= settings.event.include_arrivals, # False
-            )
-            print("Found %d events from %s" % (len(catalog),settings.event.common_config.client.value))
-        except:
-            print("No events found!") #TODO elaborate
-            # return catalog # sys.exit()
-            
-    elif settings.event.geo_constraint.geo_type == GeoConstraintType.BOUNDING: # 'box' in config['EVENT']['search_type'].lower():
-        try:
-            catalog = event_client.get_events(
-                starttime=starttime,endtime=endtime,
-                minmagnitude= settings.event.min_magnitude, # float(config['EVENT']['minmagnitude']),
-                maxmagnitude= settings.event.max_magnitude, # float(config['EVENT']['maxmagnitude']),
+                    #TODO add catalog,contributor
+                    includeallorigins= settings.event.include_all_origins, # False,
+                    includeallmagnitudes= settings.event.include_all_magnitudes, # False,
+                    includearrivals= settings.event.include_arrivals, # False
+                )
+                print("Found %d events from %s" % (len(cat),settings.event.common_config.client.value))
+                catalog.extend(cat)
+            except:
+                print("No events found!") #TODO elaborate
+                # return catalog # sys.exit()
+                
+        elif geo.geo_type == GeoConstraintType.BOUNDING: # 'box' in config['EVENT']['search_type'].lower():
+            try:
+                cat = event_client.get_events(
+                    starttime=starttime,endtime=endtime,
+                    minmagnitude= settings.event.min_magnitude, # float(config['EVENT']['minmagnitude']),
+                    maxmagnitude= settings.event.max_magnitude, # float(config['EVENT']['maxmagnitude']),
 
-                minlatitude  = settings.event.geo_constraint.coords.min_lat, # float(config['EVENT']['minlatitude']),
-                minlongitude = settings.event.geo_constraint.coords.min_lng, # float(config['EVENT']['minlongitude']),
-                maxlatitude  = settings.event.geo_constraint.coords.max_lat, # float(config['EVENT']['maxlatitude']),
-                maxlongitude = settings.event.geo_constraint.coords.max_lng, # float(config['EVENT']['maxlongitude']),
+                    minlatitude  = geo.coords.min_lat, # float(config['EVENT']['minlatitude']),
+                    minlongitude = geo.coords.min_lng, # float(config['EVENT']['minlongitude']),
+                    maxlatitude  = geo.coords.max_lat, # float(config['EVENT']['maxlatitude']),
+                    maxlongitude = geo.coords.max_lng, # float(config['EVENT']['maxlongitude']),
 
-                #TODO add catalog,contributor
-                includeallorigins= settings.event.include_all_origins, # False,
-                includeallmagnitudes= settings.event.include_all_magnitudes, # False,
-                includearrivals= settings.event.include_arrivals, # False
-            )
-            print("Found %d events from %s" % (len(catalog),settings.event.common_config.client.value))
-        except:
-            print("no events found!") #TODO elaborate
-            # return # sys.exit()
-    else:
-        # FIXME: Once concluded on Geo Type, fix below terms: radial and box
-        raise ValueError("Event search type: %s is invalid. Must be 'radial' or 'box'" % settings.event.geo_constraint.geo_type.value)
+                    #TODO add catalog,contributor
+                    includeallorigins= settings.event.include_all_origins, # False,
+                    includeallmagnitudes= settings.event.include_all_magnitudes, # False,
+                    includearrivals= settings.event.include_arrivals, # False
+                )
+                print("Found %d events from %s" % (len(cat),settings.event.common_config.client.value))
+                catalog.extend(cat)
+            except:
+                print("no events found!") #TODO elaborate
+                # return # sys.exit()
+        else:
+            # FIXME: Once concluded on Geo Type, fix below terms: radial and box
+            raise ValueError("Event search type: %s is invalid. Must be 'radial' or 'box'" % geo.geo_type.value)
         # sys.exit()   
     
     return catalog
