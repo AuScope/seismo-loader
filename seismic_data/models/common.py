@@ -15,8 +15,8 @@ class RectangleArea(BaseModel):
 class CircleArea(BaseModel):
     lat   : float
     lng   : float
-    radius: float
-
+    max_radius: float
+    min_radius : float=0
     @property
     def color(self) -> str:
         return "green"  
@@ -30,3 +30,4 @@ class DonutArea(BaseModel):
     @property
     def color(self) -> str:
         return "red"  
+
