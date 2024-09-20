@@ -139,7 +139,7 @@ class StationConfig(BaseModel):
     location: Optional[str] = None
     channel:  Optional[str] = None
 
-    geo_constraint: Optional[GeometryConstraint] = None
+    geo_constraint: Optional[List[GeometryConstraint]] = None
     include_restricted: bool = False
     level: Levels = Levels.CHANNEL
 
@@ -157,7 +157,7 @@ class EventConfig(BaseModel):
     min_radius: float = 30
     max_radius: float = 90
 
-    geo_constraint: Optional[GeometryConstraint] = None
+    geo_constraint: Optional[List[GeometryConstraint]] = None
 
     include_all_origins: bool = False
     include_all_magnitudes: bool = False
@@ -280,7 +280,7 @@ class SeismoLoaderSettings(BaseModel):
             station =config.get('STATION', 'station' , fallback=None),
             location=config.get('STATION', 'location', fallback=None),
             channel =config.get('STATION', 'channel' , fallback=None),
-            geo_constraint=geo_constraint_station,
+            geo_constraint=[geo_constraint_station],
             include_restricted=config.get('STATION', 'includerestricted' , fallback=False),
             level = config.get('STATION', 'level' , fallback=None)
         )
@@ -333,7 +333,7 @@ class SeismoLoaderSettings(BaseModel):
                 max_magnitude          = config.getfloat('EVENT', 'maxmagnitude', fallback=None),
                 min_radius             = config.getfloat('EVENT', 'minradius', fallback=None),
                 max_radius             = config.getfloat('EVENT', 'maxradius', fallback=None),
-                geo_constraint         = geo_constraint_event,
+                geo_constraint         = [geo_constraint_event],
                 include_all_origins    = config.get('STATION', 'includeallorigins' , fallback=False),
                 include_all_magnitudes = config.get('STATION', 'includeallmagnitudes' , fallback=False),
                 include_arrivals       = config.get('STATION', 'includearrivals' , fallback=False),
@@ -411,20 +411,20 @@ class SeismoLoaderSettings(BaseModel):
                 'station': convert_to_str(self.station.station),
                 'location': convert_to_str(self.station.location),
                 'channel': convert_to_str(self.station.channel),
-                'geo_constraint': convert_to_str(self.station.geo_constraint.geo_type),
+                'geo_constraint': convert_to_str(self.station.geo_constraint[0].geo_type),
             }
 
-            if self.station.geo_constraint.geo_type == GeoConstraintType.CIRCLE:
-                config['STATION']['latitude']  = convert_to_str(self.station.geo_constraint.coords.lat)
-                config['STATION']['longitude'] = convert_to_str(self.station.geo_constraint.coords.lng)
-                config['STATION']['minradius'] = convert_to_str(self.station.geo_constraint.coords.min_radius)
-                config['STATION']['maxradius'] = convert_to_str(self.station.geo_constraint.coords.max_radius)
+            if self.station.geo_constraint[0].geo_type == GeoConstraintType.CIRCLE:
+                config['STATION']['latitude']  = convert_to_str(self.station.geo_constraint[0].coords.lat)
+                config['STATION']['longitude'] = convert_to_str(self.station.geo_constraint[0].coords.lng)
+                config['STATION']['minradius'] = convert_to_str(self.station.geo_constraint[0].coords.min_radius)
+                config['STATION']['maxradius'] = convert_to_str(self.station.geo_constraint[0].coords.max_radius)
 
-            if self.station.geo_constraint.geo_type == GeoConstraintType.BOUNDING:
-                config['STATION']['minlatitude']  = convert_to_str(self.station.geo_constraint.coords.min_lat)
-                config['STATION']['maxlatitude']  = convert_to_str(self.station.geo_constraint.coords.max_lat)
-                config['STATION']['minlongitude'] = convert_to_str(self.station.geo_constraint.coords.min_lng)
-                config['STATION']['maxlongitude'] = convert_to_str(self.station.geo_constraint.coords.max_lng)
+            if self.station.geo_constraint[0].geo_type == GeoConstraintType.BOUNDING:
+                config['STATION']['minlatitude']  = convert_to_str(self.station.geo_constraint[0].coords.min_lat)
+                config['STATION']['maxlatitude']  = convert_to_str(self.station.geo_constraint[0].coords.max_lat)
+                config['STATION']['minlongitude'] = convert_to_str(self.station.geo_constraint[0].coords.min_lng)
+                config['STATION']['maxlongitude'] = convert_to_str(self.station.geo_constraint[0].coords.max_lng)
 
             config['STATION']['includerestricted'] = convert_to_str(self.station.include_restricted)
             config['STATION']['level']             = convert_to_str(self.station.level.value)
@@ -450,7 +450,7 @@ class SeismoLoaderSettings(BaseModel):
                 'updatedafter'         : convert_to_str(self.event.updated_after                ) ,
             }
             
-            if self.event.geo_constraint.geo_type == GeoConstraintType.CIRCLE:
+            if self.event.geo_constraint[0].geo_type == GeoConstraintType.CIRCLE:
                 # @FIXME: search_type and geo_constraint should follow consistent naming
                 config['EVENT']['search_type']     = 'radial'
                 config['EVENT']['latitude']        = convert_to_str(self.event.geo_constraint.coords.lat)
@@ -458,7 +458,7 @@ class SeismoLoaderSettings(BaseModel):
                 config['EVENT']['minsearchradius'] = convert_to_str(self.event.geo_constraint.coords.min_radius)
                 config['EVENT']['maxsearchradius'] = convert_to_str(self.event.geo_constraint.coords.max_radius)
 
-            if self.event.geo_constraint.geo_type == GeoConstraintType.BOUNDING:
+            if self.event.geo_constraint[0].geo_type == GeoConstraintType.BOUNDING:
                 config['EVENT']['search_type']  = 'box'
                 config['EVENT']['minlatitude']  = convert_to_str(self.event.geo_constraint.coords.min_lat)
                 config['EVENT']['maxlatitude']  = convert_to_str(self.event.geo_constraint.coords.max_lat)
