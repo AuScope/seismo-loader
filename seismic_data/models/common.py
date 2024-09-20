@@ -11,4 +11,5 @@ class RectangleArea(BaseModel):
 class CircleArea(BaseModel):
     lat   : float
     lng   : float
-    radius: float
+    min_radius: float = 0
+    max_radius: float

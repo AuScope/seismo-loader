@@ -25,7 +25,7 @@ def handle_circle(geo) -> CircleArea:
     return CircleArea(
         lat = coords[1],
         lng = coords[0],
-        radius = radius
+        max_radius = radius
     )
 
 def get_selected_areas(map_output) -> List[RectangleArea | CircleArea]:

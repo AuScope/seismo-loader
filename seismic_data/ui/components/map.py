@@ -129,7 +129,7 @@ def create_map(map_center=[-25.0000, 135.0000], areas = []):
         if isinstance(area, CircleArea):
             folium.Circle(
                 location=[area.lat, area.lng],
-                radius=area.radius,
+                radius=area.max_radius,
                 color="green",
                 fill=True,
                 fill_opacity=0.5

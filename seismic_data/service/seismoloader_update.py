@@ -21,12 +21,16 @@ import configparser
 import contextlib
 from tqdm import tqdm
 from tabulate import tabulate # non-standard. this is just to display the db contents
+import random
 
 import obspy
 from obspy.clients.fdsn import Client
 from obspy.geodetics.base import locations2degrees
 from obspy import UTCDateTime
 from obspy.taup import TauPyModel
+
+from seismic_data.models.config import SeismoLoaderSettings, StationConfig, EventConfig
+from seismic_data.enums.config import DownloadType, GeoConstraintType
 
 ### request status codes (TBD more:
 # 204 = no data
@@ -610,25 +614,15 @@ def archive_request(request,waveform_client,sds_path,db_path):
             conn.commit()
 
 
-################ end function declarations, start program
-if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python3 seismoloader.py input.cfg")
-        sys.exit(1)
-    
-    config_file = sys.argv[1]
-    try:
-        config = read_config(config_file)
-    except:
-        print("Cannot read configuration file", config_file)
-        sys.exit(1)
 
-    sds_path = config['SDS']['sds_path']
+# MAIN RUN FUNCTIONS
+# ==================================================================
+def setup_paths(settings: SeismoLoaderSettings):
+    sds_path = settings.sds_path # config['SDS']['sds_path']
     if not sds_path:
-        print("SDS Path not set!!!")
-        sys.exit(1)
+        raise ValueError("SDS Path not set!!!")
 
-    db_path = config['DATABASE']['db_path']
+    db_path = settings.db_path # config['DATABASE']['db_path']
     if not db_path:
         db_path = os.path.join(sds_path,"database.sql")
 
@@ -640,207 +634,483 @@ if __name__ == "__main__":
     if not os.path.exists(db_path):
         setup_database(db_path)
 
-    download_type = config['PROCESSING']['download_type'].lower()
-    if download_type not in ['continuous','event']:
-        download_type = 'continuous' # default
+    settings.sds_path = sds_path
+    settings.db_path  = db_path
 
-    if download_type == 'continuous':
-        starttime = UTCDateTime(config['STATION']['starttime'])
-        endtime = UTCDateTime(config['STATION']['endtime'])
+    return settings
 
-    else: #assume "event"
-        starttime = UTCDateTime(config['EVENT']['starttime'])
-        endtime = UTCDateTime(config['EVENT']['endtime'])
 
-    waveform_client = Client(config['WAVEFORM']['client']) # note we may have three different clients here: waveform, station, and event. be careful to keep track
-    if config['STATION']['client']:
-        station_client = Client(config['STATION']['client'])
+
+def get_stations(settings: SeismoLoaderSettings):
+    """
+    Refine input args to what is needed for get_stations
+    """
+    starttime = UTCDateTime(settings.station.date_config.start_time)
+    endtime = UTCDateTime(settings.station.date_config.end_time)
+    waveform_client = Client(settings.waveform.common_config.client.value)
+    if settings.station and settings.station.common_config.client: # config['STATION']['client']:
+        station_client = Client(settings.station.common_config.client.value) # Client(config['STATION']['client'])
     else:
         station_client = waveform_client
 
-    
-    if config['PROCESSING']['download_type'] == 'event' and config['EVENT']['client']:
-        event_client = Client(config['EVENT']['client'])
-    else:
-        event_client = waveform_client   
-
-
-    days_per_request = config['WAVEFORM']['days_per_request']
-    if not days_per_request:
-        days_per_request = 3 #a resonable default? It probably will have to depend on the total number of samples of the request (TODO)
-
-    # if user is specifying / filtering, use these
-    net = config['STATION']['network']
+    net = settings.station.network # config['STATION']['network']
     if not net:
         net = '*'
-    sta = config['STATION']['station']
+    sta = settings.station.station # config['STATION']['station']
     if not sta:
         sta = '*'
-    loc = config['STATION']['location']
+    loc = settings.station.location # config['STATION']['location']
     if not loc:
         loc = '*'
-    cha = config['STATION']['channel']
+    cha = settings.station.channel # config['STATION']['channel']
     if not cha:
         cha = '*'
 
-    if config['STATION']['inventory']:
+    inv = []
+    inventory = settings.station.common_config.inventory
+    if inventory: # config['STATION']['inventory']:
         # User has specified this specific pre-existing (filepath) inventory to use
-        inv = obspy.read_inventory(config['STATION']['inventory'])
+        inv = obspy.read_inventory(inventory)
 
-    elif not config['STATION']['inventory'] and \
-    config['STATION']['geo_constraint'].lower() == 'bounding':
+    elif (not inventory and \
+    settings.station.geo_constraint.geo_type == GeoConstraintType.BOUNDING):
         ## TODO Test if all variables exist / error if not
-        inv = station_client.get_stations(network=net,station=sta,
-                                 location=loc,channel=cha,
-                                 starttime=starttime,endtime=endtime,
-            minlatitude=float(config['STATION']['minlatitude']),
-            maxlatitude=float(config['STATION']['maxlatitude']),
-            minlongitude=float(config['STATION']['minlongitude']),
-            maxlongitude=float(config['STATION']['maxlongitude']),
-            includerestricted=config['STATION']['includerestricted'],
-            level='channel'
-            )
-    elif not config['STATION']['inventory'] and \
-    config['STATION']['geo_constraint'].lower() == 'circle':
+        
+        inv = station_client.get_stations(
+            network=net,station=sta,
+            location=loc,channel=cha,
+            starttime=starttime,endtime=endtime,
+            minlatitude= settings.station.geo_constraint.coords.min_lat, # float(config['STATION']['minlatitude']),
+            maxlatitude=settings.station.geo_constraint.coords.max_lat,
+            minlongitude=settings.station.geo_constraint.coords.min_lng,
+            maxlongitude=settings.station.geo_constraint.coords.max_lng,
+            includerestricted= settings.station.include_restricted, # config['STATION']['includerestricted'],
+            level=settings.station.level.value
+        )
+    elif not (inventory and \
+    settings.station.geo_constraint.geo_type == GeoConstraintType.CIRCLE):
         ## TODO Test if all variables exist / error if not
-        inv = station_client.get_stations(network=net,station=sta,
-                                 location=loc,channel=cha,
-                                 starttime=starttime,endtime=endtime,
-            latitude=float(config['STATION']['latitude']),
-            longitude=float(config['STATION']['longitude']),
-            minradius=float(config['STATION']['minradius']),
-            maxradius=float(config['STATION']['maxradius']),
-            includerestricted=config['STATION']['includerestricted'],
-            level='channel'
-            )
+        inv = station_client.get_stations(
+            network=net,station=sta,
+            location=loc,channel=cha,
+            starttime=starttime,endtime=endtime,
+            latitude= settings.station.geo_constraint.coords.lat, # float(config['STATION']['latitude']),
+            longitude= settings.station.geo_constraint.coords.lng, # float(config['STATION']['longitude']),
+            minradius= settings.station.geo_constraint.coords.min_radius, # float(config['STATION']['minradius']),
+            maxradius=settings.station.geo_constraint.coords.max_radius, # float(config['STATION']['maxradius']),
+            includerestricted=settings.station.include_restricted, # config['STATION']['includerestricted'],
+            level=settings.station.level.value
+        )
 
     else: # No geographic constraint, search via inventory alone
-        inv = station_client.get_stations(network=net,station=sta,
-                                  location=loc,channel=cha,
-                                  starttime=starttime,endtime=endtime,level='channel')
+        inv = station_client.get_stations(
+            network=net,station=sta,
+            location=loc,channel=cha, 
+            starttime=starttime,endtime=endtime,
+            level=settings.station.level.value
+        )
 
     # Remove unwanted stations or networks
-    if config['STATION']['exclude_stations']:
-        exclude_list = config['STATION']['exclude_stations'].split(',') #format is NN.STA
-        for ele in exclude_list:
-            n,s = ele.split('.')
-            inv = inv.remove(network=n.upper(),station=s.upper())
+    if settings.station.common_config.exclude_stations: # config['STATION']['exclude_stations']:
+        print("XXXXXXXXXX")
+        print(settings.station.common_config.exclude_stations)
+        # exclude_list = config['STATION']['exclude_stations'].split(',') #format is NN.STA
+        for ele in settings.station.common_config.exclude_stations:
+            # n,s = ele.split('.')
+            inv = inv.remove(network=ele.network.upper(),station=ele.station.upper())
 
     # Add anything else we were told to
-    if config['STATION']['force_stations']:
-        add_list = config['STATION']['force_stations'].split(',') #format is NN.STA
-        for ele in add_list:
-            n,s = ele.split('.')
+    if settings.station.common_config.force_stations: # config['STATION']['force_stations']:
+        # add_list = config['STATION']['force_stations'].split(',') #format is NN.STA
+        for ele in settings.station.common_config.force_stations:
+            # n,s = ele.split('.')
             try:
-                inv += station_client.get_stations(network=n,station=s,level='channel')
+                inv += station_client.get_stations(
+                    network=ele.network,
+                    station=ele.station,
+                    level=settings.station.level.value
+                )
             except:
-                print("Could not find requested station %s at %s" % (ele,config['STATION']['client']))
+                # print("Could not find requested station %s at %s" % (ele,config['STATION']['client']))
+                print("Could not find requested station %s at %s" % (ele.cmb_str,settings.station.common_config.client.value))
                 continue
 
-    if config['PROCESSING']['download_type'].lower() == 'event':
-        ttmodel = TauPyModel(config['EVENT']['model'])
-        event_client = Client(config['EVENT']['client'])
+    return inv
 
-        minradius = float(config['EVENT']['minradius'])
-        maxradius = float(config['EVENT']['maxradius'])
 
-        if config['EVENT']['search_type'].lower() == 'radial':
-            try:
-                catalog = event_client.get_events(
-                    starttime=starttime,endtime=endtime,
-                    minmagnitude=float(config['EVENT']['minmagnitude']),
-                    maxmagnitude=float(config['EVENT']['maxmagnitude']),
+def get_events(settings: SeismoLoaderSettings):
+    starttime = UTCDateTime(settings.event.date_config.start_time)
+    endtime = UTCDateTime(settings.event.date_config.end_time)
+    waveform_client = Client(settings.waveform.common_config.client.value) # note we may have three different clients here: waveform, station, and event. be careful to keep track
+    if settings.event and settings.event.common_config.client: # config['STATION']['client']:
+        event_client = Client(settings.event.common_config.client.value) # Client(config['STATION']['client'])
+    else:
+        event_client = waveform_client
 
-                    latitude=float(config['EVENT']['latitude']),
-                    longitude=float(config['EVENT']['longitude']),
-                    minradius=float(config['EVENT']['minsearchradius']),
-                    maxradius=float(config['EVENT']['maxsearchradius']),
+    catalog = []
+    if settings.event.geo_constraint.geo_type == GeoConstraintType.CIRCLE: # config['EVENT']['search_type'].lower() == 'radial':
+        try:
+            catalog = event_client.get_events(
+                starttime=starttime,endtime=endtime,
+                minmagnitude= settings.event.min_magnitude, # float(config['EVENT']['minmagnitude']),
+                maxmagnitude= settings.event.max_magnitude, # float(config['EVENT']['maxmagnitude']),
 
-                    #TODO add catalog,contributor
-                    includeallorigins=False,
-                    includeallmagnitudes=False,
-                    includearrivals=False)
-                print("Found %d events from %s" % (len(catalog),config['STATION']['client']))
-            except:
-                print("No events found!") #TODO elaborate
-                sys.exit()
-        elif 'box' in config['EVENT']['search_type'].lower():
-            try:
-                catalog = event_client.get_events(
-                    starttime=starttime,endtime=endtime,
-                    minmagnitude=float(config['EVENT']['minmagnitude']),
-                    maxmagnitude=float(config['EVENT']['maxmagnitude']),
+                latitude= settings.event.geo_constraint.coords.lat, # float(config['EVENT']['latitude']),
+                longitude=settings.event.geo_constraint.coords.lng, # float(config['EVENT']['longitude']),
+                minradius=settings.event.geo_constraint.coords.min_radius, # loat(config['EVENT']['minsearchradius']),
+                maxradius=settings.event.geo_constraint.coords.max_radius, # float(config['EVENT']['maxsearchradius']),
 
-                    minlatitude=float(config['EVENT']['minlatitude']),
-                    minlongitude=float(config['EVENT']['minlongitude']),
-                    maxlatitude=float(config['EVENT']['maxlatitude']),
-                    maxlongitude=float(config['EVENT']['maxlongitude']),
+                #TODO add catalog,contributor
+                includeallorigins= settings.event.include_all_origins, # False,
+                includeallmagnitudes= settings.event.include_all_magnitudes, # False,
+                includearrivals= settings.event.include_arrivals, # False
+            )
+            print("Found %d events from %s" % (len(catalog),settings.event.common_config.client.value))
+        except:
+            print("No events found!") #TODO elaborate
+            # return catalog # sys.exit()
+            
+    elif settings.event.geo_constraint.geo_type == GeoConstraintType.BOUNDING: # 'box' in config['EVENT']['search_type'].lower():
+        try:
+            catalog = event_client.get_events(
+                starttime=starttime,endtime=endtime,
+                minmagnitude= settings.event.min_magnitude, # float(config['EVENT']['minmagnitude']),
+                maxmagnitude= settings.event.max_magnitude, # float(config['EVENT']['maxmagnitude']),
 
-                    #TODO add catalog,contributor
-                    includeallorigins=False,
-                    includeallmagnitudes=False,
-                    includearrivals=False)
-                print("Found %d events from %s" % (len(catalog),config['STATION']['client']))
-            except:
-                print("no events found!") #TODO elaborate
-                sys.exit()
-        else:
-            print("Event search type: %s is invalid. Must be 'radial' or 'box'" % config['EVENT']['search_type'])
-            sys.exit()         
+                minlatitude  = settings.event.geo_constraint.coords.min_lat, # float(config['EVENT']['minlatitude']),
+                minlongitude = settings.event.geo_constraint.coords.min_lng, # float(config['EVENT']['minlongitude']),
+                maxlatitude  = settings.event.geo_constraint.coords.max_lat, # float(config['EVENT']['maxlatitude']),
+                maxlongitude = settings.event.geo_constraint.coords.max_lng, # float(config['EVENT']['maxlongitude']),
 
-        #now loop through events
-        # NOTE: Why "inv" collections from STATION block is included in EVENTS?
-        #       Isn't it the STATIONS have their own searching settings?
-        #       If the search settings such as map search and time search are the
-        #       same, why separate parameters are defined for events?
-        for i,eq in enumerate(catalog):
-            print("--> Downloading event (%d/%d) %s (%.4f lat %.4f lon %.1f km dep) ...\n" % (i+1,len(catalog),eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))
+                #TODO add catalog,contributor
+                includeallorigins= settings.event.include_all_origins, # False,
+                includeallmagnitudes= settings.event.include_all_magnitudes, # False,
+                includearrivals= settings.event.include_arrivals, # False
+            )
+            print("Found %d events from %s" % (len(catalog),settings.event.common_config.client.value))
+        except:
+            print("no events found!") #TODO elaborate
+            # return # sys.exit()
+    else:
+        # FIXME: Once concluded on Geo Type, fix below terms: radial and box
+        raise ValueError("Event search type: %s is invalid. Must be 'radial' or 'box'" % settings.event.geo_constraint.geo_type.value)
+        # sys.exit()   
+    
+    return catalog
 
-            # Collect requests
-            requests = collect_requests_event(eq,inv,min_dist_deg=minradius,max_dist_deg=maxradius,
-                                              before_p_sec=10,after_p_sec=120,model=ttmodel) #TODO make before p and after p configurable
 
-            # Remove any for data we already have (requires db be updated)
-            pruned_requests= prune_requests(requests, db_path)
+def run_continuous(settings: SeismoLoaderSettings):
+    """
+    Assuming it is configured to Run STATION block
+    """
+    starttime = UTCDateTime(settings.station.date_config.start_time)
+    endtime = UTCDateTime(settings.station.date_config.end_time)
+    waveform_client = Client(settings.waveform.common_config.client.value) # note we may have three different clients here: waveform, station, and event. be careful to keep track
 
-            # Combine these into fewer (but larger) requests
-            # this probably makes little for sense EVENTS, but its inexpensive and good for testing purposes
-            combined_requests = combine_requests(pruned_requests)
 
-            # Archive to disk and updated database
-            for request in combined_requests:
-                time.sleep(0.05) #to help ctrl-C out if needed
-                print(request)
-                try: 
-                    archive_request(request,waveform_client,sds_path,db_path)
-                except:
-                    print("Event request not successful: ",request)
+    inv = get_stations(settings)
 
-    else: # Continuous Data downloading
+    # Collect requests
+    requests = collect_requests(inv,starttime,endtime)
+
+    # Remove any for data we already have (requires db be updated)
+    pruned_requests= prune_requests(requests, settings.db_path)
+
+    # Combine these into fewer (but larger) requests
+    combined_requests = combine_requests(pruned_requests)
+
+    # Archive to disk and updated database
+    for request in combined_requests:
+        print(request)
+        time.sleep(0.05) #to help ctrl-C out if needed
+        try: 
+            archive_request(request, waveform_client, settings.sds_path, settings.db_path)
+        except:
+            print("Continous request not successful: ",request)
+
+
+
+def run_event(settings: SeismoLoaderSettings):
+    """
+    Assuming it is configured to Run STATION block
+
+    FIXME: inv is the set of stations. It is set in [STATION] block, which at 
+    present it looks quite a separate block to [EVENT]. Probably, we need some other way
+    to get nearby stations.
+    """
+    waveform_client = Client(settings.waveform.common_config.client.value)
+
+    catalog = get_events(settings)
+    inv     = get_stations(settings)
+    
+    ttmodel = TauPyModel(settings.event.model) #  config['EVENT']['model'])
+
+    # @FIXME: Below line seems to be redundant as in above lines, event_client was set.
+    # event_client = Client(config['EVENT']['client'])
+
+    minradius = settings.event.min_radius # float(config['EVENT']['minradius'])
+    maxradius = settings.event.max_radius # float(config['EVENT']['maxradius'])
+
+    #now loop through events
+    # NOTE: Why "inv" collections from STATION block is included in EVENTS?
+    #       Isn't it the STATIONS have their own searching settings?
+    #       If the search settings such as map search and time search are the
+    #       same, why separate parameters are defined for events?
+    for i,eq in enumerate(catalog):
+        print("--> Downloading event (%d/%d) %s (%.4f lat %.4f lon %.1f km dep) ...\n" % (i+1,len(catalog),eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))
+
         # Collect requests
-        requests = collect_requests(inv,starttime,endtime)
+        requests = collect_requests_event(eq,inv,min_dist_deg=minradius,max_dist_deg=maxradius,
+                                            before_p_sec=10,after_p_sec=120,model=ttmodel) #TODO make before p and after p configurable
 
         # Remove any for data we already have (requires db be updated)
-        pruned_requests= prune_requests(requests, db_path)
+        pruned_requests= prune_requests(requests, settings.db_path)
 
         # Combine these into fewer (but larger) requests
+        # this probably makes little for sense EVENTS, but its inexpensive and good for testing purposes
         combined_requests = combine_requests(pruned_requests)
 
         # Archive to disk and updated database
         for request in combined_requests:
-            print(request)
             time.sleep(0.05) #to help ctrl-C out if needed
+            print(request)
             try: 
-                archive_request(request,waveform_client,sds_path,db_path)
+                archive_request(request,waveform_client,settings.sds_path,settings.db_path)
             except:
-                print("Continous request not successful: ",request)
+                print("Event request not successful: ",request)
+
+
+
+def run_main(settings: SeismoLoaderSettings = None, from_file=None):
+    if not settings and from_file:
+        settings = SeismoLoaderSettings()
+        settings = settings.from_cfg_file(cfg_path = from_file)
+
+    settings = setup_paths(settings)
+
+    download_type = settings.download_type.value # config['PROCESSING']['download_type'].lower()
+    if download_type not in DownloadType:
+        download_type = DownloadType.CONTIN # 'continuous' # default
+
+
+    if download_type == DownloadType.CONTIN:
+        run_continuous(settings)
+
+    if download_type == DownloadType.EVENT:
+        run_event(settings)
+
+    # MAIN config is either station or event based. No further checking is required.
+    # starttime = UTCDateTime(settings.main.date_config.start_time)
+    # endtime = UTCDateTime(settings.main.date_config.end_time)
+    # if download_type == DownloadType.CONTIN : # 'continuous':
+    #     starttime = UTCDateTime(config['STATION']['starttime'])
+    #     endtime = UTCDateTime(config['STATION']['endtime'])
+
+    # else: #assume "event"
+    #     starttime = UTCDateTime(config['EVENT']['starttime'])
+    #     endtime = UTCDateTime(config['EVENT']['endtime'])
+
+    # waveform_client = Client(settings.waveform.common_config.client.value) # note we may have three different clients here: waveform, station, and event. be careful to keep track
+    # if isinstance(settings.main, StationConfig) and settings.main.common_config.client: # config['STATION']['client']:
+    #     station_client = Client(settings.main.common_config.client.value) # Client(config['STATION']['client'])
+    # else:
+    #     station_client = waveform_client
+
+    
+    # if config['PROCESSING']['download_type'] == 'event' and config['EVENT']['client']:
+    #     event_client = Client(config['EVENT']['client'])
+    # else:
+    #     event_client = waveform_client   
+
+
+    # days_per_request = config['WAVEFORM']['days_per_request']
+    # if not days_per_request:
+    #     days_per_request = 3 #a resonable default? It probably will have to depend on the total number of samples of the request (TODO)
+
+    # if user is specifying / filtering, use these
+    # net = config['STATION']['network']
+    # if not net:
+    #     net = '*'
+    # sta = config['STATION']['station']
+    # if not sta:
+    #     sta = '*'
+    # loc = config['STATION']['location']
+    # if not loc:
+    #     loc = '*'
+    # cha = config['STATION']['channel']
+    # if not cha:
+    #     cha = '*'
+
+    # if config['STATION']['inventory']:
+    #     # User has specified this specific pre-existing (filepath) inventory to use
+    #     inv = obspy.read_inventory(config['STATION']['inventory'])
+
+    # elif not config['STATION']['inventory'] and \
+    # config['STATION']['geo_constraint'].lower() == 'bounding':
+    #     ## TODO Test if all variables exist / error if not
+    #     inv = station_client.get_stations(network=net,station=sta,
+    #                              location=loc,channel=cha,
+    #                              starttime=starttime,endtime=endtime,
+    #         minlatitude=float(config['STATION']['minlatitude']),
+    #         maxlatitude=float(config['STATION']['maxlatitude']),
+    #         minlongitude=float(config['STATION']['minlongitude']),
+    #         maxlongitude=float(config['STATION']['maxlongitude']),
+    #         includerestricted=config['STATION']['includerestricted'],
+    #         level='channel'
+    #         )
+    # elif not config['STATION']['inventory'] and \
+    # config['STATION']['geo_constraint'].lower() == 'circle':
+    #     ## TODO Test if all variables exist / error if not
+    #     inv = station_client.get_stations(network=net,station=sta,
+    #                              location=loc,channel=cha,
+    #                              starttime=starttime,endtime=endtime,
+    #         latitude=float(config['STATION']['latitude']),
+    #         longitude=float(config['STATION']['longitude']),
+    #         minradius=float(config['STATION']['minradius']),
+    #         maxradius=float(config['STATION']['maxradius']),
+    #         includerestricted=config['STATION']['includerestricted'],
+    #         level='channel'
+    #         )
+
+    # else: # No geographic constraint, search via inventory alone
+    #     inv = station_client.get_stations(network=net,station=sta,
+    #                               location=loc,channel=cha,
+    #                               starttime=starttime,endtime=endtime,level='channel')
+
+    # # Remove unwanted stations or networks
+    # if config['STATION']['exclude_stations']:
+    #     exclude_list = config['STATION']['exclude_stations'].split(',') #format is NN.STA
+    #     for ele in exclude_list:
+    #         n,s = ele.split('.')
+    #         inv = inv.remove(network=n.upper(),station=s.upper())
+
+    # # Add anything else we were told to
+    # if config['STATION']['force_stations']:
+    #     add_list = config['STATION']['force_stations'].split(',') #format is NN.STA
+    #     for ele in add_list:
+    #         n,s = ele.split('.')
+    #         try:
+    #             inv += station_client.get_stations(network=n,station=s,level='channel')
+    #         except:
+    #             print("Could not find requested station %s at %s" % (ele,config['STATION']['client']))
+    #             continue
+
+    # if config['PROCESSING']['download_type'].lower() == 'event':
+    #     ttmodel = TauPyModel(config['EVENT']['model'])
+    #     event_client = Client(config['EVENT']['client'])
+
+    #     minradius = float(config['EVENT']['minradius'])
+    #     maxradius = float(config['EVENT']['maxradius'])
+
+    #     if config['EVENT']['search_type'].lower() == 'radial':
+    #         try:
+    #             catalog = event_client.get_events(
+    #                 starttime=starttime,endtime=endtime,
+    #                 minmagnitude=float(config['EVENT']['minmagnitude']),
+    #                 maxmagnitude=float(config['EVENT']['maxmagnitude']),
+
+    #                 latitude=float(config['EVENT']['latitude']),
+    #                 longitude=float(config['EVENT']['longitude']),
+    #                 minradius=float(config['EVENT']['minsearchradius']),
+    #                 maxradius=float(config['EVENT']['maxsearchradius']),
+
+    #                 #TODO add catalog,contributor
+    #                 includeallorigins=False,
+    #                 includeallmagnitudes=False,
+    #                 includearrivals=False)
+    #             print("Found %d events from %s" % (len(catalog),config['STATION']['client']))
+    #         except:
+    #             print("No events found!") #TODO elaborate
+    #             sys.exit()
+    #     elif 'box' in config['EVENT']['search_type'].lower():
+    #         try:
+    #             catalog = event_client.get_events(
+    #                 starttime=starttime,endtime=endtime,
+    #                 minmagnitude=float(config['EVENT']['minmagnitude']),
+    #                 maxmagnitude=float(config['EVENT']['maxmagnitude']),
+
+    #                 minlatitude=float(config['EVENT']['minlatitude']),
+    #                 minlongitude=float(config['EVENT']['minlongitude']),
+    #                 maxlatitude=float(config['EVENT']['maxlatitude']),
+    #                 maxlongitude=float(config['EVENT']['maxlongitude']),
+
+    #                 #TODO add catalog,contributor
+    #                 includeallorigins=False,
+    #                 includeallmagnitudes=False,
+    #                 includearrivals=False)
+    #             print("Found %d events from %s" % (len(catalog),config['STATION']['client']))
+    #         except:
+    #             print("no events found!") #TODO elaborate
+    #             sys.exit()
+    #     else:
+    #         print("Event search type: %s is invalid. Must be 'radial' or 'box'" % config['EVENT']['search_type'])
+    #         sys.exit()         
+
+    #     #now loop through events
+    #     for i,eq in enumerate(catalog):
+    #         print("--> Downloading event (%d/%d) %s (%.4f lat %.4f lon %.1f km dep) ...\n" % (i+1,len(catalog),eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))
+
+    #         # Collect requests
+    #         requests = collect_requests_event(eq,inv,min_dist_deg=minradius,max_dist_deg=maxradius,
+    #                                           before_p_sec=10,after_p_sec=120,model=ttmodel) #TODO make before p and after p configurable
+
+    #         # Remove any for data we already have (requires db be updated)
+    #         pruned_requests= prune_requests(requests, db_path)
+
+    #         # Combine these into fewer (but larger) requests
+    #         # this probably makes little for sense EVENTS, but its inexpensive and good for testing purposes
+    #         combined_requests = combine_requests(pruned_requests)
+
+    #         # Archive to disk and updated database
+    #         for request in combined_requests:
+    #             time.sleep(0.05) #to help ctrl-C out if needed
+    #             print(request)
+    #             try: 
+    #                 archive_request(request,waveform_client,sds_path,db_path)
+    #             except:
+    #                 print("Event request not successful: ",request)
+
+    # else: # Continuous Data downloading
+    #     # Collect requests
+    #     requests = collect_requests(inv,starttime,endtime)
+
+    #     # Remove any for data we already have (requires db be updated)
+    #     pruned_requests= prune_requests(requests, db_path)
+
+    #     # Combine these into fewer (but larger) requests
+    #     combined_requests = combine_requests(pruned_requests)
+
+    #     # Archive to disk and updated database
+    #     for request in combined_requests:
+    #         print(request)
+    #         time.sleep(0.05) #to help ctrl-C out if needed
+    #         try: 
+    #             archive_request(request,waveform_client,sds_path,db_path)
+    #         except:
+    #             print("Continous request not successful: ",request)
 
 
     # Now we can optionally clean up our database (stich continous segments, etc)
     print("\n ~~ Cleaning up database ~~")
-    join_continuous_segments(db_path, gap_tolerance=float(config['PROCESSING']['gap_tolerance']))
+    join_continuous_segments(settings.db_path, settings.proccess.gap_tolerance) # gap_tolerance=float(config['PROCESSING']['gap_tolerance']))
 
     # And print the contents (first 100 elements), for now (DEBUG / TESTING feature)
-    display_database_contents(db_path,100)
+    display_database_contents(settings.db_path,100)
 
+
+################ end function declarations, start program
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python3 seismoloader.py input.cfg")
+        sys.exit(1)
+    
+    config_file = sys.argv[1]
+
+    try:
+        run_main(from_file=config_file)
+    except Exception as e:
+        print(f"Error occured while running: {str(e)}")
+        raise e
+
+    
 
