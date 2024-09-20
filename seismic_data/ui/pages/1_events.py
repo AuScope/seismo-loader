@@ -4,22 +4,62 @@ import pandas as pd
 from copy import deepcopy
 
 from seismic_data.ui.components.card import create_card
-from seismic_data.models.events import EventFilter
-from seismic_data.models.common import CircleArea, RectangleArea, DonutArea
+from seismic_data.models.config import SeismoLoaderSettings
+from seismic_data.models.common import CircleArea, RectangleArea
 from seismic_data.service.events import get_event_data, event_response_to_df
+from seismic_data.service.seismoloader_update import get_events
 from seismic_data.ui.components.map import create_map, add_data_points
-from seismic_data.ui.pages.helpers.events import event_filter_menu
 from seismic_data.ui.pages.helpers.common import get_selected_areas
+
+from seismic_data.ui.pages.helpers.common import init_settings
+from seismic_data.ui.components.event_filter import event_filter_menu
+from seismic_data.ui.components.station_filter import station_filter_menu
+
+init_settings()
+
 
 st.set_page_config(layout="wide")
 
 
-def handle_get_events(base_map, event_filter: EventFilter):
+def handle_get_events(base_map, settings: SeismoLoaderSettings):
     # GET DATA
-    data = get_event_data(event_filter.model_dump())     
+    data = get_events(settings)
+    
     components = {}
     if data:
-        df = event_response_to_df(data)
+        records = []
+        for event in data:
+            # Extract the preferred origin (location info)
+            origin = event.preferred_origin() or event.origins[0]
+            magnitude = event.preferred_magnitude() or event.magnitudes[0]
+            
+            # Extract location (longitude, latitude, depth)
+            longitude = origin.longitude
+            latitude = origin.latitude
+            depth = origin.depth / 1000  # Convert depth to kilometers
+
+            # Extract the time and place
+            time = origin.time.datetime
+            place = event.event_descriptions[0].text if event.event_descriptions else "Unknown place"
+            
+            # Extract the magnitude
+            mag = magnitude.mag
+
+            # Create the record dictionary
+            record = {
+                'place': place,
+                'magnitude': mag,
+                'time': pd.to_datetime(time),  # Convert to pandas datetime
+                'longitude': longitude,
+                'latitude': latitude,
+                'depth': depth  # in kilometers
+            }
+            
+            records.append(record)
+
+        # Convert records to a DataFrame (optional)
+        df = pd.DataFrame(records)
+        # df = event_response_to_df(data)
         total_earthquakes = len(df)
         
         components['subheader'] = f"Showing {total_earthquakes} events"
@@ -43,14 +83,14 @@ def refresh_map(reset_areas = False):
         st.session_state.current_areas = []
 
     if reset_areas:
-        st.session_state.event_filter.areas = []
+        st.session_state.event_page.event.geo_constraint = []
     else:
-        st.session_state.event_filter.areas.extend(st.session_state.current_areas)
+        st.session_state.event_page.event.geo_constraint.extend(st.session_state.current_areas)
     
     
-    st.session_state.event_map = {'map': create_map(areas=st.session_state.event_filter.areas)}
-    if len(st.session_state.event_filter.areas) > 0:
-        result = handle_get_events(st.session_state.event_map.get('map'), st.session_state.event_filter)
+    st.session_state.event_map = {'map': create_map(areas=st.session_state.event_page.event.geo_constraint)}
+    if len(st.session_state.event_page.event.geo_constraint) > 0:
+        result = handle_get_events(st.session_state.event_map.get('map'), st.session_state.event_page)
         st.session_state.event_map = result
         st.session_state.marker_info = result.get('marker_info', {}) 
       
@@ -58,30 +98,30 @@ def refresh_map(reset_areas = False):
         
 def update_event_filter_with_rectangles(df_rect):
     new_rectangles = [RectangleArea(**row.to_dict()) for _, row in df_rect.iterrows()]
-    st.session_state.event_filter.areas = [
-        area for area in st.session_state.event_filter.areas 
-        if not (isinstance(area, RectangleArea) )
+    st.session_state.event_page.event.geo_constraint = [
+        area for area in st.session_state.event_page.event.geo_constraint 
+        if not (isinstance(area.coords, RectangleArea) )
     ] + new_rectangles
 
 
 def update_event_filter_with_circles(df_circ):
     new_circles = [CircleArea(**row.to_dict()) for _, row in df_circ.iterrows()]
-    st.session_state.event_filter.areas = [
-        area for area in st.session_state.event_filter.areas 
-        if not (isinstance(area, CircleArea) )
+    st.session_state.event_page.event.geo_constraint = [
+        area for area in st.session_state.event_page.event.geo_constraint 
+        if not (isinstance(area.coords, CircleArea) )
     ] + new_circles
 
 def update_event_filter_with_donuts(df_donut):
-    new_donuts = [DonutArea(**row.to_dict()) for _, row in df_donut.iterrows()]
+    new_donuts = [CircleArea(**row.to_dict()) for _, row in df_donut.iterrows()]
 
-    st.session_state.event_filter.areas = [
-        area for area in st.session_state.event_filter.areas 
-        if not isinstance(area, DonutArea)
+    st.session_state.event_page.event.geo_constraint = [
+        area for area in st.session_state.event_page.event.geo_constraint 
+        if not isinstance(area.coords, CircleArea)
     ] + new_donuts
 
 def update_circle_areas():
-    lst_circ = [area.model_dump() for area in st.session_state.event_filter.areas
-                if isinstance(area, CircleArea) ]
+    lst_circ = [area.model_dump() for area in st.session_state.event_page.event.geo_constraint
+                if isinstance(area.coords, CircleArea) ]
 
     if lst_circ:
         st.write(f"Circle Areas")
@@ -96,8 +136,8 @@ def update_circle_areas():
             st.rerun()
 
 def update_rectangle_areas():
-    lst_rect = [area.model_dump() for area in st.session_state.event_filter.areas
-                if isinstance(area, RectangleArea) ]
+    lst_rect = [area.model_dump() for area in st.session_state.event_page.event.geo_constraint
+                if isinstance(area.coords, RectangleArea) ]
 
     if lst_rect:
         st.write(f"Rectangle Areas")
@@ -113,11 +153,11 @@ def update_rectangle_areas():
 
 def update_donut_areas():
     # Display and allow editing of all donut areas
-    lst_donut = [area.model_dump() for area in st.session_state.event_filter.areas if isinstance(area, DonutArea)]
+    lst_donut = [area.model_dump() for area in st.session_state.event_page.event.geo_constraint if isinstance(area.coords, CircleArea)]
 
     if lst_donut:
         st.write("Station Areas from selected events")
-        original_df_donut = pd.DataFrame(lst_donut, columns=DonutArea.model_fields)
+        original_df_donut = pd.DataFrame(lst_donut, columns=CircleArea.model_fields)
 
         st.session_state.df_donut = st.data_editor(original_df_donut, key="donut_area")
 
@@ -134,15 +174,12 @@ def update_all_station_areas(min_radius, max_radius):
     max_radius_value = float(max_radius) * 1000
 
     # Update all donut areas with the new radius values
-    for area in st.session_state.event_filter.areas:
-        if isinstance(area, DonutArea):
-            area.min_radius = min_radius_value
-            area.max_radius = max_radius_value
+    for area in st.session_state.event_page.event.geo_constraint:
+        if isinstance(area.coords, CircleArea):
+            area.coords.min_radius = min_radius_value
+            area.coords.max_radius = max_radius_value
 
 def station_card():
-      
-
-
     # Text input for global radius values
     min_radius = st.text_input("Enter the minimum radius for all areas (km)", value="0")
     max_radius = st.text_input("Enter the maximum radius for all areas (km)", value="1000")
@@ -210,8 +247,8 @@ def station_card():
                 lng = marker_info["Longitude"]
 
                 # Add a new donut-shaped area
-                new_donut = DonutArea(lat=lat, lng=lng, min_radius=min_radius_value, max_radius=max_radius_value)
-                st.session_state.event_filter.areas.append(new_donut)
+                new_donut = CircleArea(lat=lat, lng=lng, min_radius=min_radius_value, max_radius=max_radius_value)
+                st.session_state.event_page.event.geo_constraint.append(new_donut)
 
                 refresh_map(reset_areas=False)
                 del st.session_state.clicked_marker_info
@@ -230,17 +267,18 @@ def right_card():
     update_circle_areas()
 
     # Display the current event filter state
-    st.write(st.session_state.event_filter.model_dump())
+    st.write(st.session_state.event_page.model_dump())
 
 
 
 def main():
-    # INIT event_filter object
-    if 'event_filter' not in st.session_state:
-        st.session_state.event_filter = EventFilter()
-
     # INIT side menu
-    st.session_state.event_filter = event_filter_menu(st.session_state.event_filter)
+    tab1, tab2 = st.sidebar.tabs(["Event options", "Station options"])
+    with tab1:
+        st.session_state.event_page = event_filter_menu(st.session_state.event_page, key='event_page_event')
+
+    with tab2:
+        st.session_state.event_page = station_filter_menu(st.session_state.event_page, key='event_page_station')
 
     # INIT MAP  
     if 'event_map' not in st.session_state:

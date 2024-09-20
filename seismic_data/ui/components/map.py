@@ -2,9 +2,9 @@ import folium
 from folium.plugins import Draw
 
 from seismic_data.models.common import RectangleArea, CircleArea , DonutArea
-from shapely.geometry import Point
-from shapely.geometry.polygon import Polygon
-import geopandas as gpd
+# from shapely.geometry import Point
+# from shapely.geometry.polygon import Polygon
+# import geopandas as gpd
 import streamlit as st
 
 def create_map(map_center=[-25.0000, 135.0000], areas=[]):
