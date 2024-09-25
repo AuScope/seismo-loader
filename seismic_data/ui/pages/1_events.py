@@ -254,77 +254,135 @@ def right_card():
     st.write(st.session_state.event_page.model_dump())
 
 
+# Initialize session state for stages if not already done
+if 'stage' not in st.session_state:
+    st.session_state.stage = 1  # Start at stage 1
+
+# Helper function to advance stages
+def next_stage():
+    st.session_state.stage += 1
+    st.rerun()
+
+# Helper function to go back stages
+def previous_stage():
+    st.session_state.stage -= 1
+
 
 def main():
-    # INIT side menu
-    tab1, tab2 = st.sidebar.tabs(["Event options", "Station options"])
-    with tab1:
-        st.session_state.event_page = event_filter_menu(st.session_state.event_page, key='event_page_event')
 
-    with tab2:
-        st.session_state.event_page = station_filter_menu(st.session_state.event_page, key='event_page_station')
-
-    # INIT MAP  
-    if 'event_map' not in st.session_state:
-        st.session_state.event_map = {'map': create_map()}
-
-    # INIT Button
-    c1_top, c2_top = st.columns([1,1])
-    with c1_top:
-        get_event_clicked = st.button("Get Events")
-    with c2_top:
-        clear_prev_clicked = st.button("Clear All Selections")
-
-    # INIT Layout
-    c1_map, c2_map = st.columns([2,1])
-    
-
-    # Handle Button Clicked
-    if get_event_clicked:     
-        refresh_map(reset_areas=False)
-
-    if clear_prev_clicked:
-        refresh_map(reset_areas=True)
-
-    
-
-    with c1_map:
-        output = create_card(None, st_folium, st.session_state.event_map.get('map'), use_container_width=True, height=600)
-        # output = st_folium(st.session_state.event_map.get('map'), use_container_width=True, height=600)
-        st.session_state.current_areas = get_selected_areas(output)
+    # Stage 1: Event options
+    if st.session_state.stage == 1:
+        st.write("Stage 1: Event options")
         
-        if output and output.get('last_object_clicked') is not None:
-            clicked_lat_lng = (output['last_object_clicked'].get('lat'), output['last_object_clicked'].get('lng'))
-            
-            if clicked_lat_lng in st.session_state.marker_info:
-                st.session_state.clicked_marker_info = st.session_state.marker_info[clicked_lat_lng]
+        # Button to go to the next stage
+        if st.button("Next"):
+            next_stage()
 
+        # Place Event options in sidebar
+        st.sidebar.header("Event options")
+        with st.sidebar:
+            st.session_state.event_page = event_filter_menu(st.session_state.event_page, key='event_page_event')
 
-    with c2_map:
-        tab1, tab2 = st.tabs(["Filter state", "Station"])
+        # INIT MAP  
+        if 'event_map' not in st.session_state:
+            st.session_state.event_map = {'map': create_map()}
 
-        with tab1:
+        # INIT Button
+        c1_top, c2_top = st.columns([1, 1])
+        with c1_top:
+            get_event_clicked = st.button("Get Events")
+        with c2_top:
+            clear_prev_events_clicked = st.button("Clear All Selections")
+
+        # INIT Layout
+        c1_map, c2_map = st.columns([2, 1])
+
+        # Handle Button Clicked
+        if get_event_clicked:
+            refresh_map(reset_areas=False)
+
+        if clear_prev_events_clicked:
+            refresh_map(reset_areas=True)
+
+        with c1_map:
+            output = create_card(None, st_folium, st.session_state.event_map.get('map'), use_container_width=True, height=600)
+            st.session_state.current_areas = get_selected_areas(output)
+
+            if output and output.get('last_object_clicked') is not None:
+                clicked_lat_lng = (output['last_object_clicked'].get('lat'), output['last_object_clicked'].get('lng'))
+                if clicked_lat_lng in st.session_state.marker_info:
+                    st.session_state.clicked_marker_info = st.session_state.marker_info[clicked_lat_lng]
+
+        with c2_map:
             create_card(None, right_card)
 
-        with tab2:
+    # Stage 2: Station options
+    elif st.session_state.stage == 2:
+        st.write("Stage 2: Station options")
+
+        # Buttons to navigate stages
+        c1_nav, c2_nav = st.columns([1, 1])
+        with c1_nav:
+            if st.button("Previous"):
+                previous_stage()
+        with c2_nav:
+            if st.button("Next"):
+                next_stage()
+
+        # Place Station options in sidebar
+        st.sidebar.header("Station options")
+        with st.sidebar:
+            st.session_state.event_page = create_card(
+                None, 
+                station_filter_menu, 
+                st.session_state.event_page, 
+                key='event_page_station'
+            )
             create_card(None, station_card)
 
-        # st.write(st.session_state.event_filter.model_dump())
-        # st.write(output)
-    
-    if 'subheader' in st.session_state['event_map']:
-        st.subheader(st.session_state['event_map']['subheader'])    
-    if 'warning' in st.session_state['event_map']:
-        st.warning(st.session_state['event_map']['warning'])
-    if 'error' in st.session_state['event_map']:
-        st.error(st.session_state['event_map']['error'])
-    if 'dataframe' in st.session_state['event_map']:
-        st.dataframe(st.session_state['event_map']['dataframe'])
+        # INIT MAP  
+        if 'station_map' not in st.session_state:
+            st.session_state.station_map = {'map': create_map()}
 
-        
+        # INIT Button
+        c1_top, c2_top = st.columns([1, 1])
+        with c1_top:
+            get_station_clicked = st.button("Get station")
+        with c2_top:
+            clear_prev_stations_clicked = st.button("Clear All Selections")
+
+        # INIT Layout
+        c1_map, c2_map = st.columns([2, 1])
+
+        # Handle Button Clicked
+        if get_station_clicked:
+            refresh_map(reset_areas=False)
+
+        if clear_prev_stations_clicked:
+            refresh_map(reset_areas=True)
+
+        with c1_map:
+            output = create_card(None, st_folium, st.session_state.event_map.get('map'), use_container_width=True, height=600)
+            st.session_state.current_areas = get_selected_areas(output)
+
+            if output and output.get('last_object_clicked') is not None:
+                clicked_lat_lng = (output['last_object_clicked'].get('lat'), output['last_object_clicked'].get('lng'))
+                if clicked_lat_lng in st.session_state.marker_info:
+                    st.session_state.clicked_marker_info = st.session_state.marker_info[clicked_lat_lng]
+
+    # Stage 3: Review & Confirmation
+    elif st.session_state.stage == 3:
+        st.write("Stage 3: Review & Confirmation")
+        st.write("Here you can review all the selections and confirm the process.")
+
+        # Navigation buttons
+        c1_nav, c2_nav = st.columns([1, 1])
+        with c1_nav:
+            if st.button("Previous"):
+                previous_stage()
+        with c2_nav:
+            if st.button("Finish"):
+                st.write("Process finished!")
 
 if __name__ == "__main__":
     main()
-    
-    
-        
