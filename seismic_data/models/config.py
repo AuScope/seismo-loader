@@ -297,8 +297,7 @@ class SeismoLoaderSettings(BaseModel):
 
             # MAP SEARCH
             geo_constraint_event = None
-            # FIXME: Fix inconsistent naming for search_type and geo_constraint
-            if config.get('EVENT', 'search_type', fallback=None) == 'box':
+            if config.get('EVENT', 'geo_constraint', fallback=None) == GeoConstraintType.BOUNDING:
                 geo_constraint_event = GeometryConstraint(
                     coords=RectangleArea(
                         min_lat=config.getfloat('EVENT', 'minlatitude', fallback=None),
@@ -308,7 +307,7 @@ class SeismoLoaderSettings(BaseModel):
                     )
                 )
 
-            if config.get('EVENT', 'search_type', fallback=None) == 'radial':
+            if config.get('EVENT', 'geo_constraint', fallback=None) == GeoConstraintType.CIRCLE:
                 geo_constraint_event = GeometryConstraint(
                     coords=CircleArea(
                         lat        = config.getfloat('EVENT', 'latitude', fallback=None),
@@ -451,15 +450,14 @@ class SeismoLoaderSettings(BaseModel):
             }
             
             if self.event.geo_constraint[0].geo_type == GeoConstraintType.CIRCLE:
-                # @FIXME: search_type and geo_constraint should follow consistent naming
-                config['EVENT']['search_type']     = 'radial'
+                config['EVENT']['geo_constraint']     = GeoConstraintType.CIRCLE.value
                 config['EVENT']['latitude']        = convert_to_str(self.event.geo_constraint.coords.lat)
                 config['EVENT']['longitude']       = convert_to_str(self.event.geo_constraint.coords.lng)
                 config['EVENT']['minsearchradius'] = convert_to_str(self.event.geo_constraint.coords.min_radius)
                 config['EVENT']['maxsearchradius'] = convert_to_str(self.event.geo_constraint.coords.max_radius)
 
             if self.event.geo_constraint[0].geo_type == GeoConstraintType.BOUNDING:
-                config['EVENT']['search_type']  = 'box'
+                config['EVENT']['geo_constraint']  = GeoConstraintType.BOUNDING.value
                 config['EVENT']['minlatitude']  = convert_to_str(self.event.geo_constraint.coords.min_lat)
                 config['EVENT']['maxlatitude']  = convert_to_str(self.event.geo_constraint.coords.max_lat)
                 config['EVENT']['minlongitude'] = convert_to_str(self.event.geo_constraint.coords.min_lng)

@@ -9,7 +9,7 @@ from seismic_data.models.config import SeismoLoaderSettings, GeometryConstraint
 
 
 current_directory = os.path.dirname(os.path.abspath(__file__))
-target_file = os.path.join(current_directory, '../../../service/example_event.kill.cfg')
+target_file = os.path.join(current_directory, '../../../service/example_event.cfg')
 target_file = os.path.abspath(target_file)
 
 
