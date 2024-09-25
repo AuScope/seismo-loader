@@ -17,13 +17,15 @@ def read_general_settings(settings: SeismoLoaderSettings):
     """
     TODO: a function that reads the latest app settings
     """
+    settings.event.geo_constraint = []
     return settings
 
 def save_general_settings(settings: SeismoLoaderSettings):
     """
     TODO: a function that saves the app settings
     """
-    pass
+    settings.station.geo_constraint = []
+    return settings
 
 
 def init_settings():

@@ -36,37 +36,38 @@ def create_map(map_center=[-25.0000, 135.0000], areas=[]):
 
     # Iterate over the areas to add them to the map
     for area in areas:
-        if isinstance(area, RectangleArea):
+        coords = area.coords
+        if isinstance(coords, RectangleArea):
             folium.Rectangle(
-                bounds=[[area.min_lat, area.min_lng], [area.max_lat, area.max_lng]],
-                color=area.color,
+                bounds=[[coords.min_lat, coords.min_lng], [coords.max_lat, coords.max_lng]],
+                color=coords.color,
                 fill=True,
                 fill_opacity=0.5
             ).add_to(m)
 
-        elif isinstance(area, CircleArea):
+        elif isinstance(coords, CircleArea):
             folium.Circle(
-                location=[area.lat, area.lng],
-                radius=area.max_radius,
+                location=[coords.lat, coords.lng],
+                radius=coords.max_radius,
                 color="green",
                 fill=True,
                 fill_opacity=0.5
             ).add_to(m)
 
-        elif isinstance(area, DonutArea):
+        elif isinstance(coords, DonutArea):
             folium.Circle(
-                location=[area.lat, area.lng],
-                radius=area.max_radius,
-                color=area.color,
+                location=[coords.lat, coords.lng],
+                radius=coords.max_radius,
+                color=coords.color,
                 fill=False,
                 dash_array='2, 4',  
                 weight=2,                
             ).add_to(m)
 
             folium.Circle(
-                location=[area.lat, area.lng],
-                radius=area.min_radius,
-                color=area.color,
+                location=[coords.lat, coords.lng],
+                radius=coords.min_radius,
+                color=coords.color,
                 fill=False,
                 dash_array='2, 4',  
                 weight=2, 

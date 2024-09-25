@@ -747,9 +747,12 @@ def get_events(settings: SeismoLoaderSettings):
         event_client = waveform_client
 
     catalog = []
-    for geo in settings.event.geo_constraint:        
+    
+    for geo in settings.event.geo_constraint:
         if geo.geo_type == GeoConstraintType.CIRCLE: # config['EVENT']['search_type'].lower() == 'radial':
             try:
+                print("HHHHHHHH")
+                print(settings.event.geo_constraint)
                 cat = event_client.get_events(
                     starttime=starttime,endtime=endtime,
                     minmagnitude= settings.event.min_magnitude, # float(config['EVENT']['minmagnitude']),
@@ -777,6 +780,8 @@ def get_events(settings: SeismoLoaderSettings):
                     starttime=starttime,endtime=endtime,
                     minmagnitude= settings.event.min_magnitude, # float(config['EVENT']['minmagnitude']),
                     maxmagnitude= settings.event.max_magnitude, # float(config['EVENT']['maxmagnitude']),
+                    mindepth    = settings.event.min_depth,
+                    maxdepth    = settings.event.max_depth,
 
                     minlatitude  = geo.coords.min_lat, # float(config['EVENT']['minlatitude']),
                     minlongitude = geo.coords.min_lng, # float(config['EVENT']['minlongitude']),

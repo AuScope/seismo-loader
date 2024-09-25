@@ -4,10 +4,10 @@ import pandas as pd
 from copy import deepcopy
 
 from seismic_data.ui.components.card import create_card
-from seismic_data.models.config import SeismoLoaderSettings
+from seismic_data.enums.config import GeoConstraintType
+from seismic_data.models.config import SeismoLoaderSettings, GeometryConstraint
 from seismic_data.models.common import CircleArea, RectangleArea
 from seismic_data.service.events import get_event_data, event_response_to_df
-from seismic_data.service.seismoloader_update import get_events
 from seismic_data.ui.components.map import create_map, add_data_points
 from seismic_data.ui.pages.helpers.common import get_selected_areas
 
@@ -23,42 +23,11 @@ st.set_page_config(layout="wide")
 
 def handle_get_events(base_map, settings: SeismoLoaderSettings):
     # GET DATA
-    data = get_events(settings)
-    
+    data = get_event_data(settings.model_dump_json())
     components = {}
     if data:
-        records = []
-        for event in data:
-            # Extract the preferred origin (location info)
-            origin = event.preferred_origin() or event.origins[0]
-            magnitude = event.preferred_magnitude() or event.magnitudes[0]
-            
-            # Extract location (longitude, latitude, depth)
-            longitude = origin.longitude
-            latitude = origin.latitude
-            depth = origin.depth / 1000  # Convert depth to kilometers
-
-            # Extract the time and place
-            time = origin.time.datetime
-            place = event.event_descriptions[0].text if event.event_descriptions else "Unknown place"
-            
-            # Extract the magnitude
-            mag = magnitude.mag
-
-            # Create the record dictionary
-            record = {
-                'place': place,
-                'magnitude': mag,
-                'time': pd.to_datetime(time),  # Convert to pandas datetime
-                'longitude': longitude,
-                'latitude': latitude,
-                'depth': depth  # in kilometers
-            }
-            
-            records.append(record)
-
         # Convert records to a DataFrame (optional)
-        df = pd.DataFrame(records)
+        df = event_response_to_df(data)
         # df = event_response_to_df(data)
         total_earthquakes = len(df)
         
@@ -87,7 +56,6 @@ def refresh_map(reset_areas = False):
     else:
         st.session_state.event_page.event.geo_constraint.extend(st.session_state.current_areas)
     
-    
     st.session_state.event_map = {'map': create_map(areas=st.session_state.event_page.event.geo_constraint)}
     if len(st.session_state.event_page.event.geo_constraint) > 0:
         result = handle_get_events(st.session_state.event_map.get('map'), st.session_state.event_page)
@@ -95,13 +63,27 @@ def refresh_map(reset_areas = False):
         st.session_state.marker_info = result.get('marker_info', {}) 
       
 
+def update_event_filter_geometry(df, geo_type: GeoConstraintType):
+    add_geo = []
+    for _, row in df.iterrows():
+        coords = row.to_dict()
+        if geo_type == GeoConstraintType.BOUNDING:
+            add_geo.append(GeometryConstraint(coords=RectangleArea(**coords)))
+        if geo_type == GeoConstraintType.CIRCLE:
+            add_geo.append(GeometryConstraint(coords=CircleArea(**coords)))
+
+    new_geo = []
+    for area in st.session_state.event_page.event.geo_constraint:
+        if area.geo_type != geo_type:
+            new_geo.append(area)
+    st.session_state.event_page.event.geo_constraint.extend(new_geo)
         
 def update_event_filter_with_rectangles(df_rect):
-    new_rectangles = [RectangleArea(**row.to_dict()) for _, row in df_rect.iterrows()]
+    new_geo = [GeometryConstraint(coords=RectangleArea(**row.to_dict())) for _, row in df_rect.iterrows()]
     st.session_state.event_page.event.geo_constraint = [
         area for area in st.session_state.event_page.event.geo_constraint 
         if not (isinstance(area.coords, RectangleArea) )
-    ] + new_rectangles
+    ] + new_geo
 
 
 def update_event_filter_with_circles(df_circ):
@@ -119,9 +101,11 @@ def update_event_filter_with_donuts(df_donut):
         if not isinstance(area.coords, CircleArea)
     ] + new_donuts
 
+
+
 def update_circle_areas():
-    lst_circ = [area.model_dump() for area in st.session_state.event_page.event.geo_constraint
-                if isinstance(area.coords, CircleArea) ]
+    lst_circ = [area.coords.model_dump() for area in st.session_state.event_page.event.geo_constraint
+                if area.geo_type == GeoConstraintType.CIRCLE ]
 
     if lst_circ:
         st.write(f"Circle Areas")
@@ -131,12 +115,12 @@ def update_circle_areas():
         circ_changed = not original_df_circ.equals(st.session_state.df_circ)
 
         if circ_changed:
-            update_event_filter_with_circles(st.session_state.df_circ)
+            update_event_filter_geometry(st.session_state.df_circ, GeoConstraintType.CIRCLE)
             refresh_map(reset_areas=False)
             st.rerun()
 
 def update_rectangle_areas():
-    lst_rect = [area.model_dump() for area in st.session_state.event_page.event.geo_constraint
+    lst_rect = [area.coords.model_dump() for area in st.session_state.event_page.event.geo_constraint
                 if isinstance(area.coords, RectangleArea) ]
 
     if lst_rect:
@@ -147,13 +131,13 @@ def update_rectangle_areas():
         rect_changed = not original_df_rect.equals(st.session_state.df_rect)
 
         if rect_changed:
-            update_event_filter_with_rectangles(st.session_state.df_rect)
+            update_event_filter_geometry(st.session_state.df_rect, GeoConstraintType.BOUNDING)
             refresh_map(reset_areas=False)
             st.rerun()
 
 def update_donut_areas():
     # Display and allow editing of all donut areas
-    lst_donut = [area.model_dump() for area in st.session_state.event_page.event.geo_constraint if isinstance(area.coords, CircleArea)]
+    lst_donut = [area.coords.model_dump() for area in st.session_state.event_page.event.geo_constraint if isinstance(area.coords, CircleArea)]
 
     if lst_donut:
         st.write("Station Areas from selected events")
@@ -164,7 +148,7 @@ def update_donut_areas():
         donut_changed = not original_df_donut.equals(st.session_state.df_donut)
 
         if donut_changed:
-            update_event_filter_with_donuts(st.session_state.df_donut)
+            update_event_filter_geometry(st.session_state.df_donut, GeoConstraintType.CIRCLE)
             refresh_map(reset_areas=False)
             st.rerun()
 
