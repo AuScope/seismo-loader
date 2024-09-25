@@ -2,8 +2,14 @@
 name = "seismic_data"
 version = "0.1.0"
 description = ""
+package-mode = false
 authors = ["Ben Motevalli <mot032@csiro.au>"]
 readme = "README.md"
+packages = [{ include = "seismic_data" }]
+
+
+[tool.poetry.scripts]
+seismo-loader = "seismic_data.cli:cli"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.11"

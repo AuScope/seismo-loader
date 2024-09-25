@@ -14,7 +14,7 @@ import requests
 
 from seismic_data.models.events import EventFilter
 from seismic_data.models.config import SeismoLoaderSettings
-from seismic_data.service.seismoloader_update import get_events
+from seismic_data.service.seismoloader import get_events
 
 
 

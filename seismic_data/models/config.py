@@ -46,10 +46,9 @@ class ProcessingConfig(BaseModel):
     logging      : Optional    [  str         ] = None
 
 class AuthConfig(BaseModel):
-    pass_2p: Optional[str] = None
-    pass_6h: Optional[str] = None
-    pass_m8: Optional[str] = None
-
+    nslc_code: str  # network.station.location.channel code
+    username: str
+    password: str
 
 class SeismoLocation(BaseModel):
     network : Optional[str] = None
@@ -84,16 +83,6 @@ class SeismoLocation(BaseModel):
         setattr(self, 'network', network)
         setattr(self, 'station', station)
 
-
-
-
-class CommonConfig(BaseModel):
-    client           : Optional[SeismoClients                 ] = SeismoClients.AUSPASS
-    inventory        : Optional[str                           ] = None
-    force_stations   : Optional[List          [SeismoLocation]] = []
-    exclude_stations : Optional[List          [SeismoLocation]] = []
-
-
 class DateConfig(BaseModel):
     start_time  : Optional[Union[date, Any] ] = date.today() - timedelta(days=7)
     end_time    : Optional[Union[date, Any] ] = date.today()
@@ -104,10 +93,10 @@ class DateConfig(BaseModel):
 
 
 class WaveformConfig(BaseModel):
-    common_config   : CommonConfig                  = None
-    channel_pref    : Optional    [List[Channels]]  = []
-    location_pref   : Optional    [List[Locations]] = []
-    days_per_request: Optional    [int]             = 3
+    client           : Optional     [SeismoClients]   = SeismoClients.AUSPASS
+    channel_pref     : Optional     [List[Channels]]  = []
+    location_pref    : Optional     [List[Locations]] = []
+    days_per_request : Optional     [int]             = 3
 
 
 class GeometryConstraint(BaseModel):
@@ -125,8 +114,19 @@ class GeometryConstraint(BaseModel):
 
 
 class StationConfig(BaseModel):
-    common_config: CommonConfig = None
-    date_config: DateConfig = DateConfig()
+    client             : Optional  [  SeismoClients] = SeismoClients.AUSPASS
+    force_stations     : Optional  [  List          [SeismoLocation]] = []
+    exclude_stations   : Optional  [  List          [SeismoLocation]] = []
+    date_config        : DateConfig = DateConfig   ()
+    local_inventory    : Optional  [  str          ] = None
+    network            : Optional  [  str          ] = None
+    station            : Optional  [  str          ] = None
+    location           : Optional  [  str          ] = None
+    channel            : Optional  [  str          ] = None
+    geo_constraint     : Optional  [  List         [GeometryConstraint]] = None
+    include_restricted : bool       = False
+    level              : Levels     = Levels       .CHANNEL
+
     # TODO: check if it makes sense to use SeismoLocation instead of separate
     # props.
     # seismo_location: List[SeismoLocation] = None
@@ -134,51 +134,42 @@ class StationConfig(BaseModel):
     # FIXME: for now we just assume all values are 
     # given in one string separated with "," -> e.g.
     # channel = CH,HH,BH,EH
-    network:  Optional[str] = None
-    station:  Optional[str] = None
-    location: Optional[str] = None
-    channel:  Optional[str] = None
-
-    geo_constraint: Optional[List[GeometryConstraint]] = None
-    include_restricted: bool = False
-    level: Levels = Levels.CHANNEL
 
 class EventConfig(BaseModel):
-    common_config: CommonConfig = None
-    date_config: DateConfig = DateConfig()
-    
-    model: EventModels = EventModels.IASP91
-    min_depth: float
-    max_depth: float
+    client       : Optional   [SeismoClients] = SeismoClients.AUSPASS
+    date_config  : DateConfig  = DateConfig()
+    model        : EventModels = EventModels.IASP91
+    min_depth    : float
+    max_depth    : float
     min_magnitude: float
     max_magnitude: float
-
     # These are relative to the individual stations
-    min_radius: float = 30
-    max_radius: float = 90
+    min_radius            : float         = 30
+    max_radius            : float         = 90
+    before_p_sec          : int           = 10
+    after_p_sec           : int           = 10
+    include_all_origins   : bool          = False
+    include_all_magnitudes: bool          = False
+    include_arrivals      : bool          = False
+    limit                 : Optional[str] = None
+    offset                : Optional[str] = None
+    local_catalog         : Optional[str] = None
+    contributor           : Optional[str] = None
+    updated_after         : Optional[str] = None   
 
     geo_constraint: Optional[List[GeometryConstraint]] = None
-
-    include_all_origins: bool = False
-    include_all_magnitudes: bool = False
-    include_arrivals: bool = False
-    limit: Optional[str] = None
-    offset: Optional[str] = None
-    catalog: Optional[str] = None
-    contributor: Optional[str] = None
-    updated_after: Optional[str] = None
 
 
 
 class SeismoLoaderSettings(BaseModel):
-    sds_path     : str              = None
-    db_path      : str              = None
-    download_type: DownloadType     = DownloadType.EVENT
-    proccess     : ProcessingConfig = None
-    auth         : AuthConfig       = None
-    waveform     : WaveformConfig   = None
-    station      : StationConfig    = None
-    event        : EventConfig      = None
+    sds_path     : str                        = None
+    db_path      : str                        = None
+    download_type: DownloadType               = DownloadType.EVENT
+    proccess     : ProcessingConfig           = None
+    auths        : Optional[List[AuthConfig]] = []
+    waveform     : WaveformConfig             = None
+    station      : StationConfig              = None
+    event        : EventConfig                = None
 
     # main: Union[EventConfig, StationConfig] = None
 
@@ -203,11 +194,17 @@ class SeismoLoaderSettings(BaseModel):
         download_type = DownloadType(download_type_str.lower())
 
         # Parse the AUTH section
-        auth = AuthConfig(
-            pass_2p=config.get('AUTH', 'pass_2P', fallback=None),
-            pass_6h=config.get('AUTH', 'pass_6H', fallback=None),
-            pass_m8=config.get('AUTH', 'pass_M8', fallback=None)
-        )
+        credentials = list(config['AUTH'].items())
+        lst_auths   = []
+        for nslc, cred in credentials:
+            username, password = cred.split(':')
+            lst_auths.append(
+                AuthConfig(
+                    nslc_code = nslc,
+                    username = username,
+                    password = password
+                )
+            )
 
         # Parse the WAVEFORM section
         client = SeismoClients[config.get('WAVEFORM', 'client', fallback='AUSPASS').upper()]
@@ -216,7 +213,7 @@ class SeismoLoaderSettings(BaseModel):
         days_per_request = config.getint('WAVEFORM', 'days_per_request', fallback=1)
 
         waveform = WaveformConfig(
-            common_config=CommonConfig(client=client),
+            client = client,
             channel_pref=[Channels(channel.strip()) for channel in channel_pref if channel],
             location_pref=[Locations(loc.strip()) for loc in location_pref if loc],
             days_per_request=days_per_request
@@ -262,12 +259,10 @@ class SeismoLoaderSettings(BaseModel):
             )
 
         station_config = StationConfig(
-            common_config=CommonConfig(
-                client=SeismoClients[station_client.upper()] if station_client else None,
-                inventory=config.get("STATION","inventory", fallback=None),
-                force_stations=force_stations,
-                exclude_stations=exclude_stations,
-            ),
+            client=SeismoClients[station_client.upper()] if station_client else None,
+            local_inventory=config.get("STATION","local_inventory", fallback=None),
+            force_stations=force_stations,
+            exclude_stations=exclude_stations,
             date_config=DateConfig(
                 start_time   = parse_time(config.get('STATION', 'starttime'  , fallback=None)),
                 end_time     = parse_time(config.get('STATION', 'endtime'    , fallback=None)),                    
@@ -318,9 +313,7 @@ class SeismoLoaderSettings(BaseModel):
                 )
 
             event_config = EventConfig(
-                common_config          = CommonConfig(
-                    client             = SeismoClients[event_client.upper()] if event_client else None
-                ),
+                client                 = SeismoClients[event_client.upper()] if event_client else None,
                 model                  = EventModels[model.upper()],
                 date_config            = DateConfig(
                     start_time         = parse_time(config.get('EVENT', 'starttime'  , fallback=None)),
@@ -332,13 +325,15 @@ class SeismoLoaderSettings(BaseModel):
                 max_magnitude          = config.getfloat('EVENT', 'maxmagnitude', fallback=None),
                 min_radius             = config.getfloat('EVENT', 'minradius', fallback=None),
                 max_radius             = config.getfloat('EVENT', 'maxradius', fallback=None),
+                before_p_sec           = config.get('STATION', 'before_p_sec' , fallback=False),
+                after_p_sec            = config.get('STATION', 'after_p_sec' , fallback=False),
                 geo_constraint         = [geo_constraint_event],
                 include_all_origins    = config.get('STATION', 'includeallorigins' , fallback=False),
                 include_all_magnitudes = config.get('STATION', 'includeallmagnitudes' , fallback=False),
                 include_arrivals       = config.get('STATION', 'includearrivals' , fallback=False),
                 limit                  = config.get('STATION', 'limit' , fallback=None),
                 offset                 = config.get('STATION', 'offset' , fallback=None),
-                catalog                = config.get('STATION', 'catalog' , fallback=None),
+                local_catalog          = config.get('STATION', 'local_catalog' , fallback=None),
                 contributor            = config.get('STATION', 'contributor' , fallback=None),
                 updatedafter           = config.get('STATION', 'updatedafter' , fallback=None),
             )
@@ -352,7 +347,7 @@ class SeismoLoaderSettings(BaseModel):
                 num_processes=num_processes,
                 gap_tolerance=gap_tolerance
             ),
-            auth=auth,
+            auths=lst_auths,
             waveform=waveform,
             station=station_config,
             event= event_config
@@ -379,15 +374,14 @@ class SeismoLoaderSettings(BaseModel):
         }
 
         # Populate the [AUTH] section
-        config['AUTH'] = {
-            'pass_2P': convert_to_str(self.auth.pass_2p),
-            'pass_6H': convert_to_str(self.auth.pass_6h),
-            'pass_M8': convert_to_str(self.auth.pass_m8)
-        }
+        config['AUTH'] = {}
+        if self.auths:
+            for auth in self.auths:
+                config['AUTH'][auth.nslc_code] = f"{auth.username}:{auth.password}"
 
         # Populate the [WAVEFORM] section
         config['WAVEFORM'] = {
-            'client': convert_to_str(self.waveform.common_config.client.value),
+            'client': convert_to_str(self.waveform.client.value),
             'channel_pref': ','.join([channel.value for channel in self.waveform.channel_pref]),
             'location_pref': ','.join([loc.value for loc in self.waveform.location_pref]),
             'days_per_request': convert_to_str(self.waveform.days_per_request)
@@ -396,10 +390,10 @@ class SeismoLoaderSettings(BaseModel):
 
         if self.station:
             config['STATION'] = {
-                'client': convert_to_str(self.station.common_config.client),
-                'inventory': convert_to_str(self.station.common_config.inventory),
-                'force_stations': ','.join([station.cmb_str for station in self.station.common_config.force_stations]),
-                'exclude_stations': ','.join([station.cmb_str for station in self.station.common_config.exclude_stations]),
+                'client': convert_to_str(self.station.client),
+                'local_inventory': convert_to_str(self.station.local_inventory),
+                'force_stations': ','.join([station.cmb_str for station in self.station.force_stations]),
+                'exclude_stations': ','.join([station.cmb_str for station in self.station.exclude_stations]),
                 'starttime': convert_to_str(self.station.date_config.start_time),
                 'endtime': convert_to_str(self.station.date_config.end_time),
                 'startbefore': convert_to_str(self.station.date_config.start_before),
@@ -412,6 +406,10 @@ class SeismoLoaderSettings(BaseModel):
                 'channel': convert_to_str(self.station.channel),
                 'geo_constraint': convert_to_str(self.station.geo_constraint[0].geo_type),
             }
+
+            # FIXME: The settings are updated such that they support multiple geometries.
+            # But config file only accepts one geometry at a time. For now we just get
+            # the first item.
 
             if self.station.geo_constraint[0].geo_type == GeoConstraintType.CIRCLE:
                 config['STATION']['latitude']  = convert_to_str(self.station.geo_constraint[0].coords.lat)
@@ -431,7 +429,7 @@ class SeismoLoaderSettings(BaseModel):
         # Check if the main section is EventConfig or StationConfig and populate accordingly
         if self.event:
             config['EVENT'] = {
-                'client'               : convert_to_str(self.event.common_config         .client) ,
+                'client'               : convert_to_str(self.event.client                       ) ,
                 'model'                : convert_to_str(self.event.model                        ) ,
                 'min_depth'            : convert_to_str(self.event.min_depth                    ) ,
                 'max_depth'            : convert_to_str(self.event.max_depth                    ) ,
@@ -439,28 +437,34 @@ class SeismoLoaderSettings(BaseModel):
                 'maxmagnitude'         : convert_to_str(self.event.max_magnitude                ) ,
                 'minradius'            : convert_to_str(self.event.min_radius                   ) ,
                 'maxradius'            : convert_to_str(self.event.max_radius                   ) ,
+                'after_p_sec'          : convert_to_str(self.event.after_p_sec                  ) ,
+                'before_p_sec'         : convert_to_str(self.event.before_p_sec                 ) ,
                 'includeallorigins'    : convert_to_str(self.event.include_all_origins          ) ,
                 'includeallmagnitudes' : convert_to_str(self.event.include_all_magnitudes       ) ,
                 'includearrivals'      : convert_to_str(self.event.include_arrivals             ) ,
                 'limit'                : convert_to_str(self.event.limit                        ) ,
                 'offset'               : convert_to_str(self.event.offset                       ) ,
-                'catalog'              : convert_to_str(self.event.catalog                      ) ,
+                'local_catalog'        : convert_to_str(self.event.local_catalog                ) ,
                 'contributor'          : convert_to_str(self.event.contributor                  ) ,
                 'updatedafter'         : convert_to_str(self.event.updated_after                ) ,
             }
+
+            # FIXME: The settings are updated such that they support multiple geometries.
+            # But config file only accepts one geometry at a time.For now we just get
+            # the first item.
             
             if self.event.geo_constraint[0].geo_type == GeoConstraintType.CIRCLE:
                 config['EVENT']['geo_constraint']     = GeoConstraintType.CIRCLE.value
-                config['EVENT']['latitude']        = convert_to_str(self.event.geo_constraint.coords.lat)
-                config['EVENT']['longitude']       = convert_to_str(self.event.geo_constraint.coords.lng)
-                config['EVENT']['minsearchradius'] = convert_to_str(self.event.geo_constraint.coords.min_radius)
-                config['EVENT']['maxsearchradius'] = convert_to_str(self.event.geo_constraint.coords.max_radius)
+                config['EVENT']['latitude']        = convert_to_str(self.event.geo_constraint[0].coords.lat)
+                config['EVENT']['longitude']       = convert_to_str(self.event.geo_constraint[0].coords.lng)
+                config['EVENT']['minsearchradius'] = convert_to_str(self.event.geo_constraint[0].coords.min_radius)
+                config['EVENT']['maxsearchradius'] = convert_to_str(self.event.geo_constraint[0].coords.max_radius)
 
             if self.event.geo_constraint[0].geo_type == GeoConstraintType.BOUNDING:
                 config['EVENT']['geo_constraint']  = GeoConstraintType.BOUNDING.value
-                config['EVENT']['minlatitude']  = convert_to_str(self.event.geo_constraint.coords.min_lat)
-                config['EVENT']['maxlatitude']  = convert_to_str(self.event.geo_constraint.coords.max_lat)
-                config['EVENT']['minlongitude'] = convert_to_str(self.event.geo_constraint.coords.min_lng)
-                config['EVENT']['maxlongitude'] = convert_to_str(self.event.geo_constraint.coords.max_lng)
+                config['EVENT']['minlatitude']  = convert_to_str(self.event.geo_constraint[0].coords.min_lat)
+                config['EVENT']['maxlatitude']  = convert_to_str(self.event.geo_constraint[0].coords.max_lat)
+                config['EVENT']['minlongitude'] = convert_to_str(self.event.geo_constraint[0].coords.min_lng)
+                config['EVENT']['maxlongitude'] = convert_to_str(self.event.geo_constraint[0].coords.max_lng)
 
         return config
