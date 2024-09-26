@@ -266,6 +266,7 @@ def next_stage():
 # Helper function to go back stages
 def previous_stage():
     st.session_state.stage -= 1
+    st.rerun()
 
 
 def main():
@@ -383,6 +384,16 @@ def main():
         with c2_nav:
             if st.button("Finish"):
                 st.write("Process finished!")
+
+    # Check for additional session state variables to display
+    if 'subheader' in st.session_state['event_map']:
+        st.subheader(st.session_state['event_map']['subheader'])    
+    if 'warning' in st.session_state['event_map']:
+        st.warning(st.session_state['event_map']['warning'])
+    if 'error' in st.session_state['event_map']:
+        st.error(st.session_state['event_map']['error'])
+    if 'dataframe' in st.session_state['event_map']:
+        st.dataframe(st.session_state['event_map']['dataframe'])
 
 if __name__ == "__main__":
     main()
