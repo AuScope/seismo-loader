@@ -28,6 +28,8 @@ from obspy.clients.fdsn import Client
 from obspy.geodetics.base import locations2degrees
 from obspy import UTCDateTime
 from obspy.taup import TauPyModel
+from obspy.core.inventory import Inventory
+from obspy.core.event import Catalog
 
 from seismic_data.models.config import SeismoLoaderSettings
 from seismic_data.enums.config import DownloadType, GeoConstraintType
@@ -839,16 +841,48 @@ def get_events(settings: SeismoLoaderSettings):
     return catalog
 
 
-def run_continuous(settings: SeismoLoaderSettings):
+def run_continuous(settings: SeismoLoaderSettings, inv: Inventory):
     """
-    Assuming it is configured to Run STATION block
+    Retrieves continuous seismic data over long time intervals for a set of stations
+    defined by the `inv` parameter. The function manages multiple steps including
+    generating data requests, pruning unnecessary requests based on existing data,
+    combining requests for efficiency, and finally archiving the retrieved data.
+
+    The function uses a client setup based on the configuration in `settings` to
+    handle different data sources and authentication methods. Errors during client
+    creation or data retrieval are handled gracefully, with issues logged to the console.
+
+    Parameters:
+    - settings (SeismoLoaderSettings): Configuration settings containing client information,
+      authentication details, and database paths necessary for data retrieval and storage.
+      This should include the start and end times for data collection, database path,
+      and SDS archive path among other configurations.
+    - inv (Inventory): An object representing the network/station/channel inventory
+      to be used for data requests. This is usually prepared prior to calling this function.
+
+    Workflow:
+    1. Initialize clients for waveform data retrieval.
+    2. Retrieve station information based on settings.
+    3. Collect initial data requests for the given time interval.
+    4. Prune requests based on existing data in the database to avoid redundancy.
+    5. Combine similar requests to minimize the number of individual operations.
+    6. Update or create clients based on specific network credentials if necessary.
+    7. Execute data retrieval requests, archive data to disk, and update the database.
+
+    Raises:
+    - Exception: General exceptions could be raised due to misconfiguration, unsuccessful
+      data retrieval or client initialization errors. These exceptions are caught and logged,
+      but not re-raised, allowing the process to continue with other requests.
+
+    Notes:
+    - It is crucial to ensure that the settings object is correctly configured, especially
+      the client details and authentication credentials to avoid runtime errors.
+    - The function logs detailed information about the processing steps and errors to aid
+      in debugging and monitoring of data retrieval processes.
     """
     starttime = UTCDateTime(settings.station.date_config.start_time)
     endtime = UTCDateTime(settings.station.date_config.end_time)
     waveform_client = Client(settings.waveform.client.value) # note we may have three different clients here: waveform, station, and event. be careful to keep track
-
-
-    inv = get_stations(settings)
 
     # Collect requests
     requests = collect_requests(inv,starttime,endtime)
@@ -882,18 +916,39 @@ def run_continuous(settings: SeismoLoaderSettings):
 
 
 
-def run_event(settings: SeismoLoaderSettings):
+def run_event(settings: SeismoLoaderSettings, inv: Inventory, catalog: Catalog):
     """
-    Assuming it is configured to Run STATION block
+    Processes and downloads seismic event data for each event in the provided catalog using the specified
+    settings and station inventory. The function handles data requests, filters out already available data,
+    combines requests for efficiency, and manages authentication for access to restricted data.
 
-    FIXME: inv is the set of stations. It is set in [STATION] block, which at 
-    present it looks quite a separate block to [EVENT]. Probably, we need some other way
-    to get nearby stations.
+    Parameters:
+    - settings (SeismoLoaderSettings): Configuration settings that include client details, authentication credentials,
+      event-specific parameters like radius and time window, and paths for data storage.
+    - inv (Inventory): The network/station/channel inventory to be used for data requests, typically relevant to the
+      stations involved in the seismic events.
+    - catalog (Catalog): A collection of seismic events, each containing data like origin time, coordinates, and depth.
+
+    Workflow:
+    1. Initialize a primary waveform client for data retrieval.
+    2. Loop through each event in the catalog, collecting necessary data request parameters.
+    3. For each event, collect data requests based on its geographical and temporal parameters.
+    4. Filter out data requests that are already satisfied with existing data in the database.
+    5. Optionally combine requests for operational efficiency.
+    6. Manage additional client creation for restricted data based on user credentials.
+    7. Execute the data retrieval requests, then archive the data to disk and update the database.
+
+    Raises:
+    - Exception: General exceptions could be caught related to client creation, data retrieval, or during the
+      archival process. These are logged but not re-raised, allowing the function to continue processing further events.
+
+    Notes:
+    - The function includes comments questioning the design, such as the redundancy of using 'inv' from STATION
+      settings in EVENTS processing, which suggests a potential refactor for better separation of concerns or efficiency.
+    - Care should be taken when modifying settings and handling authentication to ensure the integrity and security
+      of data access and retrieval.
     """
     waveform_client = Client(settings.waveform.client.value)
-
-    catalog = get_events(settings)
-    inv     = get_stations(settings)
     
     ttmodel = TauPyModel(settings.event.model) #  config['EVENT']['model'])
 
@@ -964,10 +1019,13 @@ def run_main(settings: SeismoLoaderSettings = None, from_file=None):
 
 
     if download_type == DownloadType.CONTIN:
-        run_continuous(settings)
+        inv = get_stations(settings)
+        run_continuous(settings, inv)
 
     if download_type == DownloadType.EVENT:
-        run_event(settings)
+        catalog = get_events(settings)
+        inv     = get_stations(settings)
+        run_event(settings, inv, catalog)
     # Now we can optionally clean up our database (stich continous segments, etc)
     print("\n ~~ Cleaning up database ~~")
     join_continuous_segments(settings.db_path, settings.proccess.gap_tolerance) # gap_tolerance=float(config['PROCESSING']['gap_tolerance']))

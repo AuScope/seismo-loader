@@ -19,7 +19,7 @@ from seismic_data.enums.stations import Channels, Stations, Locations, Networks
 # Convert start and end times to datetime
 def parse_time(time_str):
     try:
-        return UTCDateTime(time_str)
+        return UTCDateTime(time_str).isoformat()
     except:
         time_formats = [
             '%Y,%m,%d',         # Format like '2014,2,1'
