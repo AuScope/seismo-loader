@@ -86,11 +86,9 @@ class EventFilterMenu:
             st.error("Error: End Date must fall after Start Date.")
 
         st.header("Filter Earthquakes")
-        self.settings.event.min_magnitude = st.slider("Min Magnitude", min_value=-2.0, max_value=10.0, value=2.4, step=0.1)
-        self.settings.event.max_magnitude = st.slider("Max Magnitude", min_value=-2.0, max_value=10.0, value=10.0, step=0.1)
-        self.settings.event.min_depth = st.slider("Min Depth (km)", min_value=-5.0, max_value=800.0, value=0.0, step=1.0)
-        self.settings.event.max_depth = st.slider("Max Depth (km)", min_value=-5.0, max_value=800.0, value=200.0, step=1.0)
-
+        self.settings.event.min_magnitude, self.settings.event.max_magnitude = st.slider("Min Magnitude", min_value=-2.0, max_value=10.0, value = (2.4,9.0), step=0.1, key="event-pg-mag")
+        self.settings.event.min_depth, self.settings.event.max_depth = st.slider("Min Depth (km)", min_value=-5.0, max_value=800.0, value=(0.0,500.0), step=1.0, key=f"event-pg-depth")
+        
         self.update_rectangle_areas(refresh_map)
         self.update_circle_areas(refresh_map)
 
@@ -102,34 +100,28 @@ class EventMap:
     df_events: pd.DataFrame = pd.DataFrame()
     marker_info = None
     clicked_marker_info = None
+    warning: str = None
+    error: str = None
 
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
 
-    def handle_get_events(self, base_map):
-    # GET DATA
+    def handle_get_events(self):
+        self.warning = None
+        self.error   = None
+
         data = get_event_data(self.settings.model_dump_json())
-        components = {}
         if data:
             # Convert records to a DataFrame (optional)
             self.df_events = event_response_to_df(data)
-            # df = event_response_to_df(data)
-            total_earthquakes = len(self.df_events)
-            
-            components['subheader'] = f"Showing {total_earthquakes} events"
             
             if not self.df_events.empty:
-                base_map, self.marker_info = add_data_points(base_map, self.df_events, col_color='magnitude')
-                components['dataframe'] = self.df_events
-                components['marker_info'] = self.marker_info  
-
+                self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_events, col_color='magnitude')
             else:
-                components['warning'] = "No earthquakes found for the selected magnitude and depth range."
+                self.warning = "No earthquakes found for the selected magnitude and depth range."
         else:
-            components['error'] = "No data available."
+            self.error = "No data available."
 
-        components['map'] = base_map
-        return components  
     
 
     def refresh_map(self, reset_areas = False):
@@ -138,11 +130,9 @@ class EventMap:
         else:
             self.settings.event.geo_constraint.extend(self.areas_current)
 
-        self.map_disp = {'map': create_map(areas=self.settings.event.geo_constraint)}
+        self.map_disp = create_map(areas=self.settings.event.geo_constraint)
         if len(self.settings.event.geo_constraint) > 0:
-            result = self.handle_get_events(self.map_disp.get('map'))
-            self.map_disp = result
-            self.marker_info = result.get('marker_info', {})
+            self.handle_get_events()
 
     
     
@@ -165,7 +155,7 @@ class EventMap:
         output = create_card(
             None, 
             st_folium, 
-            self.map_disp.get('map'), 
+            self.map_disp, 
             use_container_width=True, 
             height=self.map_height
         )
@@ -175,6 +165,11 @@ class EventMap:
             if clicked_lat_lng in self.marker_info:
                 self.clicked_marker_info = self.marker_info[clicked_lat_lng]
 
+        if self.warning:
+            st.warning(self.warning)
+        
+        if self.error:
+            st.error(self.error)
 
 class EventSelect:
 
