@@ -4,11 +4,9 @@ import pandas as pd
 from seismic_data.models.common import CircleArea
 
 from seismic_data.ui.pages.helpers.common import init_settings
-from seismic_data.ui.components.events import EventBasedWorkflow
+from seismic_data.ui.components.workflows import EventBasedWorkflow
 
 init_settings()
-
-
 st.set_page_config(layout="wide")
 
 

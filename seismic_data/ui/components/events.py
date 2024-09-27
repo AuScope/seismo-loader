@@ -1,4 +1,5 @@
 from typing import List, Any, Optional, Union
+from copy import deepcopy
 import streamlit as st
 from streamlit_folium import st_folium
 import pandas as pd
@@ -79,7 +80,7 @@ class EventFilterMenu:
         refresh_map is a function that refreshes the map (see EventMap).
         """
         st.header("Select Date Range")
-        self.settings.event.date_config.start_time = st.date_input("Start Date", datetime.now() - timedelta(days=1))
+        self.settings.event.date_config.start_time = st.date_input("Start Date", datetime.now() - timedelta(days=7))
         self.settings.event.date_config.end_time   = st.date_input("End Date", datetime.now())
 
         if self.settings.event.date_config.start_time > self.settings.event.date_config.end_time:
@@ -171,18 +172,41 @@ class EventMap:
         if self.error:
             st.error(self.error)
 
+        st.write(self.clicked_marker_info)
+
 class EventSelect:
 
     settings: SeismoLoaderSettings
+    df_data_edit: pd.DataFrame = None
 
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
 
+
     def render(self, df_data):
         # Show Events in the table
         if not df_data.empty:
-            st.write(f"Total Number of Events: {len(df_data)}")
-            st.dataframe(df_data)
+            cols = df_data.columns
+            orig_cols   = [col for col in cols if col != 'is_selected']
+            ordered_col = ['is_selected'] + orig_cols
+
+            config = {col: {'disabled': True} for col in orig_cols}
+
+            df_data['is_selected'] = False     
+            config['is_selected']  = st.column_config.CheckboxColumn(
+                'Select'
+            )
+            
+            c1, c2, c3 = st.columns([1,1,12])
+            with c1:
+                st.write(f"Total Number of Events: {len(df_data)}")
+            with c2:
+                if st.button("Select All"):
+                    df_data['is_selected'] = True
+            with c3:
+                if st.button("Unselect All"):
+                    df_data['is_selected'] = False
+            self.df_data_edit = st.data_editor(df_data, hide_index = True, column_config=config, column_order = ordered_col)
 
 
 class EventComponents:
@@ -207,38 +231,3 @@ class EventComponents:
         self.event_select.render(self.map_component.df_events)
 
 
-class EventBasedWorkflow:
-
-    settings: SeismoLoaderSettings
-    stage: int = 1
-    event_components: EventComponents
-
-
-    def __init__(self, settings: SeismoLoaderSettings):
-        self.settings = settings
-        self.event_components = EventComponents(self.settings)    
-
-    def next_stage(self):
-        self.stage += 1
-        st.rerun()
-
-    def previous_stage(self):
-        self.stage -= 1
-        st.rerun()
-
-    def render(self):
-        if self.stage == 1:
-            st.write("Step 1: Select Events")
-            if st.button("Next"):
-                self.next_stage()
-            self.event_components.render()
-
-        if self.stage == 2:
-            st.write("Step 2: Select Stations")
-            c1_nav, c2_nav = st.columns([1, 1])
-            with c1_nav:
-                if st.button("Previous"):
-                    self.previous_stage()
-            with c2_nav:
-                if st.button("Next"):
-                    self.next_stage()
