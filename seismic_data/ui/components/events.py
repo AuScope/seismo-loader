@@ -117,7 +117,9 @@ class EventMap:
             self.df_events = event_response_to_df(data)
             
             if not self.df_events.empty:
-                self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_events, col_color='magnitude')
+                cols = self.df_events.columns                
+                cols_to_disp = {c:c.capitalize() for c in cols }
+                self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_events, cols_to_disp, col_color='magnitude')
             else:
                 self.warning = "No earthquakes found for the selected magnitude and depth range."
         else:
@@ -170,9 +172,7 @@ class EventMap:
             st.warning(self.warning)
         
         if self.error:
-            st.error(self.error)
-
-        st.write(self.clicked_marker_info)
+            st.error(self.error)        
 
 class EventSelect:
 
@@ -183,7 +183,7 @@ class EventSelect:
         self.settings = settings
 
 
-    def render(self, df_data):
+    def render(self, df_data, clicked_marker_info):
         # Show Events in the table
         if not df_data.empty:
             cols = df_data.columns
@@ -196,17 +196,33 @@ class EventSelect:
             config['is_selected']  = st.column_config.CheckboxColumn(
                 'Select'
             )
-            
-            c1, c2, c3 = st.columns([1,1,12])
-            with c1:
-                st.write(f"Total Number of Events: {len(df_data)}")
-            with c2:
-                if st.button("Select All"):
-                    df_data['is_selected'] = True
-            with c3:
-                if st.button("Unselect All"):
-                    df_data['is_selected'] = False
-            self.df_data_edit = st.data_editor(df_data, hide_index = True, column_config=config, column_order = ordered_col)
+
+            cc1, cc2 = st.columns([1,2])
+            with cc1:
+                if clicked_marker_info:
+                    if st.button("Select"):
+                        df_data.loc[clicked_marker_info['id'], 'is_selected'] = True
+                    st.write("Selected Event from Map")                                                
+                    st.write(clicked_marker_info) 
+                    if st.button("Unselect"):
+                        df_data.loc[clicked_marker_info['id'], 'is_selected'] = False
+                else:
+                    st.write("Select a marker from map to add event")
+                
+            with cc2:
+                c1, c2, c3 = st.columns([1,1,4])
+                with c1:
+                    st.write(f"Total Number of Events: {len(df_data)}")
+                with c2:
+                    if st.button("Select All"):
+                        df_data['is_selected'] = True
+                with c3:
+                    if st.button("Unselect All"):
+                        df_data['is_selected'] = False
+                self.df_data_edit = st.data_editor(df_data, hide_index = True, column_config=config, column_order = ordered_col)
+                
+            # selected_events = st.dataframe(df_data, key="data", on_select="rerun", selection_mode="multi-row")
+
 
 
 class EventComponents:
@@ -228,6 +244,6 @@ class EventComponents:
             self.filter_menu.render(self.map_component.refresh_map)
 
         self.map_component.render()
-        self.event_select.render(self.map_component.df_events)
+        self.event_select.render(self.map_component.df_events, self.map_component.clicked_marker_info)
 
 

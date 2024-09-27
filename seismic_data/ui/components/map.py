@@ -90,26 +90,38 @@ def get_marker_color(magnitude):
         return 'magenta'
     else:
         return 'purple'
-
-def add_data_points(base_map, df, col_color = 'magnitude'):
     
+
+def create_popup(index, row, cols_to_disp):
+    html_disp = f"<h4>No: {index}</h4>"
+    for k,v in cols_to_disp.items():
+        html_disp += f"<h6>{v}: {row[k]}</h6>"
+
+    return f"""
+    <div>
+        {html_disp}
+    </div>
+    """
+
+
+def add_data_points(base_map, df, cols_to_disp, col_color = 'magnitude'):
     marker_info = {} 
-    for _, row in df.iterrows():
+    for index, row in df.iterrows():
         color = get_marker_color(row[col_color])
+        popup_content = create_popup(index, row, cols_to_disp)
+        popup = folium.Popup(html=popup_content, max_width=2650, min_width=200)
         folium.CircleMarker(
             location=[row['latitude'], row['longitude']],
             radius=5,
-            popup=f"Latitude: {row['latitude']}<br>Longitude: {row['longitude']}<br>{col_color.capitalize()}: {row[col_color]}<br>Place: {row['place']}",
+            popup=popup,
             color=color,
             fill=True,
             fill_color=color
         ).add_to(base_map)
 
-        marker_info[(row['latitude'], row['longitude'])] = {
-            "Latitude": row['latitude'],
-            "Longitude": row['longitude'],
-            "Magnitude": row[col_color],
-            "Place": row['place']
-        }
+        marker_info[(row['latitude'], row['longitude'])] = { "id": index }
+
+        for k,v in cols_to_disp.items():
+            marker_info[(row['latitude'], row['longitude'])][v] = row[k]
 
     return base_map, marker_info
