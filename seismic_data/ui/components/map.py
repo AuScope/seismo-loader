@@ -104,19 +104,29 @@ def create_popup(index, row, cols_to_disp):
     """
 
 
-def add_data_points(base_map, df, cols_to_disp, col_color = 'magnitude'):
+def add_data_points(base_map, df, cols_to_disp, selected_idx = [], col_color = 'magnitude'):
     marker_info = {} 
     for index, row in df.iterrows():
         color = get_marker_color(row[col_color])
+        edge_color = color
+        size  = 5
+        fill_opacity = 0.2
+        if index in selected_idx:
+            # color = 'black'
+            edge_color = 'black'
+            fill_opacity = 1.0
+            size = 7
+
         popup_content = create_popup(index, row, cols_to_disp)
         popup = folium.Popup(html=popup_content, max_width=2650, min_width=200)
         folium.CircleMarker(
             location=[row['latitude'], row['longitude']],
-            radius=5,
+            radius=size,
             popup=popup,
-            color=color,
+            color=edge_color,
             fill=True,
-            fill_color=color
+            fill_color=color,
+            fill_opacity=fill_opacity,
         ).add_to(base_map)
 
         marker_info[(row['latitude'], row['longitude'])] = { "id": index }

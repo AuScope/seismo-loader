@@ -98,6 +98,7 @@ class EventMap:
     areas_current: List[Union[RectangleArea, CircleArea]] = []
     map_disp = None
     map_height = 600
+    map_output = None
     df_events: pd.DataFrame = pd.DataFrame()
     marker_info = None
     clicked_marker_info = None
@@ -125,17 +126,32 @@ class EventMap:
         else:
             self.error = "No data available."
 
+
+    def handle_update_data_points(self, selected_idx):
+        if not self.df_events.empty:
+            cols = self.df_events.columns                
+            cols_to_disp = {c:c.capitalize() for c in cols }
+            self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_events, cols_to_disp, selected_idx, col_color='magnitude')
+        else:
+            self.warning = "No earthquakes found for the selected magnitude and depth range."
+
+
     
 
-    def refresh_map(self, reset_areas = False):
+    def refresh_map(self, reset_areas = False, selected_idx = None, rerun = False):
         if reset_areas:
             self.settings.event.geo_constraint = []
         else:
             self.settings.event.geo_constraint.extend(self.areas_current)
 
         self.map_disp = create_map(areas=self.settings.event.geo_constraint)
-        if len(self.settings.event.geo_constraint) > 0:
+        if selected_idx:
+            self.handle_update_data_points(selected_idx)
+        elif len(self.settings.event.geo_constraint) > 0:
             self.handle_get_events()
+
+        if rerun:
+            st.rerun()
 
     
     
@@ -155,16 +171,15 @@ class EventMap:
         if clear_prev_events_clicked:
             self.refresh_map(reset_areas=True)
 
-        output = create_card(
-            None, 
-            st_folium, 
+
+        self.map_output = st_folium(
             self.map_disp, 
             use_container_width=True, 
             height=self.map_height
         )
-        self.areas_current = get_selected_areas(output)
-        if output and output.get('last_object_clicked') is not None:
-            clicked_lat_lng = (output['last_object_clicked'].get('lat'), output['last_object_clicked'].get('lng'))
+        self.areas_current = get_selected_areas(self.map_output)
+        if self.map_output and self.map_output.get('last_object_clicked') is not None:
+            clicked_lat_lng = (self.map_output['last_object_clicked'].get('lat'), self.map_output['last_object_clicked'].get('lng'))
             if clicked_lat_lng in self.marker_info:
                 self.clicked_marker_info = self.marker_info[clicked_lat_lng]
 
@@ -172,55 +187,93 @@ class EventMap:
             st.warning(self.warning)
         
         if self.error:
-            st.error(self.error)        
+            st.error(self.error)
+ 
 
 class EventSelect:
 
     settings: SeismoLoaderSettings
     df_data_edit: pd.DataFrame = None
 
+    def get_selected_idx(self, df_data):
+        if df_data.empty:
+            return []
+        
+        mask = df_data['is_selected']
+        return df_data[mask].index.tolist()
+
+
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
 
 
-    def render(self, df_data, clicked_marker_info):
+    def sync_df_event_with_df_edit(self, df_event):
+        df_event['is_selected'] = self.df_data_edit['is_selected']
+        return df_event
+    
+
+    def refresh_map_selection(self, map_component):
+        selected_idx = self.get_selected_idx(map_component.df_events)
+        map_component.refresh_map(reset_areas=False, selected_idx=selected_idx, rerun = True)
+
+
+    def render(self, map_component: EventMap):
         # Show Events in the table
-        if not df_data.empty:
-            cols = df_data.columns
+        if not map_component.df_events.empty:
+            cols = map_component.df_events.columns
             orig_cols   = [col for col in cols if col != 'is_selected']
             ordered_col = ['is_selected'] + orig_cols
 
             config = {col: {'disabled': True} for col in orig_cols}
 
-            df_data['is_selected'] = False     
+            if 'is_selected' not in map_component.df_events.columns:
+                map_component.df_events['is_selected'] = False
             config['is_selected']  = st.column_config.CheckboxColumn(
                 'Select'
             )
 
             cc1, cc2 = st.columns([1,2])
             with cc1:
-                if clicked_marker_info:
-                    if st.button("Select"):
-                        df_data.loc[clicked_marker_info['id'], 'is_selected'] = True
-                    st.write("Selected Event from Map")                                                
-                    st.write(clicked_marker_info) 
-                    if st.button("Unselect"):
-                        df_data.loc[clicked_marker_info['id'], 'is_selected'] = False
+                if map_component.clicked_marker_info:
+                    def handle_marker_select():
+                        if st.button("Add to Selection"):
+                            map_component.df_events = self.sync_df_event_with_df_edit(map_component.df_events)
+                            map_component.df_events.loc[map_component.clicked_marker_info['id'], 'is_selected'] = True                                             
+                            self.refresh_map_selection(map_component)
+
+                        st.write(map_component.clicked_marker_info)
+
+                        if map_component.df_events.loc[map_component.clicked_marker_info['id'], 'is_selected']:
+                            if st.button("Unselect"):
+                                map_component.df_events.loc[map_component.clicked_marker_info['id'], 'is_selected'] = False
+                                # map_component.clicked_marker_info = None
+                                # map_component.map_output["last_object_clicked"] = None
+                                self.refresh_map_selection(map_component)
+                    create_card("Selected Event from Map", handle_marker_select)
+                    
                 else:
-                    st.write("Select a marker from map to add event")
-                
-            with cc2:
-                c1, c2, c3 = st.columns([1,1,4])
+                    create_card("Select a marker from map to add event to the selection", None)            
+            
+            def event_table_view():                
+                c1, c2, c3, c4 = st.columns([1,1,1,4])
                 with c1:
-                    st.write(f"Total Number of Events: {len(df_data)}")
+                    st.write(f"Total Number of Events: {len(map_component.df_events)}")
                 with c2:
                     if st.button("Select All"):
-                        df_data['is_selected'] = True
+                        map_component.df_events['is_selected'] = True
                 with c3:
                     if st.button("Unselect All"):
-                        df_data['is_selected'] = False
-                self.df_data_edit = st.data_editor(df_data, hide_index = True, column_config=config, column_order = ordered_col)
-                
+                        map_component.df_events['is_selected'] = False
+                with c4:
+                    if st.button("Refresh Map"):
+                        map_component.df_events = self.sync_df_event_with_df_edit(map_component.df_events)
+                        self.refresh_map_selection(map_component)
+
+                self.df_data_edit = st.data_editor(map_component.df_events, hide_index = True, column_config=config, column_order = ordered_col)
+            with cc2:            
+                create_card("List of Events", event_table_view)
+
+        return map_component
             # selected_events = st.dataframe(df_data, key="data", on_select="rerun", selection_mode="multi-row")
 
 
@@ -244,6 +297,6 @@ class EventComponents:
             self.filter_menu.render(self.map_component.refresh_map)
 
         self.map_component.render()
-        self.event_select.render(self.map_component.df_events, self.map_component.clicked_marker_info)
+        self.map_component = self.event_select.render(self.map_component)
 
 

@@ -20,20 +20,22 @@ def create_card(title, content_func, *args, **kwargs):
                 st.markdown(f"<h3 style='margin-left:20px;'>{title}</h3>", unsafe_allow_html=True)
             
             # Execute the function to generate content
-            c1, c2 = st.columns([100,1])
-            with c1:
+            output = None
+            if content_func:
+                # c1, c2 = st.columns([100,1])
+                # with c1:
                 output = content_func(*args, **kwargs)
             
             # Applying CSS styles to the card
-            chat_plh_style = """
+            chat_plh_style = f"""
             <style>
-            div[data-testid='stVerticalBlock']:has(div#chat_inner):not(:has(div#chat_outer)) {
+            div[data-testid='stVerticalBlock']:has(div#chat_inner):not(:has(div#chat_outer)) {{
                 border-radius: 8px; /* Rounded corners */
                 box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Shadow for 3D effect */
                 border: 1px solid #ddd; /* Light grey border */
                 margin: 10px 0; /* Margin around the card */
                 padding: 10px;
-            };
+            }};
             </style>
             """
             st.markdown(chat_plh_style, unsafe_allow_html=True)
