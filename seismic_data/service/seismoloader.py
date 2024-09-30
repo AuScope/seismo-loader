@@ -719,8 +719,8 @@ def get_stations(settings: SeismoLoaderSettings):
                     starttime=starttime,endtime=endtime,
                     latitude = geo.coords.lat, # float(config['STATION']['latitude']),
                     longitude= geo.coords.lng, # float(config['STATION']['longitude']),
-                    minradius= geo.coords.min_radius, # float(config['STATION']['minradius']),
-                    maxradius= geo.coords.max_radius, # float(config['STATION']['maxradius']),
+                    minradius=convert_radius_to_degrees(geo.coords.min_radius), # float(config['STATION']['minradius']),
+                    maxradius=convert_radius_to_degrees (geo.coords.max_radius), # float(config['STATION']['maxradius']),
                     includerestricted=settings.station.include_restricted, # config['STATION']['includerestricted'],
                     level=settings.station.level.value
                 )
@@ -840,6 +840,11 @@ def get_events(settings: SeismoLoaderSettings):
     
     return catalog
 
+def convert_radius_to_degrees(radius_meters):
+    """ Convert radius from meters to degrees. """
+    kilometers = radius_meters / 1000
+    degrees = kilometers / 111.32
+    return degrees
 
 def run_continuous(settings: SeismoLoaderSettings, inv: Inventory):
     """

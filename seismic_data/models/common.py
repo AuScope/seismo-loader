@@ -20,14 +20,3 @@ class CircleArea(BaseModel):
     @property
     def color(self) -> str:
         return "green"  
-
-class DonutArea(BaseModel):
-    lat   : float
-    lng   : float
-    min_radius : float
-    max_radius : float
-
-    @property
-    def color(self) -> str:
-        return "red"  
-

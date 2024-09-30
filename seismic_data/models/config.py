@@ -8,7 +8,7 @@ from configparser import ConfigParser
 
 from obspy import UTCDateTime
 
-from .common import RectangleArea, CircleArea, DonutArea
+from .common import RectangleArea, CircleArea
 from seismic_data.enums.config import DownloadType, SeismoClients, GeoConstraintType, Levels, EventModels
 
 # TODO: Not sure if these values are controlled values
@@ -101,7 +101,7 @@ class WaveformConfig(BaseModel):
 
 class GeometryConstraint(BaseModel):
     geo_type: Optional[GeoConstraintType] = GeoConstraintType.NONE
-    coords: Optional[Union[RectangleArea, CircleArea, DonutArea]] = None
+    coords: Optional[Union[RectangleArea, CircleArea]] = None
 
     def __init__(self, **data):
         super().__init__(**data)
