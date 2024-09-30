@@ -7,6 +7,8 @@ import configparser
 from configparser import ConfigParser
 
 from obspy import UTCDateTime
+from obspy.core.inventory import Inventory
+from obspy.core.event import Catalog
 
 from .common import RectangleArea, CircleArea
 from seismic_data.enums.config import DownloadType, SeismoClients, GeoConstraintType, Levels, EventModels
@@ -114,18 +116,19 @@ class GeometryConstraint(BaseModel):
 
 
 class StationConfig(BaseModel):
-    client             : Optional  [  SeismoClients] = SeismoClients.AUSPASS
-    force_stations     : Optional  [  List          [SeismoLocation]] = []
-    exclude_stations   : Optional  [  List          [SeismoLocation]] = []
-    date_config        : DateConfig = DateConfig   ()
-    local_inventory    : Optional  [  str          ] = None
-    network            : Optional  [  str          ] = None
-    station            : Optional  [  str          ] = None
-    location           : Optional  [  str          ] = None
-    channel            : Optional  [  str          ] = None
-    geo_constraint     : Optional  [  List         [GeometryConstraint]] = None
+    client             : Optional   [ SeismoClients] = SeismoClients.AUSPASS
+    force_stations     : Optional   [ List          [SeismoLocation]] = []
+    exclude_stations   : Optional   [ List          [SeismoLocation]] = []
+    date_config        : DateConfig = DateConfig    ()
+    local_inventory    : Optional   [ str           ] = None
+    network            : Optional   [ str           ] = None
+    station            : Optional   [ str           ] = None
+    location           : Optional   [ str           ] = None
+    channel            : Optional   [ str           ] = None
+    selected_invs      : Optional   [ List          [Any]] = []
+    geo_constraint     : Optional   [ List          [GeometryConstraint]] = None
     include_restricted : bool       = False
-    level              : Levels     = Levels       .CHANNEL
+    level              : Levels     = Levels        .CHANNEL
 
     # TODO: check if it makes sense to use SeismoLocation instead of separate
     # props.
@@ -155,7 +158,9 @@ class EventConfig(BaseModel):
     offset                : Optional[str] = None
     local_catalog         : Optional[str] = None
     contributor           : Optional[str] = None
-    updated_after         : Optional[str] = None   
+    updated_after         : Optional[str] = None
+
+    selected_catalogs     : Optional[List[Any]] = []
 
     geo_constraint: Optional[List[GeometryConstraint]] = None
 

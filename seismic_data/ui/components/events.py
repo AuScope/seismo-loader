@@ -5,6 +5,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 import time
 
+from obspy.core.event import Catalog
+
 from seismic_data.ui.components.card import create_card
 from seismic_data.ui.components.map import create_map, add_data_points
 from seismic_data.ui.pages.helpers.common import get_selected_areas
@@ -99,9 +101,10 @@ class EventMap:
     settings: SeismoLoaderSettings
     areas_current: List[Union[RectangleArea, CircleArea]] = []
     map_disp = None
-    map_height = 600
+    map_height = 500
     map_output = None
     df_events: pd.DataFrame = pd.DataFrame()
+    catalogs: List[Catalog]
     marker_info = None
     clicked_marker_info = None
     warning: str = None
@@ -114,10 +117,10 @@ class EventMap:
         self.warning = None
         self.error   = None
 
-        data = get_event_data(self.settings.model_dump_json())
-        if data:
+        self.catalogs = get_event_data(self.settings.model_dump_json())
+        if self.catalogs:
             # Convert records to a DataFrame (optional)
-            self.df_events = event_response_to_df(data)
+            self.df_events = event_response_to_df(self.catalogs)
             
             if not self.df_events.empty:
                 cols = self.df_events.columns                
@@ -127,6 +130,13 @@ class EventMap:
                 self.warning = "No earthquakes found for the selected magnitude and depth range."
         else:
             self.error = "No data available."
+
+
+    def update_selected_catalogs(self):
+        self.settings.event.selected_catalogs = []
+        for i, event in enumerate(self.catalogs):
+            if self.df_events.loc[i, 'is_selected']:
+                self.settings.event.selected_catalogs.append(event)
 
 
     def handle_update_data_points(self, selected_idx):
@@ -218,6 +228,7 @@ class EventSelect:
 
     def refresh_map_selection(self, map_component):
         selected_idx = self.get_selected_idx(map_component.df_events)
+        map_component.update_selected_catalogs()
         map_component.refresh_map(reset_areas=False, selected_idx=selected_idx, rerun = True)
 
 
@@ -270,39 +281,39 @@ class EventSelect:
                 create_card(None, False, map_tools_card)
 
         # Show Events in the table
-        c1_bot, c2_bot = st.columns([2,1])
-        with c1_bot:
-            if not map_component.df_events.empty:
-                cols = map_component.df_events.columns
-                orig_cols   = [col for col in cols if col != 'is_selected']
-                ordered_col = ['is_selected'] + orig_cols
+        if not map_component.df_events.empty:
+            cols = map_component.df_events.columns
+            orig_cols   = [col for col in cols if col != 'is_selected']
+            ordered_col = ['is_selected'] + orig_cols
 
-                config = {col: {'disabled': True} for col in orig_cols}
+            config = {col: {'disabled': True} for col in orig_cols}
 
-                if 'is_selected' not in map_component.df_events.columns:
-                    map_component.df_events['is_selected'] = False
-                config['is_selected']  = st.column_config.CheckboxColumn(
-                    'Select'
-                )
+            if 'is_selected' not in map_component.df_events.columns:
+                map_component.df_events['is_selected'] = False
+            config['is_selected']  = st.column_config.CheckboxColumn(
+                'Select'
+            )
 
-                def event_table_view():  
-                    c1, c2, c3, c4 = st.columns([1,1,1,4])
-                    with c1:
-                        st.write(f"Total Number of Events: {len(map_component.df_events)}")
-                    with c2:
-                        if st.button("Select All"):
-                            map_component.df_events['is_selected'] = True
-                    with c3:
-                        if st.button("Unselect All"):
-                            map_component.df_events['is_selected'] = False
-                    with c4:
-                        if st.button("Refresh Map"):
-                            map_component.df_events = self.sync_df_event_with_df_edit(map_component.df_events)
-                            self.refresh_map_selection(map_component)
+            def event_table_view():
+                c1, c2, c3, c4 = st.columns([1,1,1,3])
+                with c1:
+                    st.write(f"Total Number of Events: {len(map_component.df_events)}")
+                with c2:
+                    if st.button("Select All"):
+                        map_component.df_events['is_selected'] = True
+                with c3:
+                    if st.button("Unselect All"):
+                        map_component.df_events['is_selected'] = False
+                with c4:
+                    if st.button("Refresh Map"):
+                        map_component.df_events = self.sync_df_event_with_df_edit(map_component.df_events)
+                        self.refresh_map_selection(map_component)
 
-                    self.df_data_edit = st.data_editor(map_component.df_events, hide_index = True, column_config=config, column_order = ordered_col)           
-                create_card("List of Events", False, event_table_view)
+                self.df_data_edit = st.data_editor(map_component.df_events, hide_index = True, column_config=config, column_order = ordered_col)           
+            create_card("List of Events", False, event_table_view)
 
+        # with c2_bot:
+        #     st.write(self.settings.event.selected_catalogs)
 
 
         return map_component

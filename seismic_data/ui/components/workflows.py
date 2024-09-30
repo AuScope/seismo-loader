@@ -26,11 +26,15 @@ class EventBasedWorkflow:
 
     def render(self):
         if self.stage == 1:
-            c1, c2, c3 = st.columns([1, 1, 1])            
+            c1, c2, c3 = st.columns([1, 1, 1])        
             with c2:
-                st.write("Step 1: Select Events")
+                st.markdown("### Step 1: Select Events")
             with c1:
                 if st.button("Next"):
+                    self.event_components.map_component.df_events = self.event_components.event_select.sync_df_event_with_df_edit(
+                        self.event_components.map_component.df_events
+                    )
+                    self.event_components.map_component.update_selected_catalogs()
                     self.next_stage()         
             self.event_components.render()
 

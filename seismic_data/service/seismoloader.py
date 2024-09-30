@@ -10,7 +10,6 @@
 # ver 0.2 08/2024
 # - first shared edition
 
-
 import os
 import sys
 import time
@@ -22,6 +21,7 @@ import contextlib
 from tqdm import tqdm
 from tabulate import tabulate # non-standard. this is just to display the db contents
 import random
+from typing import List
 
 import obspy
 from obspy.clients.fdsn import Client
@@ -663,6 +663,11 @@ def setup_paths(settings: SeismoLoaderSettings):
 
     return settings
 
+def convert_radius_to_degrees(radius_meters):
+    """ Convert radius from meters to degrees. """
+    kilometers = radius_meters / 1000
+    degrees = kilometers / 111.32
+    return degrees
 
 
 def get_stations(settings: SeismoLoaderSettings):
@@ -765,7 +770,7 @@ def get_stations(settings: SeismoLoaderSettings):
     return inv
 
 
-def get_events(settings: SeismoLoaderSettings):
+def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
     starttime = UTCDateTime(settings.event.date_config.start_time)
     endtime = UTCDateTime(settings.event.date_config.end_time)
     waveform_client = Client(settings.waveform.client.value) # note we may have three different clients here: waveform, station, and event. be careful to keep track
@@ -795,8 +800,8 @@ def get_events(settings: SeismoLoaderSettings):
 
                     latitude = geo.coords.lat, # float(config['EVENT']['latitude']),
                     longitude= geo.coords.lng, # float(config['EVENT']['longitude']),
-                    minradius= geo.coords.min_radius, # loat(config['EVENT']['minsearchradius']),
-                    maxradius= geo.coords.max_radius, # float(config['EVENT']['maxsearchradius']),
+                    minradius= convert_radius_to_degrees(geo.coords.min_radius), # loat(config['EVENT']['minsearchradius']),
+                    maxradius= convert_radius_to_degrees(geo.coords.max_radius), # float(config['EVENT']['maxsearchradius']),
 
                     #TODO add catalog,contributor
                     includeallorigins= settings.event.include_all_origins, # False,
@@ -840,11 +845,7 @@ def get_events(settings: SeismoLoaderSettings):
     
     return catalog
 
-def convert_radius_to_degrees(radius_meters):
-    """ Convert radius from meters to degrees. """
-    kilometers = radius_meters / 1000
-    degrees = kilometers / 111.32
-    return degrees
+
 
 def run_continuous(settings: SeismoLoaderSettings, inv: Inventory):
     """
