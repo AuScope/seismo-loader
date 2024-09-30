@@ -3,7 +3,7 @@ from typing import List
 import numpy as np
 import streamlit as st
 import os
-from seismic_data.models.common import RectangleArea, CircleArea, DonutArea
+from seismic_data.models.common import RectangleArea, CircleArea
 from seismic_data.enums.common import GeometryType
 from seismic_data.models.config import SeismoLoaderSettings, GeometryConstraint
 
@@ -59,31 +59,21 @@ def handle_polygon(geo) -> GeometryConstraint:
 
 def handle_circle(geo) -> GeometryConstraint:
     coords = geo.get("geometry").get("coordinates")
+    # min_radius = geo.get("properties").get("min_radius")
+    # max_radius = geo.get("properties").get("max_radius")
     radius = geo.get("properties").get("radius")
 
     return GeometryConstraint(
             coords = CircleArea(
             lat = coords[1],
             lng = coords[0],
+            min_radius = 0,
             max_radius = radius
         )
     )
 
-def handle_donut(geo) -> DonutArea:
-    coords = geo.get("geometry").get("coordinates")
-    min_radius = geo.get("properties").get("min_radius")
-    max_radius = geo.get("properties").get("max_radius")
 
-    return GeometryConstraint(
-        coords=DonutArea(
-            lat = coords[1],
-            lng = coords[0],
-            min_radius = min_radius,
-            max_radius = max_radius
-        )
-    )
-
-def get_selected_areas(map_output) -> List[RectangleArea | CircleArea | DonutArea]:
+def get_selected_areas(map_output) -> List[RectangleArea | CircleArea ]:
     lst_locs = []
     k = "all_drawings"
     
@@ -96,10 +86,7 @@ def get_selected_areas(map_output) -> List[RectangleArea | CircleArea | DonutAre
                 continue
 
             if geom_type == GeometryType.POINT:
-                if geo.get("properties").get("min_radius") and geo.get("properties").get("max_radius"):
-                    lst_locs.append(handle_donut(geo))
-                else:
-                    lst_locs.append(handle_circle(geo))
+                lst_locs.append(handle_circle(geo))
                 continue
 
             raise ValueError(f"Geometry Type {geom_type} not supported!")

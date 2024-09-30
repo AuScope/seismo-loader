@@ -12,18 +12,8 @@ import pandas as pd
 import streamlit as st
 import requests
 
-from seismic_data.models.events import EventFilter
 from seismic_data.models.config import SeismoLoaderSettings
 from seismic_data.service.seismoloader import get_events
-
-
-
-def convert_filter_to_cfg(event_filter: EventFilter):
-    """
-    @TODO: @Yunlong, this method should basically, convert event_filter
-    to a CFG object required as an input by Rob's scripts.
-    """
-    pass
 
 
 @st.cache_data
