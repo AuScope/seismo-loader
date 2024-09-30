@@ -27,6 +27,7 @@ class EventFilterMenu:
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
 
+
     def update_event_filter_geometry(self, df, geo_type: GeoConstraintType):
         add_geo = []
         for _, row in df.iterrows():
@@ -36,11 +37,12 @@ class EventFilterMenu:
             if geo_type == GeoConstraintType.CIRCLE:
                 add_geo.append(GeometryConstraint(coords=CircleArea(**coords)))
 
-        new_geo = []
-        for area in self.settings.event.geo_constraint:
-            if area.geo_type != geo_type:
-                new_geo.append(area)
-        self.settings.event.geo_constraint.extend(new_geo)
+        new_geo = [
+            area for area in self.settings.event.geo_constraint
+            if area.geo_type != geo_type
+        ]
+        new_geo.extend(add_geo)
+        self.settings.event.geo_constraint = new_geo
 
     def update_circle_areas(self, refresh_map):
         lst_circ = [area.coords.model_dump() for area in self.settings.event.geo_constraint
