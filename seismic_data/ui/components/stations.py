@@ -37,11 +37,12 @@ class StationFilterMenu:
             if geo_type == GeoConstraintType.CIRCLE:
                 add_geo.append(GeometryConstraint(coords=CircleArea(**coords)))
 
-        new_geo = []
-        for area in self.settings.station.geo_constraint:
-            if area.geo_type != geo_type:
-                new_geo.append(area)
-        self.settings.station.geo_constraint.extend(new_geo)
+        new_geo = [
+            area for area in self.settings.station.geo_constraint
+            if area.geo_type != geo_type
+        ]
+        new_geo.extend(add_geo)
+        self.settings.station.geo_constraint = new_geo
 
     def update_circle_areas(self, refresh_map):
         lst_circ = [area.coords.model_dump() for area in self.settings.station.geo_constraint
@@ -71,6 +72,8 @@ class StationFilterMenu:
             rect_changed = not original_df_rect.equals(self.df_rect)
 
             if rect_changed:
+                print(original_df_rect)
+                print(self.df_rect)
                 self.update_filter_geometry(self.df_rect, GeoConstraintType.BOUNDING)
                 refresh_map(reset_areas=False)
                 st.rerun()
@@ -87,7 +90,7 @@ class StationFilterMenu:
             st.error("Error: End Date must fall after Start Date.")
 
         st.header("Filter SNCL")
-        self.settings.station.network = st.text_input("Enter Network", "*")
+        self.settings.station.network = st.text_input("Enter Network", "_GSN")
         self.settings.station.station = st.text_input("Enter Station", "*")
         self.settings.station.location = st.text_input("Enter Location", "*")
         self.settings.station.channel = st.text_input("Enter Channel", "*")
