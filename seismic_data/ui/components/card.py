@@ -1,12 +1,14 @@
 import streamlit as st
 
-def create_card(title, content_func, *args, **kwargs):
+
+def create_card(title, enforce_padding, content_func, *args, **kwargs):
     """
     Creates a styled card container to display content in Streamlit.
     
     Args:
     content_func (callable): A function that generates the content to be displayed inside the card.
     args, kwargs: Arguments and keyword arguments to be passed to content_func.
+    enforce_padding: puts the content in columns to enforce artificial padding.
     """
     with st.container():
         # Unique outer div to control card display
@@ -22,9 +24,12 @@ def create_card(title, content_func, *args, **kwargs):
             # Execute the function to generate content
             output = None
             if content_func:
-                # c1, c2 = st.columns([100,1])
-                # with c1:
-                output = content_func(*args, **kwargs)
+                if enforce_padding:
+                    c1, c2 = st.columns([100,1])
+                    with c1:
+                        output = content_func(*args, **kwargs)
+                else:
+                    output = content_func(*args, **kwargs)
             
             # Applying CSS styles to the card
             chat_plh_style = f"""
@@ -33,7 +38,6 @@ def create_card(title, content_func, *args, **kwargs):
                 border-radius: 8px; /* Rounded corners */
                 box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Shadow for 3D effect */
                 border: 1px solid #ddd; /* Light grey border */
-                margin: 10px 0; /* Margin around the card */
                 padding: 10px;
             }};
             </style>

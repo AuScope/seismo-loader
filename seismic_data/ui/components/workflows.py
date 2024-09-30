@@ -26,18 +26,22 @@ class EventBasedWorkflow:
 
     def render(self):
         if self.stage == 1:
-            st.write("Step 1: Select Events")
-            if st.button("Next"):
-                self.next_stage()
+            c1, c2, c3 = st.columns([1, 1, 1])            
+            with c2:
+                st.write("Step 1: Select Events")
+            with c1:
+                if st.button("Next"):
+                    self.next_stage()         
             self.event_components.render()
 
-        if self.stage == 2:
-            st.write("Step 2: Select Stations")
-            c1_nav, c2_nav = st.columns([1, 1])
-            with c1_nav:
+        if self.stage == 2:            
+            c1, c2, c3 = st.columns([1, 1, 1])
+            with c1:
                 if st.button("Previous"):
                     self.previous_stage()
-            with c2_nav:
+            with c2:
+                st.write("Step 2: Select Stations")
+            with c3:
                 if st.button("Next"):
                     self.next_stage()
             self.station_components.render()

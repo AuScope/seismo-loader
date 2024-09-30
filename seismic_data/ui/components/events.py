@@ -1,9 +1,9 @@
 from typing import List, Any, Optional, Union
-from copy import deepcopy
 import streamlit as st
 from streamlit_folium import st_folium
 import pandas as pd
 from datetime import datetime, timedelta
+import time
 
 from seismic_data.ui.components.card import create_card
 from seismic_data.ui.components.map import create_map, add_data_points
@@ -155,16 +155,12 @@ class EventMap:
         if rerun:
             st.rerun()
 
-    
-    
-    def render(self):
-        if not self.map_disp:
-            self.refresh_map(reset_areas=True)
-
-        c1_top, c2_top = st.columns([1, 1])
-        with c1_top:
+    def render_top_buttons(self):
+        st.markdown("#### Get Events")
+        c11, c22 = st.columns([1,1])
+        with c11:
             get_event_clicked = st.button("Get Events")
-        with c2_top:
+        with c22:
             clear_prev_events_clicked = st.button("Clear All Selections")
 
         if get_event_clicked:
@@ -173,12 +169,19 @@ class EventMap:
         if clear_prev_events_clicked:
             self.refresh_map(reset_areas=True)
 
+    def render_map(self):
+        if not self.map_disp:
+            self.refresh_map(reset_areas=True)
 
-        self.map_output = st_folium(
-            self.map_disp, 
-            use_container_width=True, 
-            height=self.map_height
-        )
+        self.map_output = create_card(
+                None,
+                True,
+                st_folium, 
+                self.map_disp, 
+                use_container_width=True, 
+                height=self.map_height
+            )
+        
         self.areas_current = get_selected_areas(self.map_output)
         if self.map_output and self.map_output.get('last_object_clicked') is not None:
             clicked_lat_lng = (self.map_output['last_object_clicked'].get('lat'), self.map_output['last_object_clicked'].get('lng'))
@@ -190,8 +193,7 @@ class EventMap:
         
         if self.error:
             st.error(self.error)
- 
-
+    
 class EventSelect:
 
     settings: SeismoLoaderSettings
@@ -220,60 +222,88 @@ class EventSelect:
 
 
     def render(self, map_component: EventMap):
+        """
+        c2_top is the location beside the map
+        """
+        c1_top, c2_top = st.columns([2,1])
+
+        with c2_top:
+            create_card(None, False, map_component.render_top_buttons)
+
+        with c1_top:
+            map_component.render_map()
+
+        with c2_top:
+            def handle_marker_select():                
+                # st.write(map_component.clicked_marker_info)
+                info = map_component.clicked_marker_info
+                selected_event = f"No {info['id']}: {info['Magnitude']}, {info['Depth']} km, {info['Place']}"
+
+                if map_component.df_events.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected']:
+                    st.success(selected_event)
+                else:
+                    st.warning(selected_event)
+
+                if st.button("Add to Selection"):
+                    map_component.df_events = self.sync_df_event_with_df_edit(map_component.df_events)
+                    map_component.df_events.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected'] = True                                             
+                    self.refresh_map_selection(map_component)
+                    return
+                
+
+                if map_component.df_events.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected']:
+                    if st.button("Unselect"):
+                        map_component.df_events.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected'] = False
+                        # map_component.clicked_marker_info = None
+                        # map_component.map_output["last_object_clicked"] = None
+                        self.refresh_map_selection(map_component)
+                        return
+
+            def map_tools_card():
+                if not map_component.df_events.empty:
+                    st.markdown("#### Select Events from map")
+                    st.write("Click on a marker and add the event or simply select from the Event table")
+                    if map_component.clicked_marker_info:
+                        handle_marker_select()
+                        
+            if not map_component.df_events.empty:
+                create_card(None, False, map_tools_card)
+
         # Show Events in the table
-        if not map_component.df_events.empty:
-            cols = map_component.df_events.columns
-            orig_cols   = [col for col in cols if col != 'is_selected']
-            ordered_col = ['is_selected'] + orig_cols
+        c1_bot, c2_bot = st.columns([2,1])
+        with c1_bot:
+            if not map_component.df_events.empty:
+                cols = map_component.df_events.columns
+                orig_cols   = [col for col in cols if col != 'is_selected']
+                ordered_col = ['is_selected'] + orig_cols
 
-            config = {col: {'disabled': True} for col in orig_cols}
+                config = {col: {'disabled': True} for col in orig_cols}
 
-            if 'is_selected' not in map_component.df_events.columns:
-                map_component.df_events['is_selected'] = False
-            config['is_selected']  = st.column_config.CheckboxColumn(
-                'Select'
-            )
+                if 'is_selected' not in map_component.df_events.columns:
+                    map_component.df_events['is_selected'] = False
+                config['is_selected']  = st.column_config.CheckboxColumn(
+                    'Select'
+                )
 
-            cc1, cc2 = st.columns([1,2])
-            with cc1:
-                if map_component.clicked_marker_info:
-                    def handle_marker_select():
-                        if st.button("Add to Selection"):
+                def event_table_view():  
+                    c1, c2, c3, c4 = st.columns([1,1,1,4])
+                    with c1:
+                        st.write(f"Total Number of Events: {len(map_component.df_events)}")
+                    with c2:
+                        if st.button("Select All"):
+                            map_component.df_events['is_selected'] = True
+                    with c3:
+                        if st.button("Unselect All"):
+                            map_component.df_events['is_selected'] = False
+                    with c4:
+                        if st.button("Refresh Map"):
                             map_component.df_events = self.sync_df_event_with_df_edit(map_component.df_events)
-                            map_component.df_events.loc[map_component.clicked_marker_info['id'], 'is_selected'] = True                                             
                             self.refresh_map_selection(map_component)
 
-                        st.write(map_component.clicked_marker_info)
+                    self.df_data_edit = st.data_editor(map_component.df_events, hide_index = True, column_config=config, column_order = ordered_col)           
+                create_card("List of Events", False, event_table_view)
 
-                        if map_component.df_events.loc[map_component.clicked_marker_info['id'], 'is_selected']:
-                            if st.button("Unselect"):
-                                map_component.df_events.loc[map_component.clicked_marker_info['id'], 'is_selected'] = False
-                                # map_component.clicked_marker_info = None
-                                # map_component.map_output["last_object_clicked"] = None
-                                self.refresh_map_selection(map_component)
-                    create_card("Selected Event from Map", handle_marker_select)
-                    
-                else:
-                    create_card("Select a marker from map to add event to the selection", None)            
-            
-            def event_table_view():                
-                c1, c2, c3, c4 = st.columns([1,1,1,4])
-                with c1:
-                    st.write(f"Total Number of Events: {len(map_component.df_events)}")
-                with c2:
-                    if st.button("Select All"):
-                        map_component.df_events['is_selected'] = True
-                with c3:
-                    if st.button("Unselect All"):
-                        map_component.df_events['is_selected'] = False
-                with c4:
-                    if st.button("Refresh Map"):
-                        map_component.df_events = self.sync_df_event_with_df_edit(map_component.df_events)
-                        self.refresh_map_selection(map_component)
 
-                self.df_data_edit = st.data_editor(map_component.df_events, hide_index = True, column_config=config, column_order = ordered_col)
-            with cc2:            
-                create_card("List of Events", event_table_view)
 
         return map_component
             # selected_events = st.dataframe(df_data, key="data", on_select="rerun", selection_mode="multi-row")
@@ -298,7 +328,7 @@ class EventComponents:
         with st.sidebar:
             self.filter_menu.render(self.map_component.refresh_map)
 
-        self.map_component.render()
+        # c2_top = self.map_component.render()
         self.map_component = self.event_select.render(self.map_component)
 
 

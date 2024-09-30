@@ -123,7 +123,7 @@ def create_popup(index, row, cols_to_disp):
 
 
 def add_data_points(base_map, df, cols_to_disp, selected_idx = [], col_color = 'magnitude'):
-    marker_info = {} 
+    marker_info = {}
     for index, row in df.iterrows():
         color = get_marker_color(row[col_color])
         edge_color = color
@@ -155,7 +155,7 @@ def add_data_points(base_map, df, cols_to_disp, selected_idx = [], col_color = '
             fill_opacity=fill_opacity,
         ).add_to(base_map)
 
-        marker_info[(row['latitude'], row['longitude'])] = { "id": index }
+        marker_info[(row['latitude'], row['longitude'])] = { "id": index + 1}
 
         for k, v in cols_to_disp.items():
             marker_info[(row['latitude'], row['longitude'])][v] = row[k]
