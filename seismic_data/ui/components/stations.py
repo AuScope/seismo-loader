@@ -128,7 +128,7 @@ class StationMap:
         if not df_events.empty:
             cols = df_events.columns                
             cols_to_disp = {c:c.capitalize() for c in cols }
-            _, self.marker_info = add_data_points(self.map_disp, df_events ,cols_to_disp,selected_idx=[], col_color="magnitude", is_original=is_original)
+            _, _ = add_data_points(self.map_disp, df_events ,cols_to_disp,selected_idx=[], col_color="magnitude", is_original=is_original)
 
 
     def handle_get_stations(self):
@@ -142,7 +142,7 @@ class StationMap:
             if not self.df_stations.empty:
                 cols = self.df_stations.columns                
                 cols_to_disp = {c:c.capitalize() for c in cols }
-                self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_stations,cols_to_disp,selected_idx=[], col_color=None)
+                self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_stations,cols_to_disp,selected_idx=[], col_color=None, is_station=True)
             else:
                 self.warning = "No stations found for the selected range."
         else:
@@ -161,7 +161,7 @@ class StationMap:
         if not self.df_stations.empty:
             cols = self.df_stations.columns                
             cols_to_disp = {c:c.capitalize() for c in cols }
-            self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_stations, cols_to_disp, selected_idx, col_color=None)
+            self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_stations, cols_to_disp, selected_idx, col_color=None,is_station=True)
         else:
             self.warning = "No station found for the selected range."
 
@@ -214,7 +214,15 @@ class StationMap:
         
         self.areas_current = get_selected_areas(self.map_output)
         if self.map_output and self.map_output.get('last_object_clicked') is not None:
-            clicked_lat_lng = (self.map_output['last_object_clicked'].get('lat'), self.map_output['last_object_clicked'].get('lng'))
+            last_clicked = self.map_output['last_object_clicked']
+
+            if isinstance(last_clicked, dict):
+                clicked_lat_lng = (last_clicked.get('lat'), last_clicked.get('lng'))
+            elif isinstance(last_clicked, list):
+                clicked_lat_lng = (last_clicked[0], last_clicked[1])
+            else:
+                clicked_lat_lng = (None, None)
+
             if clicked_lat_lng in self.marker_info:
                 self.clicked_marker_info = self.marker_info[clicked_lat_lng]
 
@@ -267,6 +275,9 @@ class StationSelect:
                 # st.write(map_component.clicked_marker_info)
                 info = map_component.clicked_marker_info
                 selected_station = f"No {info['id']}: {info['Network']}, {info['Station']},{info['Location']},{info['Channel']}, {info['Depth']}"
+
+                if 'is_selected' not in map_component.df_stations.columns:
+                    map_component.df_stations['is_selected'] = False
 
                 if map_component.df_stations.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected']:
                     st.success(selected_station)
