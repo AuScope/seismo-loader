@@ -5,11 +5,16 @@ from streamlit_folium import st_folium
 import pandas as pd
 from datetime import datetime, timedelta
 
+from obspy.core.inventory import Inventory
+from obspy.core.event import Catalog
+
+
 from seismic_data.ui.components.card import create_card
 from seismic_data.ui.components.map import create_map, add_data_points
 from seismic_data.ui.pages.helpers.common import get_selected_areas
 
 from seismic_data.service.stations import get_station_data, station_response_to_df
+from seismic_data.service.events import event_response_to_df
 
 from seismic_data.models.config import SeismoLoaderSettings, GeometryConstraint
 from seismic_data.models.common import CircleArea, RectangleArea
@@ -23,7 +28,6 @@ class StationFilterMenu:
     settings: SeismoLoaderSettings
     df_rect: None
     df_circ: None
-    df_donut: None
 
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
@@ -103,8 +107,10 @@ class StationMap:
     settings: SeismoLoaderSettings
     areas_current: List[Union[RectangleArea, CircleArea]] = []
     map_disp = None
-    map_height = 600
+    map_height = 500
+    map_output = None
     df_stations: pd.DataFrame = pd.DataFrame()
+    Inventories: List[Inventory]
     marker_info = None
     clicked_marker_info = None
     warning: str = None
@@ -113,13 +119,25 @@ class StationMap:
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
 
+    def display_selected_events(self, catalogs: List[Catalog]):
+        self.warning = None
+        self.error   = None
+        is_original = False
+
+        df_events = event_response_to_df(catalogs)
+        if not df_events.empty:
+            cols = df_events.columns                
+            cols_to_disp = {c:c.capitalize() for c in cols }
+            _, self.marker_info = add_data_points(self.map_disp, df_events ,cols_to_disp,selected_idx=[], col_color="magnitude", is_original=is_original)
+
+
     def handle_get_stations(self):
         self.warning = None
         self.error   = None
 
-        data = get_station_data(self.settings.model_dump_json())
-        if data:
-            self.df_stations = station_response_to_df(data)
+        self.Inventories = get_station_data(self.settings.model_dump_json())
+        if self.Inventories:
+            self.df_stations = station_response_to_df(self.Inventories)
             
             if not self.df_stations.empty:
                 cols = self.df_stations.columns                
@@ -131,26 +149,48 @@ class StationMap:
             self.error = "No data available."
 
 
-    def refresh_map(self, reset_areas = False):
+    def update_selected_inventories(self):
+        self.settings.station.selected_invs = []
+        for i, station in enumerate(self.Inventories):
+            if self.df_stations.loc[i, 'is_selected']:
+                self.settings.station.selected_invs.append(station)
+
+
+    def handle_update_data_points(self, selected_idx):
+    
+        if not self.df_stations.empty:
+            cols = self.df_stations.columns                
+            cols_to_disp = {c:c.capitalize() for c in cols }
+            self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_stations, cols_to_disp, selected_idx, col_color=None)
+        else:
+            self.warning = "No station found for the selected range."
+
+
+
+    def refresh_map(self, reset_areas = False, selected_idx = None, rerun = False):
         if reset_areas:
             self.settings.station.geo_constraint = []
         else:
             self.settings.station.geo_constraint.extend(self.areas_current)
 
         self.map_disp = create_map(areas=self.settings.station.geo_constraint)
-        if len(self.settings.station.geo_constraint) > 0:
+        if selected_idx:
+            self.handle_update_data_points(selected_idx)
+        elif len(self.settings.station.geo_constraint) > 0:
             self.handle_get_stations()
 
-    
-    
-    def render(self):
-        if not self.map_disp:
-            self.refresh_map(reset_areas=True)
+        if len(self.settings.event.selected_catalogs) > 0:    
+            self.display_selected_events(self.settings.event.selected_catalogs)
 
-        c1_top, c2_top = st.columns([1, 1])
-        with c1_top:
+        if rerun:
+            st.rerun()
+            
+    def render_top_buttons(self):
+        st.markdown("#### Get Stations")
+        c11, c22 = st.columns([1,1])
+        with c11:
             get_station_clicked = st.button("Get Stations")
-        with c2_top:
+        with c22:
             clear_prev_stations_clicked = st.button("Clear All Selections")
 
         if get_station_clicked:
@@ -159,16 +199,22 @@ class StationMap:
         if clear_prev_stations_clicked:
             self.refresh_map(reset_areas=True)
 
-        output = create_card(
-            None, 
-            st_folium, 
-            self.map_disp, 
-            use_container_width=True, 
-            height=self.map_height
-        )
-        self.areas_current = get_selected_areas(output)
-        if output and output.get('last_object_clicked') is not None:
-            clicked_lat_lng = (output['last_object_clicked'].get('lat'), output['last_object_clicked'].get('lng'))
+    def render_map(self):
+        if not self.map_disp:
+            self.refresh_map(reset_areas=True)
+
+        self.map_output = create_card(
+                None,
+                True,
+                st_folium, 
+                self.map_disp, 
+                use_container_width=True, 
+                height=self.map_height
+            )
+        
+        self.areas_current = get_selected_areas(self.map_output)
+        if self.map_output and self.map_output.get('last_object_clicked') is not None:
+            clicked_lat_lng = (self.map_output['last_object_clicked'].get('lat'), self.map_output['last_object_clicked'].get('lng'))
             if clicked_lat_lng in self.marker_info:
                 self.clicked_marker_info = self.marker_info[clicked_lat_lng]
 
@@ -178,8 +224,6 @@ class StationMap:
         if self.error:
             st.error(self.error)
 
-        st.write(self.clicked_marker_info)
-
 class StationSelect:
 
     settings: SeismoLoaderSettings
@@ -188,31 +232,106 @@ class StationSelect:
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
 
+    def get_selected_idx(self, df_data):
+        if df_data.empty:
+            return []
+        
+        mask = df_data['is_selected']
+        return df_data[mask].index.tolist()
+    
+    def sync_df_station_with_df_edit(self, df_station):
+        df_station['is_selected'] = self.df_data_edit['is_selected']
+        return df_station
+    
 
-    def render(self, df_data):
+    def refresh_map_selection(self, map_component):
+        selected_idx = self.get_selected_idx(map_component.df_stations)
+        map_component.update_selected_inventories()
+        map_component.refresh_map(reset_areas=False, selected_idx=selected_idx, rerun = True)
+
+
+    def render(self, map_component: StationMap):
+        """
+        c2_top is the location beside the map
+        """
+        c1_top, c2_top = st.columns([2,1])
+
+        with c2_top:
+            create_card(None, False, map_component.render_top_buttons)
+
+        with c1_top:
+            map_component.render_map()
+
+        with c2_top:
+            def handle_marker_select():                
+                # st.write(map_component.clicked_marker_info)
+                info = map_component.clicked_marker_info
+                selected_station = f"No {info['id']}: {info['Network']}, {info['Station']},{info['Location']},{info['Channel']}, {info['Depth']}"
+
+                if map_component.df_stations.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected']:
+                    st.success(selected_station)
+                else:
+                    st.warning(selected_station)
+
+                if st.button("Add to Selection"):
+                    map_component.df_stations = self.sync_df_station_with_df_edit(map_component.df_stations)
+                    map_component.df_stations.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected'] = True                                             
+                    self.refresh_map_selection(map_component)
+                    return
+                
+
+                if map_component.df_stations.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected']:
+                    if st.button("Unselect"):
+                        map_component.df_stations.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected'] = False
+                        # map_component.clicked_marker_info = None
+                        # map_component.map_output["last_object_clicked"] = None
+                        self.refresh_map_selection(map_component)
+                        return
+
+            def map_tools_card():
+                if not map_component.df_stations.empty:
+                    st.markdown("#### Select Stations from map")
+                    st.write("Click on a marker and add the station or simply select from the Station table")
+                    if map_component.clicked_marker_info:
+                        handle_marker_select()
+                        
+            if not map_component.df_stations.empty:
+                create_card(None, False, map_tools_card)
+
+
         # Show Stations in the table
-        if not df_data.empty:
-            cols = df_data.columns
+        if not map_component.df_stations.empty:
+            cols = map_component.df_stations.columns
             orig_cols   = [col for col in cols if col != 'is_selected']
             ordered_col = ['is_selected'] + orig_cols
 
             config = {col: {'disabled': True} for col in orig_cols}
 
-            df_data['is_selected'] = False     
+            if 'is_selected' not in map_component.df_stations.columns:
+                map_component.df_stations['is_selected'] = False
             config['is_selected']  = st.column_config.CheckboxColumn(
                 'Select'
             )
-            
-            c1, c2, c3 = st.columns([1,1,12])
-            with c1:
-                st.write(f"Total Number of Stations: {len(df_data)}")
-            with c2:
-                if st.button("Select All"):
-                    df_data['is_selected'] = True
-            with c3:
-                if st.button("Unselect All"):
-                    df_data['is_selected'] = False
-            self.df_data_edit = st.data_editor(df_data, hide_index = True, column_config=config, column_order = ordered_col)
+
+            def station_table_view():
+                c1, c2, c3, c4 = st.columns([1,1,1,3])
+                with c1:
+                    st.write(f"Total Number of Stations: {len(map_component.df_stations)}")
+                with c2:
+                    if st.button("Select All"):
+                        map_component.df_stations['is_selected'] = True
+                with c3:
+                    if st.button("Unselect All"):
+                        map_component.df_stations['is_selected'] = False
+                with c4:
+                    if st.button("Refresh Map"):
+                        map_component.df_stations = self.sync_df_station_with_df_edit(map_component.df_stations)
+                        self.refresh_map_selection(map_component)
+
+                self.df_data_edit = st.data_editor(map_component.df_stations, hide_index = True, column_config=config, column_order = ordered_col)           
+            create_card("List of Stationss", False, station_table_view)
+
+        return map_component
 
 
 class StationComponents:
@@ -233,7 +352,5 @@ class StationComponents:
         with st.sidebar:
             self.filter_menu.render(self.map_component.refresh_map)
 
-        self.map_component.render()
-        self.station_select.render(self.map_component.df_stations)
-
+        self.map_component = self.station_select.render(self.map_component)
 

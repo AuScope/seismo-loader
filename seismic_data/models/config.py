@@ -130,6 +130,11 @@ class StationConfig(BaseModel):
     include_restricted : bool       = False
     level              : Levels     = Levels        .CHANNEL
 
+    class Config:
+        json_encoders = {
+            Any: lambda v: None  
+        }
+        exclude = {"selected_invs"}
     # TODO: check if it makes sense to use SeismoLocation instead of separate
     # props.
     # seismo_location: List[SeismoLocation] = None
@@ -163,7 +168,11 @@ class EventConfig(BaseModel):
     selected_catalogs     : Optional[List[Any]] = []
 
     geo_constraint: Optional[List[GeometryConstraint]] = None
-
+    class Config:
+        json_encoders = {
+            Any: lambda v: None  
+        }
+        exclude = {"selected_catalogs"}
 
 
 class SeismoLoaderSettings(BaseModel):
