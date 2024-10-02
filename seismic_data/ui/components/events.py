@@ -250,6 +250,9 @@ class EventSelect:
                 info = map_component.clicked_marker_info
                 selected_event = f"No {info['id']}: {info['Magnitude']}, {info['Depth']} km, {info['Place']}"
 
+                if 'is_selected' not in map_component.df_events.columns:
+                    map_component.df_events['is_selected'] = False
+                    
                 if map_component.df_events.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected']:
                     st.success(selected_event)
                 else:

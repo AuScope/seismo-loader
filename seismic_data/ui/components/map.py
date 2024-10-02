@@ -122,43 +122,61 @@ def create_popup(index, row, cols_to_disp):
     """
 
 
-def add_data_points(base_map, df, cols_to_disp, selected_idx = [], col_color = 'magnitude'):
+def add_data_points(base_map, df, cols_to_disp, selected_idx=[], col_color=None, is_station=False, is_original=True):
     marker_info = {}
-    for index, row in df.iterrows():
-        color = get_marker_color(row[col_color])
-        edge_color = color
-        fill_opacity = 0.2
 
-        if col_color is None:
-            color = DEFAULT_COLOR_MARKER  
-        else:
-            color = get_marker_color(row[col_color])
-        
-        if index in selected_idx:
-            size = 7  
-            # color = 'darkred' 
-            edge_color = 'black'
-            fill_opacity = 1.0
-        else:
-            size = 5
+    for index, row in df.iterrows():
+        color = DEFAULT_COLOR_MARKER if col_color is None else get_marker_color(row[col_color])
+
+        edge_color = 'black' if index in selected_idx else color
+        size = 7 if index in selected_idx else 5
+        fill_opacity = 1.0 if index in selected_idx else 0.2
 
         popup_content = create_popup(index, row, cols_to_disp)
         popup = folium.Popup(html=popup_content, max_width=2650, min_width=200)
-        
-        folium.CircleMarker(
-            location=[row['latitude'], row['longitude']],
-            radius=size,
-            popup=popup,
-            color=edge_color,
-            fill=True,
-            fill_color=color,
-            fill_opacity=fill_opacity,
-        ).add_to(base_map)
 
-        marker_info[(row['latitude'], row['longitude'])] = { "id": index + 1}
+        latitude, longitude = row['latitude'], row['longitude']
+        if is_original and not is_station:
+            folium.CircleMarker(
+                location=[latitude, longitude],
+                radius=size,
+                popup=popup,
+                color=edge_color,
+                fill=True,
+                fill_color=color,
+                fill_opacity=fill_opacity,
+            ).add_to(base_map)
+        elif is_original and is_station:
+            folium.RegularPolygonMarker(
+                location=[latitude, longitude],
+                number_of_sides=3,
+                rotation=-90,
+                radius=size,
+                popup=popup,
+                color=edge_color,
+                fill=True,
+                fill_color=color,
+                fill_opacity=fill_opacity,
+            ).add_to(base_map)
+        elif not is_original:
+            folium.RegularPolygonMarker(
+                location=[latitude, longitude],
+                number_of_sides=5,
+                rotation=30,
+                radius=10,
+                popup=popup,
+                color=edge_color,
+                fill=True,
+                fill_color=color,
+                fill_opacity=0.6
+            ).add_to(base_map)
+
+        marker_key = (latitude, longitude)
+        if marker_key not in marker_info:
+            marker_info[marker_key] = {"id": index + 1}
 
         for k, v in cols_to_disp.items():
-            marker_info[(row['latitude'], row['longitude'])][v] = row[k]
+            marker_info[marker_key][v] = row[k]
 
     return base_map, marker_info
 
