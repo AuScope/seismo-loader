@@ -48,4 +48,4 @@ class EventBasedWorkflow:
             with c3:
                 if st.button("Next"):
                     self.next_stage()
-            self.station_components.render()
+            self.station_components.render(self.stage)
