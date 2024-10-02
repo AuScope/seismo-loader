@@ -118,6 +118,7 @@ class StationMap:
 
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
+        self.Inventories=[]
 
     def display_selected_events(self, catalogs: List[Catalog]):
         self.warning = None
@@ -261,6 +262,14 @@ class StationSelect:
         return df_data[mask].index.tolist()
     
     def sync_df_station_with_df_edit(self, df_station):
+        if self.df_data_edit is None:
+            # st.error("No data has been edited yet. Please make a selection first.")
+            return df_station
+
+        if 'is_selected' not in self.df_data_edit.columns:
+            # st.error("'is_selected' column is missing from the edited data.")
+            return df_station
+                
         df_station['is_selected'] = self.df_data_edit['is_selected']
         return df_station
     
@@ -316,17 +325,28 @@ class StationSelect:
                 st.dataframe(df_events, use_container_width=True)
 
 
-    def area_from_selected_events_card(self,refresh_map):
+    def area_from_selected_events_card(self, refresh_map):
         min_radius = st.text_input("Enter the minimum radius for all areas (km)", value="0")
-        max_radius = st.text_input("Enter the maximum radius for all areas (km)", value="1000")
+        max_radius = st.text_input("Enter the maximum radius for all areas (km)", value="0")
         
+        try:
+            min_radius_value = float(min_radius)
+            max_radius_value = float(max_radius)
+        except ValueError:
+            st.error("Please enter valid numeric values for the radius.")
+            return
+
+        if min_radius_value >= max_radius_value:
+            st.error("Maximum radius should be greater than minimum radius.")
+            return
+
         if not self.prev_min_radius:
             self.prev_min_radius = min_radius
         if not self.prev_max_radius:
             self.prev_max_radius = max_radius
 
         if min_radius != self.prev_min_radius or max_radius != self.prev_max_radius:
-            self.update_area_from_selected_events(min_radius, max_radius,refresh_map)
+            self.update_area_from_selected_events(min_radius, max_radius, refresh_map)
             self.prev_min_radius = min_radius
             self.prev_max_radius = max_radius
             st.rerun()
@@ -337,6 +357,7 @@ class StationSelect:
         df_events = event_response_to_df(self.settings.event.selected_catalogs)
 
         updated_constraints = []
+
         for _, row in df_events.iterrows():
             lat, lng = row['latitude'], row['longitude']
             found = False
@@ -347,20 +368,26 @@ class StationSelect:
                     and geo_constraint.coords.lat == lat
                     and geo_constraint.coords.lng == lng
                 ):
-                    # Update the radius if the lat/lng match
-                    geo_constraint.coords.min_radius = min_radius_value
-                    geo_constraint.coords.max_radius = max_radius_value
                     found = True
+                    if min_radius_value == 0 and max_radius_value == 0:
+                        # Remove the constraint if both radii are zero
+                        continue
+                    else:
+                        # Update the radius if the lat/lng match and radii are not zero
+                        geo_constraint.coords.min_radius = min_radius_value
+                        geo_constraint.coords.max_radius = max_radius_value
+                        updated_constraints.append(geo_constraint)
+                        break
+                else:
+                    updated_constraints.append(geo_constraint)
 
-            # If no existing constraint matches, add a new one
-            if not found:
+            if not found and not (min_radius_value == 0 and max_radius_value == 0):
                 new_donut = CircleArea(lat=lat, lng=lng, min_radius=min_radius_value, max_radius=max_radius_value)
                 geo = GeometryConstraint(geo_type=GeoConstraintType.CIRCLE, coords=new_donut)
                 updated_constraints.append(geo)
 
-        self.settings.station.geo_constraint.extend(updated_constraints)
+        self.settings.station.geo_constraint = updated_constraints
         refresh_map(reset_areas=False)
-
 
 
     def render(self, map_component: StationMap, stage):
