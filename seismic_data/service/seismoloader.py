@@ -922,7 +922,7 @@ def run_continuous(settings: SeismoLoaderSettings, inv: Inventory):
 
 
 
-def run_event(settings: SeismoLoaderSettings, inv: Inventory, catalog: Catalog):
+def run_event(settings: SeismoLoaderSettings):
     """
     Processes and downloads seismic event data for each event in the provided catalog using the specified
     settings and station inventory. The function handles data requests, filters out already available data,
@@ -969,12 +969,12 @@ def run_event(settings: SeismoLoaderSettings, inv: Inventory, catalog: Catalog):
     #       Isn't it the STATIONS have their own searching settings?
     #       If the search settings such as map search and time search are the
     #       same, why separate parameters are defined for events?
-    for i,eq in enumerate(catalog):
+    for i,eq in enumerate(settings.event.selected_catalogs):
         print("--> Downloading event (%d/%d) %s (%.4f lat %.4f lon %.1f km dep) ...\n" % (i+1,len(catalog),eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))
 
         # Collect requests
         requests = collect_requests_event(
-            eq,inv,min_dist_deg=minradius,max_dist_deg=maxradius,
+            eq, settings.station.selected_invs,min_dist_deg=minradius,max_dist_deg=maxradius,
             before_p_sec=settings.event.before_p_sec if settings.event.before_p_sec else 10,
             after_p_sec=settings.event.after_p_sec if settings.event.after_p_sec else 120,
             model=ttmodel

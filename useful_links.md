@@ -20,5 +20,17 @@ https://github.com/Mohamed-512/Extra-Streamlit-Components
 https://folium.streamlit.app/
 
 
-# FSDN - auspass
+## Desktop App with Streamlit
+https://github.com/whitphx/stlite
+
+## Auto UI generation from Pydantic Models
+https://st-pydantic.streamlit.app/
+
+
+# FSDN
+
+## AusPass
 https://auspass.edu.au/fdsnws/
+
+## Wilbert (iris)
+https://ds.iris.edu/wilber3/find_stations/11887265
