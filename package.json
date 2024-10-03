@@ -1,0 +1,45 @@
+{
+  "name": "seismic-data-desktop",
+  "version": "0.1.0",
+  "main": "./build/electron/main.js",
+  "scripts": {
+    "dump": "dump-stlite-desktop-artifacts",
+    "serve": "cross-env NODE_ENV=production electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "build": {
+    "files": [
+      "build/**/*"
+    ],
+    "directories": {
+      "buildResources": "assets"
+    }
+  },
+  "devDependencies": {
+    "@stlite/desktop": "^0.66.0",
+    "cross-env": "^7.0.3",
+    "electron": "30.0.8",
+    "electron-builder": "^24.13.3"
+  },
+  "stlite": {
+    "desktop": {
+      "files": [
+        "seismic_data/models/*",
+        "seismic_data/service/*",
+        "seismic_data/ui/components/*",
+        "seismic_data/ui/pages/*",
+        "seismic_data/ui/__init__.py",
+        "seismic_data/ui/main.py",
+        "seismic_data/utils/*",
+        "seismic_data/__init__.py",
+        "seismic_data/cli.py"
+      ],
+      "entrypoint": "seismic_data/ui/main.py",
+      "requirementsTxtFiles": [
+        "requirements.txt"
+      ]
+    }
+  }
+}

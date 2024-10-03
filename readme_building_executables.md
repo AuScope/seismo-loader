@@ -1,5 +1,5 @@
 
-# Building Executables for macOS, Linux, and Windows
+# Building Executables for macOS, Linux, and Windows - Running in Browser Option
 
 This readme outlines the steps to create executables for macOS, Linux, and Windows using **Python**, **Poetry**, and **PyInstaller**. The process is similar across platforms with some platform-specific adjustments.
 
@@ -211,3 +211,25 @@ pyinstaller run_app.spec --clean
 
 By following these steps, you can build standalone executables for macOS, Linux, and Windows using **Poetry** and **PyInstaller**. Each platform requires slight adjustments, such as path formatting, but the overall process remains consistent across environments.
 
+
+# Building as Desktop app
+
+## How to build
+
+@stlite/desktop can be used to build a desktop app with Steamlit. Follow the below step:
+
+- Create a `package.json`. There is already one created in the project (see https://github.com/whitphx/stlite/blob/main/packages/desktop/README.md)
+- Make sure all required project files are available in `package.json`
+- Make sure `requirements.txt` is available for lib dependencies
+- `npm install` -> this will install required node_modules
+- `npm run dump` -> builds the app
+- `npm run serve` -> serves the app
+- `npm run dist` -> creates executable
+
+## Main Challenge - Lib dependecies
+
+stlite only accept libraries that have pure wheels, i.e., they are built for webassembly. `pyodide` (https://pyodide.org/en/stable/usage/faq.html#why-can-t-micropip-find-a-pure-python-wheel-for-a-package) seems to be reponsible to bundle the app. This library already comes with a list of famous libs such as `pandas`. But it does not support less famous/widely used libs such as `obspy`.
+
+Packagin a lib in to a webassembly wheel seems to be quite complicated and not worthy of much try. And this is the main blocker of this approach.
+
+**NOTE:** packages with pure wheel will have `*py3-none-any.whl` in their naming.
