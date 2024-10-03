@@ -112,6 +112,7 @@ class EventMap:
 
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
+        self.catalogs=[]
 
     def handle_get_events(self):
         self.warning = None
@@ -222,9 +223,17 @@ class EventSelect:
 
 
     def sync_df_event_with_df_edit(self, df_event):
+        if self.df_data_edit is None:
+            # st.error("No data has been edited yet. Please make a selection first.")
+            return df_event
+
+        if 'is_selected' not in self.df_data_edit.columns:
+            # st.error("'is_selected' column is missing from the edited data.")
+            return df_event
+
         df_event['is_selected'] = self.df_data_edit['is_selected']
         return df_event
-    
+
 
     def refresh_map_selection(self, map_component):
         selected_idx = self.get_selected_idx(map_component.df_events)

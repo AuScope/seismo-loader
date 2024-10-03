@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 
 from obspy.core.inventory import Inventory
 from obspy.core.event import Catalog
+from obspy.clients.fdsn.header import FDSNException
 
 
 from seismic_data.ui.components.card import create_card
@@ -76,8 +77,6 @@ class StationFilterMenu:
             rect_changed = not original_df_rect.equals(self.df_rect)
 
             if rect_changed:
-                print(original_df_rect)
-                print(self.df_rect)
                 self.update_filter_geometry(self.df_rect, GeoConstraintType.BOUNDING)
                 refresh_map(reset_areas=False)
                 st.rerun()
@@ -115,9 +114,11 @@ class StationMap:
     clicked_marker_info = None
     warning: str = None
     error: str = None
+    stage=0
 
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
+        self.Inventories=[]
 
     def display_selected_events(self, catalogs: List[Catalog]):
         self.warning = None
@@ -134,20 +135,27 @@ class StationMap:
     def handle_get_stations(self):
         self.warning = None
         self.error   = None
-
-        self.Inventories = get_station_data(self.settings.model_dump_json())
-        if self.Inventories:
-            self.df_stations = station_response_to_df(self.Inventories)
-            
-            if not self.df_stations.empty:
-                cols = self.df_stations.columns                
-                cols_to_disp = {c:c.capitalize() for c in cols }
-                self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_stations,cols_to_disp,selected_idx=[], col_color=None, is_station=True)
+        try:
+            self.Inventories = get_station_data(self.settings.model_dump_json())
+            if self.Inventories:
+                self.df_stations = station_response_to_df(self.Inventories)
+                
+                if not self.df_stations.empty:
+                    cols = self.df_stations.columns                
+                    cols_to_disp = {c:c.capitalize() for c in cols }
+                    self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_stations,cols_to_disp,selected_idx=[], col_color=None, is_station=True)
+                else:
+                    self.warning = "No stations found for the selected range."
             else:
-                self.warning = "No stations found for the selected range."
-        else:
-            self.error = "No data available."
-
+                self.error = "No data available."
+                    
+        # except FDSNException as e:
+        #     print (f"Invalid request: {str(e)}. Please check your input parameters, such as longitude and latitude.")
+        #     self.error = f"Invalid request: {str(e)}. Please check your input parameters, such as longitude and latitude."
+        except Exception as e:
+            print(f"An unexpected error occurred: {str(e)}")
+            self.error = f"An unexpected error occurred: {str(e)}"
+        
 
     def update_selected_inventories(self):
         self.settings.station.selected_invs = []
@@ -156,8 +164,7 @@ class StationMap:
                 self.settings.station.selected_invs.append(station)
 
 
-    def handle_update_data_points(self, selected_idx):
-    
+    def handle_update_data_points(self, selected_idx):   
         if not self.df_stations.empty:
             cols = self.df_stations.columns                
             cols_to_disp = {c:c.capitalize() for c in cols }
@@ -174,12 +181,13 @@ class StationMap:
             self.settings.station.geo_constraint.extend(self.areas_current)
 
         self.map_disp = create_map(areas=self.settings.station.geo_constraint)
+        
         if selected_idx:
             self.handle_update_data_points(selected_idx)
         elif len(self.settings.station.geo_constraint) > 0:
             self.handle_get_stations()
 
-        if len(self.settings.event.selected_catalogs) > 0:    
+        if self.stage == 2 and len(self.settings.event.selected_catalogs) > 0:    
             self.display_selected_events(self.settings.event.selected_catalogs)
 
         if rerun:
@@ -199,7 +207,9 @@ class StationMap:
         if clear_prev_stations_clicked:
             self.refresh_map(reset_areas=True)
 
-    def render_map(self):
+    def render_map(self,stage):
+        self.stage = stage
+
         if not self.map_disp:
             self.refresh_map(reset_areas=True)
 
@@ -215,7 +225,6 @@ class StationMap:
         self.areas_current = get_selected_areas(self.map_output)
         if self.map_output and self.map_output.get('last_object_clicked') is not None:
             last_clicked = self.map_output['last_object_clicked']
-
             if isinstance(last_clicked, dict):
                 clicked_lat_lng = (last_clicked.get('lat'), last_clicked.get('lng'))
             elif isinstance(last_clicked, list):
@@ -236,9 +245,14 @@ class StationSelect:
 
     settings: SeismoLoaderSettings
     df_data_edit: pd.DataFrame = None
+    prev_min_radius : float
+    prev_max_radius : float
 
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
+        self.df_data_edit = None
+        self.prev_min_radius = None  
+        self.prev_max_radius = None  
 
     def get_selected_idx(self, df_data):
         if df_data.empty:
@@ -248,6 +262,14 @@ class StationSelect:
         return df_data[mask].index.tolist()
     
     def sync_df_station_with_df_edit(self, df_station):
+        if self.df_data_edit is None:
+            # st.error("No data has been edited yet. Please make a selection first.")
+            return df_station
+
+        if 'is_selected' not in self.df_data_edit.columns:
+            # st.error("'is_selected' column is missing from the edited data.")
+            return df_station
+                
         df_station['is_selected'] = self.df_data_edit['is_selected']
         return df_station
     
@@ -257,8 +279,126 @@ class StationSelect:
         map_component.update_selected_inventories()
         map_component.refresh_map(reset_areas=False, selected_idx=selected_idx, rerun = True)
 
+    def station_table_view(self, map_component):
+        create_card("List of Stations", False, lambda: self.display_stations(map_component))
 
-    def render(self, map_component: StationMap):
+    def display_stations(self, map_component):
+        cols = map_component.df_stations.columns
+        orig_cols = [col for col in cols if col != 'is_selected']
+        ordered_col = ['is_selected'] + orig_cols
+
+        config = {col: {'disabled': True} for col in orig_cols}
+
+        if 'is_selected' not in map_component.df_stations.columns:
+            map_component.df_stations['is_selected'] = False
+        config['is_selected'] = st.column_config.CheckboxColumn('Select')
+
+        c1, c2, c3, c4 = st.columns([1, 1, 1, 3])
+        with c1:
+            st.write(f"Total Number of Stations: {len(map_component.df_stations)}")
+        with c2:
+            if st.button("Select All"):
+                map_component.df_stations['is_selected'] = True
+        with c3:
+            if st.button("Unselect All"):
+                map_component.df_stations['is_selected'] = False
+        with c4:
+            if st.button("Refresh Map"):
+                map_component.df_stations = self.sync_df_station_with_df_edit(map_component.df_stations)
+                self.refresh_map_selection(map_component)
+
+        self.df_data_edit = st.data_editor(
+            map_component.df_stations,
+            hide_index=True,
+            column_config=config,
+            column_order=ordered_col
+        )
+
+    def display_selected_events(self, map_component):
+        df_events = event_response_to_df(self.settings.event.selected_catalogs)
+        if df_events.empty:
+            st.write("No selected events")
+        else:
+            with st.container():
+                self.area_from_selected_events_card(map_component.refresh_map)
+                st.write(f"Total Number of Selected Events: {len(df_events)}")
+                st.dataframe(df_events, use_container_width=True)
+
+    def area_from_selected_events_card(self, refresh_map):
+
+        st.markdown(
+            """
+            <style>
+            div.stButton > button {
+                margin-top: 25px;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.write("Define an area around the selected events.")
+        c1, c2, c3 = st.columns([1, 1, 1])
+
+        with c1:
+            min_radius_str = st.text_input("Minimum radius (km)", value="0")
+        with c2:
+            max_radius_str = st.text_input("Maximum radius (km)", value="1000")
+
+        try:
+            min_radius = float(min_radius_str)
+            max_radius = float(max_radius_str)
+        except ValueError:
+            st.error("Please enter valid numeric values for the radius.")
+            return
+
+        if min_radius >= max_radius:
+            st.error("Maximum radius should be greater than minimum radius.")
+            return
+
+        if not hasattr(self, 'prev_min_radius') or not hasattr(self, 'prev_max_radius'):
+            self.prev_min_radius = None
+            self.prev_max_radius = None
+
+        with c3:
+            if st.button("Draw Area"):
+                if self.prev_min_radius is None or self.prev_max_radius is None or min_radius != self.prev_min_radius or max_radius != self.prev_max_radius:
+                    self.update_area_from_selected_events(min_radius, max_radius, refresh_map)
+                    self.prev_min_radius = min_radius
+                    self.prev_max_radius = max_radius
+                    st.rerun()
+
+    def update_area_from_selected_events(self, min_radius, max_radius, refresh_map):
+        min_radius_value = float(min_radius) * 1000
+        max_radius_value = float(max_radius) * 1000
+        df_events = event_response_to_df(self.settings.event.selected_catalogs)
+
+        updated_constraints = []
+
+        for geo_constraint in self.settings.station.geo_constraint:
+            if geo_constraint.geo_type == GeoConstraintType.CIRCLE:
+                lat, lng = geo_constraint.coords.lat, geo_constraint.coords.lng
+                matching_event = df_events[(df_events['latitude'] == lat) & (df_events['longitude'] == lng)]
+
+                if not matching_event.empty:
+                    geo_constraint.coords.min_radius = min_radius_value
+                    geo_constraint.coords.max_radius = max_radius_value
+            updated_constraints.append(geo_constraint)
+
+        for _, row in df_events.iterrows():
+            lat, lng = row['latitude'], row['longitude']
+            if not any(
+                geo.geo_type == GeoConstraintType.CIRCLE and geo.coords.lat == lat and geo.coords.lng == lng
+                for geo in updated_constraints
+            ):
+                new_donut = CircleArea(lat=lat, lng=lng, min_radius=min_radius_value, max_radius=max_radius_value)
+                geo = GeometryConstraint(geo_type=GeoConstraintType.CIRCLE, coords=new_donut)
+                updated_constraints.append(geo)
+
+        self.settings.station.geo_constraint = updated_constraints
+        refresh_map(reset_areas=False)
+
+    def render(self, map_component: StationMap, stage):
         """
         c2_top is the location beside the map
         """
@@ -268,7 +408,9 @@ class StationSelect:
             create_card(None, False, map_component.render_top_buttons)
 
         with c1_top:
-            map_component.render_map()
+            map_component.render_map(stage)
+            if not map_component.df_stations.empty:
+                self.station_table_view(map_component)
 
         with c2_top:
             def handle_marker_select():                
@@ -309,38 +451,8 @@ class StationSelect:
             if not map_component.df_stations.empty:
                 create_card(None, False, map_tools_card)
 
-
-        # Show Stations in the table
-        if not map_component.df_stations.empty:
-            cols = map_component.df_stations.columns
-            orig_cols   = [col for col in cols if col != 'is_selected']
-            ordered_col = ['is_selected'] + orig_cols
-
-            config = {col: {'disabled': True} for col in orig_cols}
-
-            if 'is_selected' not in map_component.df_stations.columns:
-                map_component.df_stations['is_selected'] = False
-            config['is_selected']  = st.column_config.CheckboxColumn(
-                'Select'
-            )
-
-            def station_table_view():
-                c1, c2, c3, c4 = st.columns([1,1,1,3])
-                with c1:
-                    st.write(f"Total Number of Stations: {len(map_component.df_stations)}")
-                with c2:
-                    if st.button("Select All"):
-                        map_component.df_stations['is_selected'] = True
-                with c3:
-                    if st.button("Unselect All"):
-                        map_component.df_stations['is_selected'] = False
-                with c4:
-                    if st.button("Refresh Map"):
-                        map_component.df_stations = self.sync_df_station_with_df_edit(map_component.df_stations)
-                        self.refresh_map_selection(map_component)
-
-                self.df_data_edit = st.data_editor(map_component.df_stations, hide_index = True, column_config=config, column_order = ordered_col)           
-            create_card("List of Stationss", False, station_table_view)
+            if stage == 2:
+                create_card("List of Selected Events", False, lambda: self.display_selected_events(map_component))
 
         return map_component
 
@@ -358,10 +470,10 @@ class StationComponents:
         self.map_component = StationMap(settings)
         self.station_select  = StationSelect(settings)
 
-    def render(self):
+    def render(self,stage):
         st.sidebar.header("Station Filters")
         with st.sidebar:
             self.filter_menu.render(self.map_component.refresh_map)
 
-        self.map_component = self.station_select.render(self.map_component)
+        self.map_component = self.station_select.render(self.map_component,stage=stage)
 
