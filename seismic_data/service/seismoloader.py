@@ -17,7 +17,6 @@ import sqlite3
 import datetime
 import multiprocessing
 import configparser
-import contextlib
 from tqdm import tqdm
 from tabulate import tabulate # non-standard. this is just to display the db contents
 import random
@@ -34,6 +33,7 @@ from obspy.core.event import Catalog
 from seismic_data.models.config import SeismoLoaderSettings
 from seismic_data.enums.config import DownloadType, GeoConstraintType
 from seismic_data.service.utils import is_in_enum
+from seismic_data.service.db import setup_database, safe_db_connection
 
 ### request status codes (TBD more:
 # 204 = no data
@@ -70,52 +70,7 @@ def read_config(config_file):
 
     return processed_config
 
-def setup_database(db_path):
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS archive_data (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            network TEXT,
-            station TEXT,
-            location TEXT,
-            channel TEXT,
-            starttime TEXT,
-            endtime TEXT
-            )
-        ''')
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_archive_data 
-        ON archive_data (network, station, location, channel, starttime, endtime)
-        ''')
-    conn.commit()
-    return
 
-@contextlib.contextmanager
-def safe_db_connection(db_path, max_retries=3, initial_delay=1):
-    """Context manager for safe database connections with retry mechanism."""
-    retry_count = 0
-    delay = initial_delay
-    while retry_count < max_retries:
-        try:
-            conn = sqlite3.connect(db_path, timeout=20)
-            yield conn
-            return
-        except sqlite3.OperationalError as e:
-            if "database is locked" in str(e):
-                retry_count += 1
-                if retry_count >= max_retries:
-                    print(f"Failed to connect to database after {max_retries} retries.")
-                    raise
-                print(f"Database is locked. Retrying in {delay} seconds...")
-                time.sleep(delay)
-                delay *= 2  # Exponential backoff
-                delay += random.uniform(0, 1)  # Add jitter
-            else:
-                raise
-        finally:
-            if 'conn' in locals():
-                conn.close()
 
 def process_file(file_path):
     try:
@@ -479,6 +434,47 @@ def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=1
 
     return requests_per_eq
 
+
+def collect_requests_event_revised(eq,inv,before_p_sec=10,after_p_sec=120,model=None): #todo add params for before_p, after_p, etc
+    """ 
+    @Review: Rob please review this
+    
+    This method is revised as followings:
+
+    1. No more need for params: `min_dist_deg` and `max_dist_deg`. This function will accept a shortlist of selected 
+    events and stations.
+    """
+
+    # n.b. "eq" is an earthquake object, e.g. one element of the array collected in a "catalog" object
+
+    origin = eq.origins[0] # default to the primary I suppose (possible TODO but don't see why anyone would want anything else)
+    ot = origin.time
+    sub_inv = inv.select(time = ot) # Loose filter to select only stations that were running during the earthquake start
+
+    # TODO: further filter by selecting best available channels
+
+    requests_per_eq = []
+    for net in sub_inv:
+        for sta in net:
+            p_time, s_time = get_p_s_times(eq,sta.latitude,sta.longitude,model)
+            if not p_time: continue # TOTO need error msg also
+
+            t_start = p_time - abs(before_p_sec)
+            t_end = p_time + abs(after_p_sec)
+
+            for cha in sta: # TODO will have to had filtered channels prior to this, else will grab them all
+                requests_per_eq.append((
+                    net.code,
+                    sta.code,
+                    cha.location_code,
+                    cha.code,
+                    t_start.isoformat() + "Z",
+                    t_end.isoformat() + "Z" ))
+
+    return requests_per_eq
+
+
+
 from collections import defaultdict
 def combine_requests(requests):
     """ Combine requests to 
@@ -572,6 +568,8 @@ def archive_request(request,waveform_client,sds_path,db_path):
         st = waveform_client.get_waveforms(network=request[0],station=request[1],
                             location=request[2],channel=request[3],
                             starttime=UTCDateTime(request[4]),endtime=UTCDateTime(request[5]))
+        nslc_code = f"{request[0]}.{request[1]}.{request[2]}.{request[3]}"
+        # return nslc_code, st
     except Exception as e:
         print(f"Error fetching data: {request} {str(e)}")
         # >> TODO add failure & denied to database also. can grep from HTTP status code (204 = no data, etc)
@@ -636,6 +634,8 @@ def archive_request(request,waveform_client,sds_path,db_path):
                     VALUES (?, ?, ?, ?, ?, ?)
                 ''', ele)
             conn.commit()
+
+    return nslc_code, st
 
 
 
@@ -886,6 +886,8 @@ def run_continuous(settings: SeismoLoaderSettings, inv: Inventory):
     - The function logs detailed information about the processing steps and errors to aid
       in debugging and monitoring of data retrieval processes.
     """
+    settings = setup_paths(settings)
+
     starttime = UTCDateTime(settings.station.date_config.start_time)
     endtime = UTCDateTime(settings.station.date_config.end_time)
     waveform_client = Client(settings.waveform.client.value) # note we may have three different clients here: waveform, station, and event. be careful to keep track
@@ -912,13 +914,17 @@ def run_continuous(settings: SeismoLoaderSettings, inv: Inventory):
         waveform_clients.update({cred.nslc_code:new_client})
 
     # Archive to disk and updated database
+    time_series = {}
     for request in combined_requests:
         print(request)
         time.sleep(0.05) #to help ctrl-C out if needed
         try: 
-            archive_request(request, waveform_client, settings.sds_path, settings.db_path)
+            k, st = archive_request(request, waveform_client, settings.sds_path, settings.db_path)
+            time_series[k] = st
         except:
             print("Continous request not successful: ",request)
+
+    return time_series
 
 
 
@@ -954,6 +960,8 @@ def run_event(settings: SeismoLoaderSettings):
     - Care should be taken when modifying settings and handling authentication to ensure the integrity and security
       of data access and retrieval.
     """
+    settings = setup_paths(settings)
+
     waveform_client = Client(settings.waveform.client.value)
     
     ttmodel = TauPyModel(settings.event.model) #  config['EVENT']['model'])
@@ -961,8 +969,8 @@ def run_event(settings: SeismoLoaderSettings):
     # @FIXME: Below line seems to be redundant as in above lines, event_client was set.
     # event_client = Client(config['EVENT']['client'])
 
-    minradius = settings.event.min_radius # float(config['EVENT']['minradius'])
-    maxradius = settings.event.max_radius # float(config['EVENT']['maxradius'])
+    # minradius = settings.event.min_radius # float(config['EVENT']['minradius'])
+    # maxradius = settings.event.max_radius # float(config['EVENT']['maxradius'])
 
     #now loop through events
     # NOTE: Why "inv" collections from STATION block is included in EVENTS?
@@ -970,11 +978,11 @@ def run_event(settings: SeismoLoaderSettings):
     #       If the search settings such as map search and time search are the
     #       same, why separate parameters are defined for events?
     for i,eq in enumerate(settings.event.selected_catalogs):
-        print("--> Downloading event (%d/%d) %s (%.4f lat %.4f lon %.1f km dep) ...\n" % (i+1,len(catalog),eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))
+        print("--> Downloading event (%d/%d) %s (%.4f lat %.4f lon %.1f km dep) ...\n" % (i+1,len(settings.event.selected_catalogs),eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))
 
         # Collect requests
-        requests = collect_requests_event(
-            eq, settings.station.selected_invs,min_dist_deg=minradius,max_dist_deg=maxradius,
+        requests = collect_requests_event_revised(
+            eq, settings.station.selected_invs,
             before_p_sec=settings.event.before_p_sec if settings.event.before_p_sec else 10,
             after_p_sec=settings.event.after_p_sec if settings.event.after_p_sec else 120,
             model=ttmodel
@@ -1002,13 +1010,17 @@ def run_event(settings: SeismoLoaderSettings):
             waveform_clients.update({cred.nslc_code:new_client})
 
         # Archive to disk and updated database
+        time_series = {}
         for request in combined_requests:
             time.sleep(0.05) #to help ctrl-C out if needed
             print(request)
             try: 
-                archive_request(request,waveform_client,settings.sds_path,settings.db_path)
+                k, st = archive_request(request,waveform_client,settings.sds_path,settings.db_path)
+                time_series[k] = st
             except:
                 print("Event request not successful: ",request)
+        
+        return time_series
 
 
 

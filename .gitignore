@@ -158,6 +158,8 @@ cython_debug/
 
 *.sql
 
+data/
+
 *.kill*
 
 # PyCharm

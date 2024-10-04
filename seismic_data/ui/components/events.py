@@ -17,6 +17,7 @@ from seismic_data.models.config import SeismoLoaderSettings, GeometryConstraint
 from seismic_data.models.common import CircleArea, RectangleArea
 
 from seismic_data.enums.config import GeoConstraintType
+from seismic_data.enums.ui import Steps
 
 # Sidebar date input
 
@@ -126,7 +127,7 @@ class EventMap:
             if not self.df_events.empty:
                 cols = self.df_events.columns                
                 cols_to_disp = {c:c.capitalize() for c in cols }
-                self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_events, cols_to_disp, col_color='magnitude')
+                self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_events, cols_to_disp, step=Steps.EVENT, col_color='magnitude')
             else:
                 self.warning = "No earthquakes found for the selected magnitude and depth range."
         else:
@@ -144,7 +145,9 @@ class EventMap:
         if not self.df_events.empty:
             cols = self.df_events.columns                
             cols_to_disp = {c:c.capitalize() for c in cols }
-            self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_events, cols_to_disp, selected_idx, col_color='magnitude')
+            self.map_disp, self.marker_info = add_data_points(
+                self.map_disp, self.df_events, cols_to_disp, step=Steps.EVENT, selected_idx = selected_idx, col_color='magnitude'
+            )
         else:
             self.warning = "No earthquakes found for the selected magnitude and depth range."
 
@@ -294,35 +297,37 @@ class EventSelect:
 
         # Show Events in the table
         if not map_component.df_events.empty:
-            cols = map_component.df_events.columns
-            orig_cols   = [col for col in cols if col != 'is_selected']
-            ordered_col = ['is_selected'] + orig_cols
+            c21, c22 = st.columns([2,1])
+            with c21:
+                cols = map_component.df_events.columns
+                orig_cols   = [col for col in cols if col != 'is_selected']
+                ordered_col = ['is_selected'] + orig_cols
 
-            config = {col: {'disabled': True} for col in orig_cols}
+                config = {col: {'disabled': True} for col in orig_cols}
 
-            if 'is_selected' not in map_component.df_events.columns:
-                map_component.df_events['is_selected'] = False
-            config['is_selected']  = st.column_config.CheckboxColumn(
-                'Select'
-            )
+                if 'is_selected' not in map_component.df_events.columns:
+                    map_component.df_events['is_selected'] = False
+                config['is_selected']  = st.column_config.CheckboxColumn(
+                    'Select'
+                )
 
-            def event_table_view():
-                c1, c2, c3, c4 = st.columns([1,1,1,3])
-                with c1:
-                    st.write(f"Total Number of Events: {len(map_component.df_events)}")
-                with c2:
-                    if st.button("Select All"):
-                        map_component.df_events['is_selected'] = True
-                with c3:
-                    if st.button("Unselect All"):
-                        map_component.df_events['is_selected'] = False
-                with c4:
-                    if st.button("Refresh Map"):
-                        map_component.df_events = self.sync_df_event_with_df_edit(map_component.df_events)
-                        self.refresh_map_selection(map_component)
+                def event_table_view():
+                    c1, c2, c3, c4 = st.columns([1,1,1,3])
+                    with c1:
+                        st.write(f"Total Number of Events: {len(map_component.df_events)}")
+                    with c2:
+                        if st.button("Select All"):
+                            map_component.df_events['is_selected'] = True
+                    with c3:
+                        if st.button("Unselect All"):
+                            map_component.df_events['is_selected'] = False
+                    with c4:
+                        if st.button("Refresh Map"):
+                            map_component.df_events = self.sync_df_event_with_df_edit(map_component.df_events)
+                            self.refresh_map_selection(map_component)
 
-                self.df_data_edit = st.data_editor(map_component.df_events, hide_index = True, column_config=config, column_order = ordered_col)           
-            create_card("List of Events", False, event_table_view)
+                    self.df_data_edit = st.data_editor(map_component.df_events, hide_index = True, column_config=config, column_order = ordered_col)           
+                create_card("List of Events", False, event_table_view)
 
         # with c2_bot:
         #     st.write(self.settings.event.selected_catalogs)

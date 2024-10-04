@@ -52,11 +52,13 @@ class AuthConfig(BaseModel):
     username: str
     password: str
 
-class SeismoLocation(BaseModel):
+class SeismoQuery(BaseModel):
     network : Optional[str] = None
     station : Optional[str] = None
     location: Optional[str] = None
     channel : Optional[str] = None
+    starttime: Optional[datetime] = None
+    endtime: Optional[datetime] = None
 
     def __init__(self, cmb_str_n_s=None, **data):
         super().__init__(**data) 
@@ -117,8 +119,8 @@ class GeometryConstraint(BaseModel):
 
 class StationConfig(BaseModel):
     client             : Optional   [ SeismoClients] = SeismoClients.AUSPASS
-    force_stations     : Optional   [ List          [SeismoLocation]] = []
-    exclude_stations   : Optional   [ List          [SeismoLocation]] = []
+    force_stations     : Optional   [ List          [SeismoQuery]] = []
+    exclude_stations   : Optional   [ List          [SeismoQuery]] = []
     date_config        : DateConfig = DateConfig    ()
     local_inventory    : Optional   [ str           ] = None
     network            : Optional   [ str           ] = None
@@ -242,13 +244,13 @@ class SeismoLoaderSettings(BaseModel):
         force_stations           = []
         for cmb_n_s in force_stations_cmb_n_s:
             if cmb_n_s != '':
-                force_stations.append(SeismoLocation(cmb_str_n_s=cmb_n_s))
+                force_stations.append(SeismoQuery(cmb_str_n_s=cmb_n_s))
 
         exclude_stations_cmb_n_s = config.get('STATION', 'exclude_stations', fallback='').split(',')
         exclude_stations         = []
         for cmb_n_s in exclude_stations_cmb_n_s:
             if cmb_n_s != '':
-                exclude_stations.append(SeismoLocation(cmb_str_n_s=cmb_n_s))
+                exclude_stations.append(SeismoQuery(cmb_str_n_s=cmb_n_s))
 
         # MAP SEAARCH            
         geo_constraint_station = None

@@ -6,6 +6,7 @@ from matplotlib.colors import Normalize
 import matplotlib.cm as cm
 
 from seismic_data.models.common import RectangleArea, CircleArea 
+from seismic_data.enums.ui import Steps
 # from shapely.geometry import Point
 # from shapely.geometry.polygon import Polygon
 # import geopandas as gpd
@@ -122,7 +123,7 @@ def create_popup(index, row, cols_to_disp):
     """
 
 
-def add_data_points(base_map, df, cols_to_disp, selected_idx=[], col_color=None, is_station=False, is_original=True):
+def add_data_points(base_map, df, cols_to_disp, step: Steps, selected_idx=[], col_color=None):
     marker_info = {}
 
     for index, row in df.iterrows():
@@ -136,7 +137,8 @@ def add_data_points(base_map, df, cols_to_disp, selected_idx=[], col_color=None,
         popup = folium.Popup(html=popup_content, max_width=2650, min_width=200)
 
         latitude, longitude = row['latitude'], row['longitude']
-        if is_original and not is_station:
+
+        if step == Steps.EVENT:
             folium.CircleMarker(
                 location=[latitude, longitude],
                 radius=size,
@@ -146,7 +148,8 @@ def add_data_points(base_map, df, cols_to_disp, selected_idx=[], col_color=None,
                 fill_color=color,
                 fill_opacity=fill_opacity,
             ).add_to(base_map)
-        elif is_original and is_station:
+
+        if step == Steps.STATION:
             folium.RegularPolygonMarker(
                 location=[latitude, longitude],
                 number_of_sides=3,
@@ -158,18 +161,42 @@ def add_data_points(base_map, df, cols_to_disp, selected_idx=[], col_color=None,
                 fill_color=color,
                 fill_opacity=fill_opacity,
             ).add_to(base_map)
-        elif not is_original:
-            folium.RegularPolygonMarker(
-                location=[latitude, longitude],
-                number_of_sides=5,
-                rotation=30,
-                radius=10,
-                popup=popup,
-                color=edge_color,
-                fill=True,
-                fill_color=color,
-                fill_opacity=0.6
-            ).add_to(base_map)
+
+
+        # if is_original and not is_station:
+        #     folium.CircleMarker(
+        #         location=[latitude, longitude],
+        #         radius=size,
+        #         popup=popup,
+        #         color=edge_color,
+        #         fill=True,
+        #         fill_color=color,
+        #         fill_opacity=fill_opacity,
+        #     ).add_to(base_map)
+        # elif is_original and is_station:
+        #     folium.RegularPolygonMarker(
+        #         location=[latitude, longitude],
+        #         number_of_sides=3,
+        #         rotation=-90,
+        #         radius=size,
+        #         popup=popup,
+        #         color=edge_color,
+        #         fill=True,
+        #         fill_color=color,
+        #         fill_opacity=fill_opacity,
+        #     ).add_to(base_map)
+        # elif not is_original:
+        #     folium.RegularPolygonMarker(
+        #         location=[latitude, longitude],
+        #         number_of_sides=5,
+        #         rotation=30,
+        #         radius=10,
+        #         popup=popup,
+        #         color=edge_color,
+        #         fill=True,
+        #         fill_color=color,
+        #         fill_opacity=0.6
+        #     ).add_to(base_map)
 
         marker_key = (latitude, longitude)
         if marker_key not in marker_info:

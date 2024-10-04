@@ -48,7 +48,10 @@ class GeoConstraintType(str, Enum):
 
 
 class Levels(str, Enum):
-    CHANNEL = 'channel'
+    CHANNEL  = 'channel'
+    LOCATION = 'location'
+    STATION  = 'station'
+    NETWORK  = 'network'
 
 
 class EventModels(str, Enum):

@@ -29,7 +29,6 @@ def station_response_to_df(inventory):
     Convert ObsPy Inventory data into a DataFrame with station information.
     """
     records = []
-
     for network in inventory.networks:
         for station in network.stations:
             station_code = station.code
@@ -37,26 +36,39 @@ def station_response_to_df(inventory):
             latitude = station.latitude
             longitude = station.longitude
             elevation = station.elevation
+
+            record = {
+                'network': network.code,
+                'station': station_code,
+                'station_name': station_name,
+                'latitude': latitude,
+                'longitude': longitude,
+                'elevation': elevation,
+                'detail': station,
+            }
+
+            records.append(record)
+
             
-            for channel in station.channels:
-                channel_code = channel.code
-                channel_location = channel.location_code
-                depth = channel.depth
-                sensor = channel.sensor.description
+            # for channel in station.channels:
+            #     channel_code = channel.code
+            #     channel_location = channel.location_code
+            #     depth = channel.depth
+            #     sensor = channel.sensor.description
 
-                record = {
-                    'network': network.code,
-                    'station': station_code,
-                    'station_name': station_name,
-                    'latitude': latitude,
-                    'longitude': longitude,
-                    'elevation': elevation,
-                    'channel': channel_code,
-                    'location': channel_location,
-                    'depth': depth,
-                    'sensor': sensor
-                }
+            #     record = {
+            #         'network': network.code,
+            #         'station': station_code,
+            #         'station_name': station_name,
+            #         'latitude': latitude,
+            #         'longitude': longitude,
+            #         'elevation': elevation,
+            #         'channel': channel_code,
+            #         'location': channel_location,
+            #         'depth': depth,
+            #         'sensor': sensor
+            #     }
 
-                records.append(record)
+            #     records.append(record)
 
     return pd.DataFrame(records)

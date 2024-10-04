@@ -21,6 +21,7 @@ from seismic_data.models.config import SeismoLoaderSettings, GeometryConstraint
 from seismic_data.models.common import CircleArea, RectangleArea
 
 from seismic_data.enums.config import GeoConstraintType
+from seismic_data.enums.ui import Steps
 
 # Sidebar date input
 
@@ -109,7 +110,7 @@ class StationMap:
     map_height = 500
     map_output = None
     df_stations: pd.DataFrame = pd.DataFrame()
-    Inventories: List[Inventory]
+    inventories: List[Inventory]
     marker_info = None
     clicked_marker_info = None
     warning: str = None
@@ -118,32 +119,34 @@ class StationMap:
 
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
-        self.Inventories=[]
+        self.inventories=[]
 
     def display_selected_events(self, catalogs: List[Catalog]):
         self.warning = None
         self.error   = None
-        is_original = False
 
         df_events = event_response_to_df(catalogs)
         if not df_events.empty:
             cols = df_events.columns                
             cols_to_disp = {c:c.capitalize() for c in cols }
-            _, _ = add_data_points(self.map_disp, df_events ,cols_to_disp,selected_idx=[], col_color="magnitude", is_original=is_original)
+            _, _ = add_data_points(self.map_disp, df_events ,cols_to_disp, step=Steps.EVENT,selected_idx=[], col_color="magnitude")
 
 
     def handle_get_stations(self):
         self.warning = None
         self.error   = None
         try:
-            self.Inventories = get_station_data(self.settings.model_dump_json())
-            if self.Inventories:
-                self.df_stations = station_response_to_df(self.Inventories)
+            self.inventories = get_station_data(self.settings.model_dump_json())
+            if self.inventories:
+                self.df_stations = station_response_to_df(self.inventories)
                 
                 if not self.df_stations.empty:
-                    cols = self.df_stations.columns                
+                    cols = self.df_stations.columns
                     cols_to_disp = {c:c.capitalize() for c in cols }
-                    self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_stations,cols_to_disp,selected_idx=[], col_color=None, is_station=True)
+                    cols_to_disp.pop("detail")
+                    self.map_disp, self.marker_info = add_data_points(
+                        self.map_disp, self.df_stations,cols_to_disp, step=Steps.STATION,selected_idx=[], col_color=None
+                    )
                 else:
                     self.warning = "No stations found for the selected range."
             else:
@@ -158,17 +161,24 @@ class StationMap:
         
 
     def update_selected_inventories(self):
-        self.settings.station.selected_invs = []
-        for i, station in enumerate(self.Inventories):
-            if self.df_stations.loc[i, 'is_selected']:
-                self.settings.station.selected_invs.append(station)
+        self.settings.station.selected_invs = None
+        is_init = False
+        for idx, row in self.df_stations[self.df_stations['is_selected']].iterrows():
+            if not is_init:
+                self.settings.station.selected_invs = self.inventories.select(station=row["station"])
+                is_init = True
+            else:
+                self.settings.station.selected_invs += self.inventories.select(station=row["station"])
 
 
     def handle_update_data_points(self, selected_idx):   
         if not self.df_stations.empty:
             cols = self.df_stations.columns                
             cols_to_disp = {c:c.capitalize() for c in cols }
-            self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_stations, cols_to_disp, selected_idx, col_color=None,is_station=True)
+            cols_to_disp.pop("detail")
+            self.map_disp, self.marker_info = add_data_points(
+                self.map_disp, self.df_stations, cols_to_disp, step=Steps.STATION, selected_idx=selected_idx, col_color=None
+            )
         else:
             self.warning = "No station found for the selected range."
 
@@ -324,6 +334,8 @@ class StationSelect:
                 st.write(f"Total Number of Selected Events: {len(df_events)}")
                 st.dataframe(df_events, use_container_width=True)
 
+            # map_component.refresh_map()
+
     def area_from_selected_events_card(self, refresh_map):
 
         st.markdown(
@@ -416,7 +428,8 @@ class StationSelect:
             def handle_marker_select():                
                 # st.write(map_component.clicked_marker_info)
                 info = map_component.clicked_marker_info
-                selected_station = f"No {info['id']}: {info['Network']}, {info['Station']},{info['Location']},{info['Channel']}, {info['Depth']}"
+                # selected_station = f"No {info['id']}: {info['Network']}, {info['Station']},{info['Location']},{info['Channel']}, {info['Depth']}"
+                selected_station = f"No {info['id']}: {info['Network']}, {info['Station']}"
 
                 if 'is_selected' not in map_component.df_stations.columns:
                     map_component.df_stations['is_selected'] = False
