@@ -17,6 +17,7 @@ import sqlite3
 import datetime
 import multiprocessing
 import configparser
+import pandas as pd
 from tqdm import tqdm
 from tabulate import tabulate # non-standard. this is just to display the db contents
 import random
@@ -30,10 +31,11 @@ from obspy.taup import TauPyModel
 from obspy.core.inventory import Inventory
 from obspy.core.event import Catalog
 
-from seismic_data.models.config import SeismoLoaderSettings
+from seismic_data.models.config import SeismoLoaderSettings, SeismoQuery
 from seismic_data.enums.config import DownloadType, GeoConstraintType
 from seismic_data.service.utils import is_in_enum
 from seismic_data.service.db import setup_database, safe_db_connection
+from seismic_data.service.waveform import get_local_waveform, stream_to_dataframe
 
 ### request status codes (TBD more:
 # 204 = no data
@@ -568,7 +570,6 @@ def archive_request(request,waveform_client,sds_path,db_path):
         st = waveform_client.get_waveforms(network=request[0],station=request[1],
                             location=request[2],channel=request[3],
                             starttime=UTCDateTime(request[4]),endtime=UTCDateTime(request[5]))
-        nslc_code = f"{request[0]}.{request[1]}.{request[2]}.{request[3]}"
         # return nslc_code, st
     except Exception as e:
         print(f"Error fetching data: {request} {str(e)}")
@@ -634,8 +635,6 @@ def archive_request(request,waveform_client,sds_path,db_path):
                     VALUES (?, ?, ?, ?, ?, ?)
                 ''', ele)
             conn.commit()
-
-    return nslc_code, st
 
 
 
@@ -914,15 +913,38 @@ def run_continuous(settings: SeismoLoaderSettings, inv: Inventory):
         waveform_clients.update({cred.nslc_code:new_client})
 
     # Archive to disk and updated database
-    time_series = {}
     for request in combined_requests:
         print(request)
         time.sleep(0.05) #to help ctrl-C out if needed
         try: 
-            k, st = archive_request(request, waveform_client, settings.sds_path, settings.db_path)
-            time_series[k] = st
+            archive_request(request, waveform_client, settings.sds_path, settings.db_path)
         except:
             print("Continous request not successful: ",request)
+
+    # Goint through all original requests
+    time_series = []
+    for req in requests:
+        data = pd.DataFrame()
+        query = SeismoQuery(
+            network = req[0],
+            station = req[1],
+            location = req[2],
+            channel = req[3],
+            starttime = req[4],
+            endtime = req[5]
+        )
+        try:
+            data = stream_to_dataframe(get_local_waveform(query, settings))
+        except Exception as e:
+            print(str(e))
+        
+        time_series.append({
+            'Network': query.network,
+            'Station': query.station,
+            'Location': query.location,
+            'Channel': query.channel,
+            'Data': data
+        })
 
     return time_series
 
@@ -1010,16 +1032,38 @@ def run_event(settings: SeismoLoaderSettings):
             waveform_clients.update({cred.nslc_code:new_client})
 
         # Archive to disk and updated database
-        time_series = {}
         for request in combined_requests:
             time.sleep(0.05) #to help ctrl-C out if needed
             print(request)
             try: 
-                k, st = archive_request(request,waveform_client,settings.sds_path,settings.db_path)
-                time_series[k] = st
-            except:
-                print("Event request not successful: ",request)
+                archive_request(request,waveform_client,settings.sds_path,settings.db_path)
+            except Exception as e:
+                print("Event request not successful: ",request, str(e))
         
+        time_series = []
+        for req in requests:
+            data = pd.DataFrame()
+            query = SeismoQuery(
+                network = req[0],
+                station = req[1],
+                location = req[2],
+                channel = req[3],
+                starttime = req[4],
+                endtime = req[5]
+            )
+            try:
+                data = stream_to_dataframe(get_local_waveform(query, settings))
+            except Exception as e:
+                print(str(e))
+            
+            time_series.append({
+                'Network': query.network,
+                'Station': query.station,
+                'Location': query.location,
+                'Channel': query.channel,
+                'Data': data
+            })
+            
         return time_series
 
 

@@ -1,5 +1,6 @@
 import streamlit as st
 import plotly.express as px
+import pandas as pd
 from seismic_data.models.config import SeismoLoaderSettings
 from seismic_data.ui.components.events import EventComponents
 from seismic_data.ui.components.stations import StationComponents
@@ -75,9 +76,25 @@ class EventBasedWorkflow:
             st.write(self.settings.event.selected_catalogs)
             st.write(self.settings.station.selected_invs)
             time_series = run_event(self.settings)
-            for k, ts in time_series.items():
-                st.write(k)
-                df  = stream_to_dataframe(ts)
-                fig = px.line(df, x='time', y='amplitude', color='channel', title='Waveform Data')
-                st.plotly_chart(fig)
+            df = pd.DataFrame(time_series)
+            grouped = df.groupby(['Network', 'Station', 'Location'])
+            for (network, station, location), group in grouped:
+                with st.expander(f"Network: {network}, Station: {station}, Location: {location}"):
+                    # with st.expander(f"Station: {station}"):
+                    #     with st.expander(f"Location: {location}"):
+                            # Assuming 'Data' column contains the timeseries data
+                    all_data = pd.DataFrame()
+                    for index, row in group.iterrows():
+                        current_data = row['Data']
+                        if not current_data.empty:
+                            all_data = pd.concat([all_data, current_data])
+                        else:
+                            st.write(f"No data available for channel: {row['Channel']}")
+
+                    # Now plot all channels on one plot
+                    title = f'Waveform Data - {network}.{station}.{location}'
+                    fig = px.line(all_data, x='time', y='amplitude', color='channel',
+                                title=title)
+                    st.plotly_chart(fig, use_container_width=True, key=f"event_waveform_{title}")
+
 
