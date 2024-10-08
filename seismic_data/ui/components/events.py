@@ -3,12 +3,11 @@ import streamlit as st
 from streamlit_folium import st_folium
 import pandas as pd
 from datetime import datetime, timedelta
-import time
 
 from obspy.core.event import Catalog
 
 from seismic_data.ui.components.card import create_card
-from seismic_data.ui.components.map import create_map, add_data_points
+from seismic_data.ui.components.map import create_map, add_area_overlays, add_data_points, clear_map_layers, clear_map_draw
 from seismic_data.ui.pages.helpers.common import get_selected_areas
 
 from seismic_data.service.events import get_event_data, event_response_to_df
@@ -18,6 +17,8 @@ from seismic_data.models.common import CircleArea, RectangleArea
 
 from seismic_data.enums.config import GeoConstraintType
 from seismic_data.enums.ui import Steps
+import json
+
 
 # Sidebar date input
 
@@ -60,9 +61,7 @@ class EventFilterMenu:
 
             if circ_changed:
                 self.update_event_filter_geometry(self.df_circ, GeoConstraintType.CIRCLE)
-                refresh_map(reset_areas=False)
-                st.rerun()
-
+                refresh_map(reset_areas=False,clear_draw=True)
 
     def update_rectangle_areas(self, refresh_map):
         lst_rect = [area.coords.model_dump() for area in self.settings.event.geo_constraint
@@ -77,13 +76,13 @@ class EventFilterMenu:
 
             if rect_changed:
                 self.update_event_filter_geometry(self.df_rect, GeoConstraintType.BOUNDING)
-                refresh_map(reset_areas=False)
-                st.rerun()
+                refresh_map(reset_areas=False,clear_draw=True)
 
     def render(self, refresh_map):
         """
         refresh_map is a function that refreshes the map (see EventMap).
         """
+
         st.header("Select Date Range")
         self.settings.event.date_config.start_time = st.date_input("Start Date", datetime.now() - timedelta(days=7))
         self.settings.event.date_config.end_time   = st.date_input("End Date", datetime.now())
@@ -94,7 +93,6 @@ class EventFilterMenu:
         st.header("Filter Earthquakes")
         self.settings.event.min_magnitude, self.settings.event.max_magnitude = st.slider("Min Magnitude", min_value=-2.0, max_value=10.0, value = (2.4,9.0), step=0.1, key="event-pg-mag")
         self.settings.event.min_depth, self.settings.event.max_depth = st.slider("Min Depth (km)", min_value=-5.0, max_value=800.0, value=(0.0,500.0), step=1.0, key=f"event-pg-depth")
-        
         self.update_rectangle_areas(refresh_map)
         self.update_circle_areas(refresh_map)
 
@@ -102,6 +100,8 @@ class EventMap:
     settings: SeismoLoaderSettings
     areas_current: List[Union[RectangleArea, CircleArea]] = []
     map_disp = None
+    map_fg_area =None
+    map_fg_marker =None
     map_height = 500
     map_output = None
     df_events: pd.DataFrame = pd.DataFrame()
@@ -114,6 +114,9 @@ class EventMap:
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
         self.catalogs=[]
+        st.session_state.prev_event_drawings = []        
+        if self.map_disp is None:
+             self.map_disp = create_map()
 
     def handle_get_events(self):
         self.warning = None
@@ -121,13 +124,12 @@ class EventMap:
 
         self.catalogs = get_event_data(self.settings.model_dump_json())
         if self.catalogs:
-            # Convert records to a DataFrame (optional)
             self.df_events = event_response_to_df(self.catalogs)
             
             if not self.df_events.empty:
                 cols = self.df_events.columns                
                 cols_to_disp = {c:c.capitalize() for c in cols }
-                self.map_disp, self.marker_info = add_data_points(self.map_disp, self.df_events, cols_to_disp, step=Steps.EVENT, col_color='magnitude')
+                self.map_fg_marker, self.marker_info = add_data_points( self.df_events, cols_to_disp, step=Steps.EVENT, col_color='magnitude')
             else:
                 self.warning = "No earthquakes found for the selected magnitude and depth range."
         else:
@@ -145,29 +147,30 @@ class EventMap:
         if not self.df_events.empty:
             cols = self.df_events.columns                
             cols_to_disp = {c:c.capitalize() for c in cols }
-            self.map_disp, self.marker_info = add_data_points(
-                self.map_disp, self.df_events, cols_to_disp, step=Steps.EVENT, selected_idx = selected_idx, col_color='magnitude'
-            )
+            self.map_fg_marker, self.marker_info = add_data_points( self.df_events, cols_to_disp, step=Steps.EVENT, selected_idx = selected_idx, col_color='magnitude')
         else:
-            self.warning = "No earthquakes found for the selected magnitude and depth range."
+            self.warning = "No earthquakes found for the selected magnitude and depth range."   
 
+    def refresh_map(self, reset_areas = False, selected_idx = None, clear_draw = False):
 
-    
-
-    def refresh_map(self, reset_areas = False, selected_idx = None, rerun = False):
         if reset_areas:
             self.settings.event.geo_constraint = []
         else:
             self.settings.event.geo_constraint.extend(self.areas_current)
 
-        self.map_disp = create_map(areas=self.settings.event.geo_constraint)
+        self.map_fg_area= add_area_overlays(areas=self.settings.event.geo_constraint)  
+
         if selected_idx:
             self.handle_update_data_points(selected_idx)
         elif len(self.settings.event.geo_constraint) > 0:
             self.handle_get_events()
 
-        if rerun:
-            st.rerun()
+        self.areas_current=[]
+
+        if clear_draw:       
+            clear_map_draw(self.map_disp)
+
+        st.rerun()
 
     def render_top_buttons(self):
         st.markdown("#### Get Events")
@@ -181,24 +184,51 @@ class EventMap:
             self.refresh_map(reset_areas=False)
 
         if clear_prev_events_clicked:
-            self.refresh_map(reset_areas=True)
+            self.map_fg_marker= None
+            self.map_fg_area= None
+            self.catalogs=[]
+            self.df_events = pd.DataFrame()     
+            self.refresh_map(reset_areas=True,clear_draw=True)
 
     def render_map(self):
-        if not self.map_disp:
-            self.refresh_map(reset_areas=True)
+        if self.map_disp is None:
+            self.map_disp = create_map()
+
+        if self.map_disp is not None:
+            clear_map_layers(self.map_disp)
+
+        feature_groups = [fg for fg in [self.map_fg_area, self.map_fg_marker] if fg is not None]
 
         self.map_output = create_card(
-                None,
-                True,
-                st_folium, 
-                self.map_disp, 
-                use_container_width=True, 
-                height=self.map_height
-            )
-        
-        self.areas_current = get_selected_areas(self.map_output)
+            None,
+            True,
+            st_folium, 
+            self.map_disp, 
+            key="new",
+            feature_group_to_add=feature_groups, 
+            use_container_width=True, 
+            height=self.map_height,
+        )
+
+        current_drawings = get_selected_areas(self.map_output)
+
+        if 'prev_event_drawings' not in st.session_state:
+            st.session_state.prev_event_drawings = []
+
+        if len(current_drawings) > len(st.session_state.prev_event_drawings):
+            new_shape = current_drawings[-1]  
+            st.session_state.prev_event_drawings = current_drawings
+            self.areas_current.append(new_shape)  
+
         if self.map_output and self.map_output.get('last_object_clicked') is not None:
-            clicked_lat_lng = (self.map_output['last_object_clicked'].get('lat'), self.map_output['last_object_clicked'].get('lng'))
+            last_clicked = self.map_output['last_object_clicked']
+            if isinstance(last_clicked, dict):
+                clicked_lat_lng = (last_clicked.get('lat'), last_clicked.get('lng'))
+            elif isinstance(last_clicked, list):
+                clicked_lat_lng = (last_clicked[0], last_clicked[1])
+            else:
+                clicked_lat_lng = (None, None)
+
             if clicked_lat_lng in self.marker_info:
                 self.clicked_marker_info = self.marker_info[clicked_lat_lng]
 
@@ -207,7 +237,6 @@ class EventMap:
         
         if self.error:
             st.error(self.error)
-    
 class EventSelect:
 
     settings: SeismoLoaderSettings
@@ -241,7 +270,7 @@ class EventSelect:
     def refresh_map_selection(self, map_component):
         selected_idx = self.get_selected_idx(map_component.df_events)
         map_component.update_selected_catalogs()
-        map_component.refresh_map(reset_areas=False, selected_idx=selected_idx, rerun = True)
+        map_component.refresh_map(reset_areas=False, selected_idx=selected_idx)
 
 
     def render(self, map_component: EventMap):
@@ -272,7 +301,7 @@ class EventSelect:
 
                 if st.button("Add to Selection"):
                     map_component.df_events = self.sync_df_event_with_df_edit(map_component.df_events)
-                    map_component.df_events.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected'] = True                                             
+                    map_component.df_events.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected'] = True          
                     self.refresh_map_selection(map_component)
                     return
                 

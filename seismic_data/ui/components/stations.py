@@ -11,7 +11,7 @@ from obspy.clients.fdsn.header import FDSNException
 
 
 from seismic_data.ui.components.card import create_card
-from seismic_data.ui.components.map import create_map, add_data_points
+from seismic_data.ui.components.map import create_map, add_area_overlays, add_data_points, clear_map_layers, clear_map_draw
 from seismic_data.ui.pages.helpers.common import get_selected_areas
 
 from seismic_data.service.stations import get_station_data, station_response_to_df
@@ -63,8 +63,7 @@ class StationFilterMenu:
 
             if circ_changed:
                 self.update_filter_geometry(self.df_circ, GeoConstraintType.CIRCLE)
-                refresh_map(reset_areas=False)
-                st.rerun()
+                refresh_map(reset_areas=False,clear_draw=True)
 
 
     def update_rectangle_areas(self, refresh_map):
@@ -79,8 +78,7 @@ class StationFilterMenu:
 
             if rect_changed:
                 self.update_filter_geometry(self.df_rect, GeoConstraintType.BOUNDING)
-                refresh_map(reset_areas=False)
-                st.rerun()
+                refresh_map(reset_areas=False,clear_draw=True)
 
     def render(self, refresh_map):
         """
@@ -98,7 +96,6 @@ class StationFilterMenu:
         self.settings.station.station = st.text_input("Enter Station", "*")
         self.settings.station.location = st.text_input("Enter Location", "*")
         self.settings.station.channel = st.text_input("Enter Channel", "*")
-
         
         self.update_rectangle_areas(refresh_map)
         self.update_circle_areas(refresh_map)
@@ -107,6 +104,9 @@ class StationMap:
     settings: SeismoLoaderSettings
     areas_current: List[Union[RectangleArea, CircleArea]] = []
     map_disp = None
+    map_fg_area =None
+    map_fg_marker =None
+    map_fg_selected_event_marker =None
     map_height = 500
     map_output = None
     df_stations: pd.DataFrame = pd.DataFrame()
@@ -120,6 +120,9 @@ class StationMap:
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
         self.inventories=[]
+        st.session_state.prev_station_drawings = []        
+        if self.map_disp is None:
+            self.map_disp = create_map()
 
     def display_selected_events(self, catalogs: List[Catalog]):
         self.warning = None
@@ -129,8 +132,7 @@ class StationMap:
         if not df_events.empty:
             cols = df_events.columns                
             cols_to_disp = {c:c.capitalize() for c in cols }
-            _, _ = add_data_points(self.map_disp, df_events ,cols_to_disp, step=Steps.EVENT,selected_idx=[], col_color="magnitude")
-
+            self.map_fg_selected_event_marker, _ = add_data_points( df_events ,cols_to_disp, step=Steps.EVENT,selected_idx=[], col_color="magnitude")
 
     def handle_get_stations(self):
         self.warning = None
@@ -144,9 +146,8 @@ class StationMap:
                     cols = self.df_stations.columns
                     cols_to_disp = {c:c.capitalize() for c in cols }
                     cols_to_disp.pop("detail")
-                    self.map_disp, self.marker_info = add_data_points(
-                        self.map_disp, self.df_stations,cols_to_disp, step=Steps.STATION,selected_idx=[], col_color=None
-                    )
+                    self.map_fg_marker, self.marker_info = add_data_points( self.df_stations, cols_to_disp, step=Steps.STATION, selected_idx=[], col_color=None)
+
                 else:
                     self.warning = "No stations found for the selected range."
             else:
@@ -177,31 +178,34 @@ class StationMap:
             cols_to_disp = {c:c.capitalize() for c in cols }
             cols_to_disp.pop("detail")
             self.map_disp, self.marker_info = add_data_points(
-                self.map_disp, self.df_stations, cols_to_disp, step=Steps.STATION, selected_idx=selected_idx, col_color=None
+                self.df_stations, cols_to_disp, step=Steps.STATION, selected_idx=selected_idx, col_color=None
             )
         else:
             self.warning = "No station found for the selected range."
 
 
 
-    def refresh_map(self, reset_areas = False, selected_idx = None, rerun = False):
+    def refresh_map(self, reset_areas = False, selected_idx = None, clear_draw = False):
+        
         if reset_areas:
             self.settings.station.geo_constraint = []
         else:
             self.settings.station.geo_constraint.extend(self.areas_current)
 
-        self.map_disp = create_map(areas=self.settings.station.geo_constraint)
-        
+        self.map_fg_area= add_area_overlays(areas=self.settings.station.geo_constraint)  
+
+       
         if selected_idx:
             self.handle_update_data_points(selected_idx)
         elif len(self.settings.station.geo_constraint) > 0:
             self.handle_get_stations()
 
-        if self.stage == 2 and len(self.settings.event.selected_catalogs) > 0:    
-            self.display_selected_events(self.settings.event.selected_catalogs)
+        self.areas_current=[]
 
-        if rerun:
-            st.rerun()
+        if clear_draw:       
+            clear_map_draw(self.map_disp)
+
+        st.rerun()
             
     def render_top_buttons(self):
         st.markdown("#### Get Stations")
@@ -215,24 +219,48 @@ class StationMap:
             self.refresh_map(reset_areas=False)
 
         if clear_prev_stations_clicked:
-            self.refresh_map(reset_areas=True)
+            # self.map_fg_marker= None
+            # self.map_fg_area= None
+            # self.inventories=[]
+            # self.df_stations = pd.DataFrame()                 
+            self.refresh_map(reset_areas=True,clear_draw=True)
 
     def render_map(self,stage):
         self.stage = stage
 
-        if not self.map_disp:
-            self.refresh_map(reset_areas=True)
+        if self.map_disp is None:
+            self.map_disp = create_map()
+
+        if self.stage == 2 and len(self.settings.event.selected_catalogs) > 0:    
+            self.display_selected_events(self.settings.event.selected_catalogs)
+
+        if self.map_disp is not None:
+            clear_map_layers(self.map_disp)
+
+
+        feature_groups = [fg for fg in [self.map_fg_area, self.map_fg_marker , self.map_fg_selected_event_marker] if fg is not None]
 
         self.map_output = create_card(
                 None,
                 True,
                 st_folium, 
                 self.map_disp, 
+                key="new",
+                feature_group_to_add=feature_groups, 
                 use_container_width=True, 
                 height=self.map_height
-            )
+            )      
         
-        self.areas_current = get_selected_areas(self.map_output)
+        current_drawings = get_selected_areas(self.map_output)
+
+        if 'prev_station_drawings' not in st.session_state:
+            st.session_state.prev_station_drawings = []
+
+        if len(current_drawings) > len(st.session_state.prev_station_drawings):
+            new_shape = current_drawings[-1]  
+            st.session_state.prev_station_drawings = current_drawings
+            self.areas_current.append(new_shape)  
+
         if self.map_output and self.map_output.get('last_object_clicked') is not None:
             last_clicked = self.map_output['last_object_clicked']
             if isinstance(last_clicked, dict):
@@ -287,7 +315,7 @@ class StationSelect:
     def refresh_map_selection(self, map_component):
         selected_idx = self.get_selected_idx(map_component.df_stations)
         map_component.update_selected_inventories()
-        map_component.refresh_map(reset_areas=False, selected_idx=selected_idx, rerun = True)
+        map_component.refresh_map(reset_areas=False, selected_idx=selected_idx)
 
     def station_table_view(self, map_component):
         create_card("List of Stations", False, lambda: self.display_stations(map_component))

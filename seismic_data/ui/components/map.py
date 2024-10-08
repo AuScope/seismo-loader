@@ -1,6 +1,5 @@
 import folium
-from folium.plugins import Draw
-
+from folium.plugins import Draw, Fullscreen
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 import matplotlib.cm as cm
@@ -11,78 +10,177 @@ from seismic_data.enums.ui import Steps
 # from shapely.geometry.polygon import Polygon
 # import geopandas as gpd
 import streamlit as st
+from seismic_data.models.config import GeometryConstraint
+from folium.plugins import Draw
 
+
+from folium import MacroElement
+import jinja2
 
 DEFAULT_COLOR_MARKER = 'blue'
 
-def create_map(map_center=[-25.0000, 135.0000], areas=[]):
+def create_map(map_center=[-25.0000, 135.0000], zoom_start=2):
     """
-    Default on Australia center
+    Create a base map with controls but without dynamic layers.
     """
-    m = folium.Map(location=map_center, zoom_start=2, tiles='CartoDB positron', attr='Map data © OpenStreetMap contributors, CartoDB')
+    m = folium.Map(
+        location=map_center,
+        zoom_start=zoom_start,
+        tiles='CartoDB positron',
+        attr='Map data © OpenStreetMap contributors, CartoDB'
+    )
+    add_draw_controls(m)
+    add_fullscreen_control(m)
+    return m
 
+def add_draw_controls(map_object):
+    """
+    Add draw controls to the map.
+    """
     Draw(
         draw_options={
-            'polyline': False,  
-            'rectangle': True,  
-            'polygon': False,   
-            'circle': True,     
-            'marker': False,    
+            'polyline': False,
+            'rectangle': True,
+            'polygon': False,
+            'circle': True,
+            'marker': False,
             'circlemarker': False,
         },
         edit_options={'edit': True},
         export=False
-    ).add_to(m)
+    ).add_to(map_object)
 
-    folium.plugins.Fullscreen(
+def add_fullscreen_control(map_object):
+    """
+    Add fullscreen control to the map.
+    """
+    Fullscreen(
         position="topright",
         title="Expand me",
         title_cancel="Exit me",
         force_separate_button=True,
-    ).add_to(m)
+    ).add_to(map_object)
 
+def add_area_overlays(areas):
+    """
+    Add overlays representing areas (Rectangles or Circles) to the map.
+    """
+    feature_group = folium.FeatureGroup(name="Areas")
     for area in areas:
         coords = area.coords
-        
         if isinstance(coords, RectangleArea):
-            folium.Rectangle(
+            feature_group.add_child(folium.Rectangle(
                 bounds=[[coords.min_lat, coords.min_lng], [coords.max_lat, coords.max_lng]],
                 color=coords.color,
                 fill=True,
                 fill_opacity=0.5
-            ).add_to(m)
-
+            ))
         elif isinstance(coords, CircleArea):
-            if coords.min_radius == 0:
-                folium.Circle(
-                    location=[coords.lat, coords.lng],
-                    radius=coords.max_radius,
-                    color="green",  # Solid green color
-                    fill=True,
-                    fill_opacity=0.5
-                ).add_to(m)
-            else:
-                # Outer circle (max_radius) with dashed lines
-                folium.Circle(
-                    location=[coords.lat, coords.lng],
-                    radius=coords.max_radius,
-                    color=coords.color,
-                    fill=False,
-                    dash_array='2, 4',  # Dashed lines
-                    weight=2,                
-                ).add_to(m)
+            add_circle_area(feature_group, coords)
+    
+    return feature_group
+        
+def add_circle_area(feature_group, coords):
+    """
+    Add circle area (inner and outer) to the feature group.
+    """
+    if coords.min_radius == 0:
+        feature_group.add_child(folium.Circle(
+            location=[coords.lat, coords.lng],
+            radius=coords.max_radius,
+            color="green",
+            fill=True,
+            fill_opacity=0.5
+        ))
+    else:
+        # Outer Circle
+        feature_group.add_child(folium.Circle(
+            location=[coords.lat, coords.lng],
+            radius=coords.max_radius,
+            color=coords.color,
+            fill=False,
+            dash_array='2, 4',
+            weight=2,
+        ))
+        # Inner Circle
+        feature_group.add_child(folium.Circle(
+            location=[coords.lat, coords.lng],
+            radius=coords.min_radius,
+            color=coords.color,
+            fill=False,
+            dash_array='2, 4',
+            weight=2,
+        ))
 
-                # Inner circle (min_radius), always with dashed lines
-                folium.Circle(
-                    location=[coords.lat, coords.lng],
-                    radius=coords.min_radius,
-                    color=coords.color,
-                    fill=False,
-                    dash_array='2, 4',  # Dashed lines
-                    weight=2, 
-                ).add_to(m)
+def add_data_points(df, cols_to_disp, step: Steps, selected_idx=[], col_color=None):
 
-    return m
+    fg = folium.FeatureGroup(name="Marker "+ step)
+
+    marker_info = {}
+
+    for index, row in df.iterrows():
+        color = DEFAULT_COLOR_MARKER if col_color is None else get_marker_color(row[col_color])
+
+        edge_color = 'black' if index in selected_idx else color
+        size = 7 if index in selected_idx else 5
+        fill_opacity = 1.0 if index in selected_idx else 0.2
+
+        popup_content = create_popup(index, row, cols_to_disp)
+        popup = folium.Popup(html=popup_content, max_width=2650, min_width=200)
+
+        latitude, longitude = row['latitude'], row['longitude']
+        add_marker_to_cluster(fg, latitude, longitude, color, edge_color, size, fill_opacity, popup,step)
+
+        marker_key = (latitude, longitude)
+        if marker_key not in marker_info:
+            marker_info[marker_key] = {"id": index + 1}
+
+        for k, v in cols_to_disp.items():
+            marker_info[marker_key][v] = row[k]
+
+    return fg, marker_info
+
+def add_marker_to_cluster(fg, latitude, longitude, color, edge_color, size, fill_opacity, popup, step):
+    """
+    Add a marker to a cluster with specific attributes.
+    """
+    # if step == Steps.EVENT:
+    fg.add_child (folium.CircleMarker(
+            location=[latitude, longitude],
+            radius=size,
+            popup=popup,
+            color=edge_color,
+            fill=True,
+            fill_color=color,
+            fill_opacity=fill_opacity,
+    ))
+
+    # if step == Steps.STATION:
+    #      fg.add_child(folium.RegularPolygonMarker(
+    #         location=[latitude, longitude],
+    #         number_of_sides=3,
+    #         rotation=-90,
+    #         radius=size,
+    #         popup=popup,
+    #         color=edge_color,
+    #         fill=True,
+    #         fill_color=color,
+    #         fill_opacity=fill_opacity,
+    #     ))
+            
+def clear_map_layers(map_object):
+    """
+    Remove all FeatureGroup layers from the map object.
+    """
+    if map_object is not None:
+        layers_to_remove = []
+        for key, layer in map_object._children.items():
+            if isinstance(layer, (folium.map.FeatureGroup)):
+                layers_to_remove.append(key)
+        
+        for key in layers_to_remove:
+            map_object._children.pop(key)
+        
 
 
 def get_marker_color(magnitude):
@@ -123,87 +221,59 @@ def create_popup(index, row, cols_to_disp):
     """
 
 
-def add_data_points(base_map, df, cols_to_disp, step: Steps, selected_idx=[], col_color=None):
-    marker_info = {}
+def remove_duplicate_areas(areas):
+    """
+    Remove duplicate areas from the list.
+    Areas are considered duplicate if they have the same type and identical attributes.
+    """
+    unique_areas = []
+    seen = set()
 
-    for index, row in df.iterrows():
-        color = DEFAULT_COLOR_MARKER if col_color is None else get_marker_color(row[col_color])
+    for area in areas:
+        # If the area is a GeometryConstraint, access its coords attribute
+        if isinstance(area, GeometryConstraint):
+            if isinstance(area.coords, RectangleArea):
+                area_id = (area.coords.min_lat, area.coords.min_lng, area.coords.max_lat, area.coords.max_lng, area.coords.color)
+            elif isinstance(area.coords, CircleArea):
+                area_id = (area.coords.lat, area.coords.lng, area.coords.min_radius, area.coords.max_radius, area.coords.color)
+            else:
+                # Skip if no valid coords are present
+                continue
+        # If the area is directly a RectangleArea or CircleArea
+        elif isinstance(area, RectangleArea):
+            area_id = (area.min_lat, area.min_lng, area.max_lat, area.max_lng, area.color)
+        elif isinstance(area, CircleArea):
+            area_id = (area.lat, area.lng, area.min_radius, area.max_radius, area.color)
+        else:
+            raise ValueError(f"Unsupported area type: {type(area)}")
 
-        edge_color = 'black' if index in selected_idx else color
-        size = 7 if index in selected_idx else 5
-        fill_opacity = 1.0 if index in selected_idx else 0.2
+        # Only add unique areas
+        if area_id not in seen:
+            seen.add(area_id)
+            unique_areas.append(area)
 
-        popup_content = create_popup(index, row, cols_to_disp)
-        popup = folium.Popup(html=popup_content, max_width=2650, min_width=200)
+    return unique_areas
 
-        latitude, longitude = row['latitude'], row['longitude']
+def clear_map_draw(map_object):
+    ClearMapDraw().add_to(map_object)
 
-        if step == Steps.EVENT:
-            folium.CircleMarker(
-                location=[latitude, longitude],
-                radius=size,
-                popup=popup,
-                color=edge_color,
-                fill=True,
-                fill_color=color,
-                fill_opacity=fill_opacity,
-            ).add_to(base_map)
-
-        if step == Steps.STATION:
-            folium.RegularPolygonMarker(
-                location=[latitude, longitude],
-                number_of_sides=3,
-                rotation=-90,
-                radius=size,
-                popup=popup,
-                color=edge_color,
-                fill=True,
-                fill_color=color,
-                fill_opacity=fill_opacity,
-            ).add_to(base_map)
-
-
-        # if is_original and not is_station:
-        #     folium.CircleMarker(
-        #         location=[latitude, longitude],
-        #         radius=size,
-        #         popup=popup,
-        #         color=edge_color,
-        #         fill=True,
-        #         fill_color=color,
-        #         fill_opacity=fill_opacity,
-        #     ).add_to(base_map)
-        # elif is_original and is_station:
-        #     folium.RegularPolygonMarker(
-        #         location=[latitude, longitude],
-        #         number_of_sides=3,
-        #         rotation=-90,
-        #         radius=size,
-        #         popup=popup,
-        #         color=edge_color,
-        #         fill=True,
-        #         fill_color=color,
-        #         fill_opacity=fill_opacity,
-        #     ).add_to(base_map)
-        # elif not is_original:
-        #     folium.RegularPolygonMarker(
-        #         location=[latitude, longitude],
-        #         number_of_sides=5,
-        #         rotation=30,
-        #         radius=10,
-        #         popup=popup,
-        #         color=edge_color,
-        #         fill=True,
-        #         fill_color=color,
-        #         fill_opacity=0.6
-        #     ).add_to(base_map)
-
-        marker_key = (latitude, longitude)
-        if marker_key not in marker_info:
-            marker_info[marker_key] = {"id": index + 1}
-
-        for k, v in cols_to_disp.items():
-            marker_info[marker_key][v] = row[k]
-
-    return base_map, marker_info
+class ClearMapDraw(MacroElement):
+    def __init__(self):
+        super().__init__()
+        # Set the Jinja2 template for injecting the JS
+        self._template = jinja2.Template("""
+        {% macro script(this, kwargs) %}
+        console.log("JavaScript is running to clear drawn layers.");  // Debugging console log
+        var map = this;  // Reference to the current map object
+        if (typeof map.drawnItems !== 'undefined') {
+            map.drawnItems.clearLayers();
+        } else {
+            map.eachLayer(function(layer) {
+                if (layer.hasOwnProperty('_path')) {
+                    map.removeLayer(layer);
+                }
+            });
+        }
+        {% endmacro %}
+        """)
 
