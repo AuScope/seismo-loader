@@ -2,9 +2,8 @@
 
 *Add a brief intro here*
 
-## Set up Development
+## Clone Repository
 
-### Clone the repository:
 ```bash
 git clone https://github.com/AuScope/seismo-loader.git
 ```
@@ -12,6 +11,20 @@ or
 ```bash
 git clone git@github.com:AuScope/seismo-loader.git
 ```
+
+## Quick Start
+
+For a quick start follow these steps:
+
+1. Setup environment:  `source setup.sh`
+2. Run app: `source run.sh`
+
+**Note:** For Win OS, you would need to convert the shell scripts to PowerShell. Or simply follow the steps in the shell scripts to set up the app. 
+
+
+## Setting up with Poetry
+
+If you look to further develop this app, it is highly recommended to set up the project with `poetry`. Follow the steps below to set up using `poetry`.
 
 ### Install poetry 
 
@@ -157,4 +170,9 @@ seismo-loader/
 │   └── cli.py         # Command Line Interface
 │
 └── pyproject.toml     # Poetry configuration file for the whole project
+```
+
+## Export poetry packages to requirements.txt
+```
+poetry export -f requirements.txt --output requirements.txt --without-hashes
 ```
