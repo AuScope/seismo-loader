@@ -25,60 +25,9 @@ import json
 class EventFilterMenu:
 
     settings: SeismoLoaderSettings
-    df_rect: None
-    df_circ: None
 
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
-
-
-    def update_event_filter_geometry(self, df, geo_type: GeoConstraintType):
-        add_geo = []
-        for _, row in df.iterrows():
-            coords = row.to_dict()
-            if geo_type == GeoConstraintType.BOUNDING:
-                add_geo.append(GeometryConstraint(coords=RectangleArea(**coords)))
-            if geo_type == GeoConstraintType.CIRCLE:
-                add_geo.append(GeometryConstraint(coords=CircleArea(**coords)))
-
-        new_geo = [
-            area for area in self.settings.event.geo_constraint
-            if area.geo_type != geo_type
-        ]
-        new_geo.extend(add_geo)
-
-        return new_geo
-        # self.settings.event.geo_constraint = new_geo
-
-    def update_circle_areas(self, map_component):
-        lst_circ = [area.coords.model_dump() for area in self.settings.event.geo_constraint
-                    if area.geo_type == GeoConstraintType.CIRCLE ]
-
-        if lst_circ:
-            st.write(f"Circle Areas")
-            original_df_circ = pd.DataFrame(lst_circ, columns=CircleArea.model_fields)
-            self.df_circ = st.data_editor(original_df_circ, key=f"circ_area")
-
-            circ_changed = not original_df_circ.equals(self.df_circ)
-
-            if circ_changed:
-                return self.update_event_filter_geometry(self.df_circ, GeoConstraintType.CIRCLE)
-                # map_component.refresh_map(reset_areas=False,clear_draw=True)
-
-    def update_rectangle_areas(self, map_component):
-        lst_rect = [area.coords.model_dump() for area in self.settings.event.geo_constraint
-                    if isinstance(area.coords, RectangleArea) ]
-
-        if lst_rect:
-            st.write(f"Rectangle Areas")
-            original_df_rect = pd.DataFrame(lst_rect, columns=RectangleArea.model_fields)
-            self.df_rect = st.data_editor(original_df_rect, key=f"rect_area")
-
-            rect_changed = not original_df_rect.equals(self.df_rect)
-
-            if rect_changed:
-                return self.update_event_filter_geometry(self.df_rect, GeoConstraintType.BOUNDING)
-                # map_component.refresh_map(reset_areas=False,clear_draw=True)
 
     def render(self, map_component):
         """
@@ -97,20 +46,13 @@ class EventFilterMenu:
         st.header("Filter Earthquakes")
         self.settings.event.min_magnitude, self.settings.event.max_magnitude = st.slider("Min Magnitude", min_value=-2.0, max_value=10.0, value = (2.4,9.0), step=0.1, key="event-pg-mag")
         self.settings.event.min_depth, self.settings.event.max_depth = st.slider("Min Depth (km)", min_value=-5.0, max_value=800.0, value=(0.0,500.0), step=1.0, key=f"event-pg-depth")
-        new_rect = self.update_rectangle_areas(map_component)
-        new_circ = self.update_circle_areas(map_component)
-
-        new_geo = new_rect if new_rect else new_circ
-
-        if new_geo:
-            self.settings.event.geo_constraint = new_geo
-            map_component.refresh_map(reset_areas=False)
 
 
 class EventMap:
     settings: SeismoLoaderSettings
     # areas_current: List[Union[RectangleArea, CircleArea]] = []
-    areas_current: List[GeometryConstraint]
+    all_current_drawings: List[GeometryConstraint] = []
+    all_feature_drawings: List[GeometryConstraint] = []
     map_disp = None
     map_fg_area =None
     map_fg_marker =None
@@ -122,6 +64,8 @@ class EventMap:
     clicked_marker_info = None
     warning: str = None
     error: str = None
+    df_rect: None
+    df_circ: None
 
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
@@ -134,6 +78,54 @@ class EventMap:
 
         # if self.map_disp is None:
             # self.map_disp = create_map()
+
+    
+    def update_event_filter_geometry(self, df, geo_type: GeoConstraintType):
+        add_geo = []
+        for _, row in df.iterrows():
+            coords = row.to_dict()
+            if geo_type == GeoConstraintType.BOUNDING:
+                add_geo.append(GeometryConstraint(coords=RectangleArea(**coords)))
+            if geo_type == GeoConstraintType.CIRCLE:
+                add_geo.append(GeometryConstraint(coords=CircleArea(**coords)))
+
+        new_geo = [
+            area for area in self.settings.event.geo_constraint
+            if area.geo_type != geo_type
+        ]
+        new_geo.extend(add_geo)
+
+        self.settings.event.geo_constraint = new_geo
+
+    def update_circle_areas(self):
+        lst_circ = [area.coords.model_dump() for area in self.settings.event.geo_constraint
+                    if area.geo_type == GeoConstraintType.CIRCLE ]
+
+        if lst_circ:
+            st.write(f"Circle Areas")
+            original_df_circ = pd.DataFrame(lst_circ, columns=CircleArea.model_fields)
+            self.df_circ = st.data_editor(original_df_circ, key=f"circ_area")
+
+            circ_changed = not original_df_circ.equals(self.df_circ)
+
+            if circ_changed:
+                self.update_event_filter_geometry(self.df_circ, GeoConstraintType.CIRCLE)
+                self.refresh_map(reset_areas=False, clear_draw=True)
+
+    def update_rectangle_areas(self):
+        lst_rect = [area.coords.model_dump() for area in self.settings.event.geo_constraint
+                    if isinstance(area.coords, RectangleArea) ]
+
+        if lst_rect:
+            st.write(f"Rectangle Areas")
+            original_df_rect = pd.DataFrame(lst_rect, columns=RectangleArea.model_fields)
+            self.df_rect = st.data_editor(original_df_rect, key=f"rect_area")
+
+            rect_changed = not original_df_rect.equals(self.df_rect)
+
+            if rect_changed:
+                self.update_event_filter_geometry(self.df_rect, GeoConstraintType.BOUNDING)
+                self.refresh_map(reset_areas=False, clear_draw=True)
 
     def handle_get_events(self):
         self.warning = None
@@ -175,28 +167,28 @@ class EventMap:
         self.map_fg_area= None
         self.catalogs=[]
         self.df_events = pd.DataFrame()
-        self.areas_current = []
+        self.all_current_drawings = []
         self.settings.event.geo_constraint = []
 
-    def refresh_map(self, reset_areas = False, selected_idx = None): #, clear_draw = False):
+    def refresh_map(self, reset_areas = False, selected_idx = None, clear_draw = False):
 
-        if reset_areas:
-            self.settings.event.geo_constraint = []
+        if clear_draw:
+            clear_map_draw(self.map_disp)
+            self.all_feature_drawings = self.settings.event.geo_constraint
+            self.map_fg_area= add_area_overlays(areas=self.settings.event.geo_constraint)
         else:
-            self.settings.event.geo_constraint.extend(self.areas_current)
+            if reset_areas:
+                self.settings.event.geo_constraint = []
+            else:
+                self.settings.event.geo_constraint = self.all_current_drawings + self.all_feature_drawings
 
-        clear_map_draw(self.map_disp)
-        self.map_fg_area= add_area_overlays(areas=self.settings.event.geo_constraint)  
 
-        if selected_idx:
+        if selected_idx != None:
             self.handle_update_data_points(selected_idx)
+            st.rerun()
         elif len(self.settings.event.geo_constraint) > 0:
-            self.handle_get_events()
+            self.handle_get_events()        
 
-        self.areas_current=[]
-
-        # if clear_draw:
-        #     clear_map_draw(self.map_disp)
             # if len(self.settings.event.geo_constraint)>0:
             #     add_map_draw(self.map_disp, self.settings.event.geo_constraint)
 
@@ -215,7 +207,11 @@ class EventMap:
 
         if clear_prev_events_clicked:
             self.clear_all_data()
-            self.refresh_map(reset_areas=True,clear_draw=True)
+            self.refresh_map(reset_areas=True, clear_draw=True)
+
+        self.update_rectangle_areas()
+        self.update_circle_areas()
+            
 
     def render(self):
         c1_top, c2_top = st.columns([2,1])
@@ -253,9 +249,7 @@ class EventMap:
                 height=self.map_height,
             )
 
-            st.write(self.map_output)
-
-            self.areas_current = get_selected_areas(self.map_output)
+            self.all_current_drawings = get_selected_areas(self.map_output)
             # self.settings.event.geo_constraint = get_selected_areas(self.map_output)
 
             if self.map_output and self.map_output.get('last_object_clicked') is not None:
@@ -305,8 +299,8 @@ class EventSelect:
         return df_event
 
 
-    def refresh_map_selection(self, map_component):
-        selected_idx = self.get_selected_idx(map_component.df_events)
+    def refresh_map_selection(self, map_component: EventMap, df_events):
+        selected_idx = self.get_selected_idx(df_events)
         map_component.update_selected_catalogs()
         map_component.refresh_map(reset_areas=False, selected_idx=selected_idx)
 
@@ -318,6 +312,45 @@ class EventSelect:
         # Show Events in the table
         if not map_component.df_events.empty:
             c21, c22 = st.columns([2,1])
+            with c22:
+                def handle_marker_select():                
+                    # st.write(map_component.clicked_marker_info)
+                    info = map_component.clicked_marker_info
+                    selected_event = f"No {info['id']}: {info['Magnitude']}, {info['Depth']} km, {info['Place']}"
+
+                    if 'is_selected' not in map_component.df_events.columns:
+                        map_component.df_events['is_selected'] = False
+                        
+                    if map_component.df_events.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected']:
+                        st.success(selected_event)
+                    else:
+                        st.warning(selected_event)
+
+                    if st.button("Add to Selection"):
+                        map_component.df_events = self.sync_df_event_with_df_edit(map_component.df_events)
+                        map_component.df_events.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected'] = True          
+                        self.refresh_map_selection(map_component, map_component.df_events)
+                        return
+                    
+
+                    if map_component.df_events.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected']:
+                        if st.button("Unselect"):
+                            map_component.df_events.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected'] = False
+                            # map_component.clicked_marker_info = None
+                            # map_component.map_output["last_object_clicked"] = None
+                            self.refresh_map_selection(map_component, map_component.df_events)
+                            return
+
+                def map_tools_card():
+                    if not map_component.df_events.empty:
+                        st.markdown("#### Select Events from map")
+                        st.write("Click on a marker and add the event")
+                        if map_component.clicked_marker_info:
+                            handle_marker_select()
+                            
+                if not map_component.df_events.empty:
+                    create_card(None, False, map_tools_card)
+
             with c21:
                 cols = map_component.df_events.columns
                 orig_cols   = [col for col in cols if col != 'is_selected']
@@ -349,44 +382,7 @@ class EventSelect:
                     self.df_data_edit = st.data_editor(map_component.df_events, hide_index = True, column_config=config, column_order = ordered_col)           
                 create_card("Select Events from table", False, event_table_view)
 
-            with c22:
-                def handle_marker_select():                
-                    # st.write(map_component.clicked_marker_info)
-                    info = map_component.clicked_marker_info
-                    selected_event = f"No {info['id']}: {info['Magnitude']}, {info['Depth']} km, {info['Place']}"
-
-                    if 'is_selected' not in map_component.df_events.columns:
-                        map_component.df_events['is_selected'] = False
-                        
-                    if map_component.df_events.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected']:
-                        st.success(selected_event)
-                    else:
-                        st.warning(selected_event)
-
-                    if st.button("Add to Selection"):
-                        map_component.df_events = self.sync_df_event_with_df_edit(map_component.df_events)
-                        map_component.df_events.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected'] = True          
-                        self.refresh_map_selection(map_component)
-                        return
-                    
-
-                    if map_component.df_events.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected']:
-                        if st.button("Unselect"):
-                            map_component.df_events.loc[map_component.clicked_marker_info['id'] - 1, 'is_selected'] = False
-                            # map_component.clicked_marker_info = None
-                            # map_component.map_output["last_object_clicked"] = None
-                            self.refresh_map_selection(map_component)
-                            return
-
-                def map_tools_card():
-                    if not map_component.df_events.empty:
-                        st.markdown("#### Select Events from map")
-                        st.write("Click on a marker and add the event")
-                        if map_component.clicked_marker_info:
-                            handle_marker_select()
-                            
-                if not map_component.df_events.empty:
-                    create_card(None, False, map_tools_card)
+            
 
         # with c2_bot:
         #     st.write(self.settings.event.selected_catalogs)

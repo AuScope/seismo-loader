@@ -69,6 +69,7 @@ def add_area_overlays(areas):
     Add overlays representing areas (Rectangles or Circles) to the map.
     """
     feature_group = folium.FeatureGroup(name="Areas")
+    st.write(areas)
     for area in areas:
         coords = area.coords
         if isinstance(coords, RectangleArea):

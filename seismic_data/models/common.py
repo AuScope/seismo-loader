@@ -9,7 +9,7 @@ class RectangleArea(BaseModel):
 
     @property
     def color(self) -> str:
-        return "green"  
+        return "#5dade2"  
 
 
 class CircleArea(BaseModel):
@@ -19,4 +19,4 @@ class CircleArea(BaseModel):
     min_radius : float=0
     @property
     def color(self) -> str:
-        return "green"  
+        return "#5dade2"  
