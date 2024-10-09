@@ -4,7 +4,7 @@ import streamlit as st
 from streamlit_folium import st_folium
 import pandas as pd
 from datetime import datetime, timedelta
-
+import uuid
 from obspy.core.inventory import Inventory
 from obspy.core.event import Catalog
 from obspy.clients.fdsn.header import FDSNException
@@ -120,9 +120,14 @@ class StationMap:
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
         self.inventories=[]
-        st.session_state.prev_station_drawings = []        
-        if self.map_disp is None:
-            self.map_disp = create_map()
+        st.session_state.prev_station_drawings = []
+        if 'event_based_station_map' not in st.session_state:
+            map_id = "map_" + str(uuid.uuid4())
+            st.session_state.event_based_station_map = create_map(map_id=map_id)
+        
+        self.map_disp = st.session_state.event_based_station_map   
+        # if self.map_disp is None:
+        #     self.map_disp = create_map()
 
     def display_selected_events(self, catalogs: List[Catalog]):
         self.warning = None

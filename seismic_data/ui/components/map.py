@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 import matplotlib.cm as cm
 
+from typing import List, Union
+
 from seismic_data.models.common import RectangleArea, CircleArea 
 from seismic_data.enums.ui import Steps
 # from shapely.geometry import Point
@@ -19,7 +21,7 @@ import jinja2
 
 DEFAULT_COLOR_MARKER = 'blue'
 
-def create_map(map_center=[-25.0000, 135.0000], zoom_start=2):
+def create_map(map_center=[-25.0000, 135.0000], zoom_start=2, map_id = None):
     """
     Create a base map with controls but without dynamic layers.
     """
@@ -27,7 +29,8 @@ def create_map(map_center=[-25.0000, 135.0000], zoom_start=2):
         location=map_center,
         zoom_start=zoom_start,
         tiles='CartoDB positron',
-        attr='Map data © OpenStreetMap contributors, CartoDB'
+        attr='Map data © OpenStreetMap contributors, CartoDB',
+        id=map_id,
     )
     add_draw_controls(m)
     add_fullscreen_control(m)
@@ -255,7 +258,12 @@ def remove_duplicate_areas(areas):
     return unique_areas
 
 def clear_map_draw(map_object):
-    ClearMapDraw().add_to(map_object)
+    # ClearMapDraw().add_to(map_object)
+    map_object.add_child(ClearMapDraw())
+
+def add_map_draw(map_object, areas):
+    # AddMapDraw(all_drawings=areas) # .add_to(map_object)
+    map_object.add_child(AddMapDraw(all_drawings=areas))
 
 class ClearMapDraw(MacroElement):
     def __init__(self):
@@ -277,3 +285,75 @@ class ClearMapDraw(MacroElement):
         {% endmacro %}
         """)
 
+
+class AddMapDraw(MacroElement):
+    def __init__(self, all_drawings: List[GeometryConstraint]):
+        super().__init__()
+        self.all_drawings = all_drawings
+        self._template = jinja2.Template("""
+        {% macro script(this, kwargs) %}
+        console.log("JavaScript is adding drawing layers.");  // Debugging console log
+        var map = this;  // Reference to the current map object
+                                         
+        console.log(this.map)
+        console.log(map)
+
+        // Ensure the drawnItems layer group exists
+        if (typeof map.drawnItems === 'undefined') {
+            map.drawnItems = new L.FeatureGroup();
+            map.addLayer(map.drawnItems);
+        }
+
+        // Example of adding a rectangle
+        {% for drawing in this.all_drawings %}
+            {% if drawing.geo_type == 'bounding' %}
+                var bounds = [[{{drawing.coords.min_lat}}, {{drawing.coords.min_lng}}], [{{drawing.coords.max_lat}}, {{drawing.coords.max_lng}}]];
+                var rect = L.rectangle(bounds, {});
+                map.drawnItems.addLayer(rect);
+            {% endif %}
+            {% if drawing.geo_type == 'circle' %}
+                var circ = L.circle([{{drawing.coords.lat}}, {{drawing.coords.lng}}], {radius: {{drawing.coords.max_radius}}});
+                map.drawnItems.addLayer(circ);       
+            {% endif %}                          
+        {% endfor %}
+
+        // More cases for other types like circles, polylines, etc., can be added here
+        {% endmacro %}
+        """)
+
+
+# class AddMapDraw(MacroElement):
+#     def __init__(self, all_drawings: List[GeometryConstraint]):
+#         super().__init__()
+#         self.all_drawings = all_drawings
+#         self._template = jinja2.Template("""
+#         {% macro script(this, kwargs) %}
+#         console.log("Adding drawings to the map.");  // Debugging console log
+#         var map = this;  // Reference to the current map object
+
+#         // Function to add a rectangle
+#         function addRectangle(bounds, color) {
+#             L.rectangle(bounds, {color: color, weight: 1, fillOpacity: 0.5}).addTo(map);
+#         }
+
+#         // Function to add a circle
+#         function addCircle(lat, lng, radius, color) {
+#             L.circle([lat, lng], {radius: radius, color: color, weight: 1, fillOpacity: 0.5}).addTo(map);
+#         }
+                                         
+#         console.log(this)
+
+#         // Loop over all drawings and add to map
+#         {% for constraint in this.all_drawings %}
+#             console.log({{constraint.coords.min_lat}})
+#             {% if constraint.geo_type == 'bounding' %}
+#                 addRectangle([[{{constraint.coords.min_lat}}, {{constraint.coords.min_lng}}], [{{constraint.coords.max_lat}}, {{constraint.coords.max_lng}}]], "{{constraint.coords.color}}");
+#             {% elif constraint.geo_type == 'circle' %}
+#                 addCircle({{constraint.coords.lat}}, {{constraint.coords.lng}}, {{constraint.coords.max_radius}}, "{{constraint.coords.color}}");
+#                 if ({{constraint.coords.min_radius}} > 0) {
+#                     addCircle({{constraint.coords.lat}}, {{constraint.coords.lng}}, {{constraint.coords.min_radius}}, "{{constraint.coords.color}}");
+#                 }
+#             {% endif %}
+#         {% endfor %}
+#         {% endmacro %}
+#         """)
