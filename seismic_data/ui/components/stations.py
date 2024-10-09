@@ -28,57 +28,9 @@ from seismic_data.enums.ui import Steps
 class StationFilterMenu:
 
     settings: SeismoLoaderSettings
-    df_rect: None
-    df_circ: None
 
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
-
-    def update_filter_geometry(self, df, geo_type: GeoConstraintType):
-        add_geo = []
-        for _, row in df.iterrows():
-            coords = row.to_dict()
-            if geo_type == GeoConstraintType.BOUNDING:
-                add_geo.append(GeometryConstraint(coords=RectangleArea(**coords)))
-            if geo_type == GeoConstraintType.CIRCLE:
-                add_geo.append(GeometryConstraint(coords=CircleArea(**coords)))
-
-        new_geo = [
-            area for area in self.settings.station.geo_constraint
-            if area.geo_type != geo_type
-        ]
-        new_geo.extend(add_geo)
-        self.settings.station.geo_constraint = new_geo
-
-    def update_circle_areas(self, refresh_map):
-        lst_circ = [area.coords.model_dump() for area in self.settings.station.geo_constraint
-                    if area.geo_type == GeoConstraintType.CIRCLE ]
-
-        if lst_circ:
-            st.write(f"Circle Areas")
-            original_df_circ = pd.DataFrame(lst_circ, columns=CircleArea.model_fields)
-            self.df_circ = st.data_editor(original_df_circ, key=f"circ_area")
-
-            circ_changed = not original_df_circ.equals(self.df_circ)
-
-            if circ_changed:
-                self.update_filter_geometry(self.df_circ, GeoConstraintType.CIRCLE)
-                refresh_map(reset_areas=False,clear_draw=True)
-
-
-    def update_rectangle_areas(self, refresh_map):
-        lst_rect = [area.coords.model_dump() for area in self.settings.station.geo_constraint
-                    if isinstance(area.coords, RectangleArea) ]
-        if lst_rect:
-            st.write(f"Rectangle Areas")
-            original_df_rect = pd.DataFrame(lst_rect, columns=RectangleArea.model_fields)
-            self.df_rect = st.data_editor(original_df_rect, key=f"rect_area")
-
-            rect_changed = not original_df_rect.equals(self.df_rect)
-
-            if rect_changed:
-                self.update_filter_geometry(self.df_rect, GeoConstraintType.BOUNDING)
-                refresh_map(reset_areas=False,clear_draw=True)
 
     def render(self, refresh_map):
         """
@@ -97,8 +49,6 @@ class StationFilterMenu:
         self.settings.station.location = st.text_input("Enter Location", "*")
         self.settings.station.channel = st.text_input("Enter Channel", "*")
         
-        self.update_rectangle_areas(refresh_map)
-        self.update_circle_areas(refresh_map)
 
 class StationMap:
     settings: SeismoLoaderSettings
@@ -116,6 +66,8 @@ class StationMap:
     warning: str = None
     error: str = None
     stage=0
+    df_rect: None
+    df_circ: None
 
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
@@ -128,6 +80,52 @@ class StationMap:
         self.map_disp = st.session_state.event_based_station_map   
         # if self.map_disp is None:
         #     self.map_disp = create_map()
+
+    def update_filter_geometry(self, df, geo_type: GeoConstraintType):
+        add_geo = []
+        for _, row in df.iterrows():
+            coords = row.to_dict()
+            if geo_type == GeoConstraintType.BOUNDING:
+                add_geo.append(GeometryConstraint(coords=RectangleArea(**coords)))
+            if geo_type == GeoConstraintType.CIRCLE:
+                add_geo.append(GeometryConstraint(coords=CircleArea(**coords)))
+
+        new_geo = [
+            area for area in self.settings.station.geo_constraint
+            if area.geo_type != geo_type
+        ]
+        new_geo.extend(add_geo)
+        self.settings.station.geo_constraint = new_geo
+
+    def update_circle_areas(self):
+        lst_circ = [area.coords.model_dump() for area in self.settings.station.geo_constraint
+                    if area.geo_type == GeoConstraintType.CIRCLE ]
+
+        if lst_circ:
+            st.write(f"Circle Areas")
+            original_df_circ = pd.DataFrame(lst_circ, columns=CircleArea.model_fields)
+            self.df_circ = st.data_editor(original_df_circ, key=f"circ_area")
+
+            circ_changed = not original_df_circ.equals(self.df_circ)
+
+            if circ_changed:
+                self.update_filter_geometry(self.df_circ, GeoConstraintType.CIRCLE)
+                self.refresh_map(reset_areas=False,clear_draw=True)
+
+
+    def update_rectangle_areas(self):
+        lst_rect = [area.coords.model_dump() for area in self.settings.station.geo_constraint
+                    if isinstance(area.coords, RectangleArea) ]
+        if lst_rect:
+            st.write(f"Rectangle Areas")
+            original_df_rect = pd.DataFrame(lst_rect, columns=RectangleArea.model_fields)
+            self.df_rect = st.data_editor(original_df_rect, key=f"rect_area")
+
+            rect_changed = not original_df_rect.equals(self.df_rect)
+
+            if rect_changed:
+                self.update_filter_geometry(self.df_rect, GeoConstraintType.BOUNDING)
+                self.refresh_map(reset_areas=False,clear_draw=True)
 
     def display_selected_events(self, catalogs: List[Catalog]):
         self.warning = None
@@ -223,12 +221,12 @@ class StationMap:
         if get_station_clicked:
             self.refresh_map(reset_areas=False)
 
-        if clear_prev_stations_clicked:
-            # self.map_fg_marker= None
-            # self.map_fg_area= None
-            # self.inventories=[]
-            # self.df_stations = pd.DataFrame()                 
+        if clear_prev_stations_clicked:                
             self.refresh_map(reset_areas=True,clear_draw=True)
+
+        
+        self.update_rectangle_areas()
+        self.update_circle_areas()
 
     def render_map(self,stage):
         self.stage = stage
@@ -448,16 +446,26 @@ class StationSelect:
         c2_top is the location beside the map
         """
         c1_top, c2_top = st.columns([2,1])
+        c1_bot, c2_bot = st.columns([2,1])
 
         with c2_top:
-            create_card(None, False, map_component.render_top_buttons)
+            def c2_top_comps():
+                map_component.render_top_buttons()
+                if stage == 2:
+                    self.display_selected_events(map_component)
+            create_card(None, False, c2_top_comps)
+            # create_card(None, False, map_component.render_top_buttons)
+            # if stage == 2:
+            #     create_card("List of Selected Events", False, lambda: self.display_selected_events(map_component))
 
         with c1_top:
             map_component.render_map(stage)
+
+        with c1_bot:
             if not map_component.df_stations.empty:
                 self.station_table_view(map_component)
-
-        with c2_top:
+        
+        with c2_bot:
             def handle_marker_select():                
                 # st.write(map_component.clicked_marker_info)
                 info = map_component.clicked_marker_info
@@ -496,9 +504,6 @@ class StationSelect:
                         
             if not map_component.df_stations.empty:
                 create_card(None, False, map_tools_card)
-
-            if stage == 2:
-                create_card("List of Selected Events", False, lambda: self.display_selected_events(map_component))
 
         return map_component
 

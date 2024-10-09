@@ -170,7 +170,7 @@ class EventMap:
         self.all_current_drawings = []
         self.settings.event.geo_constraint = []
 
-    def refresh_map(self, reset_areas = False, selected_idx = None, clear_draw = False):
+    def refresh_map(self, reset_areas = False, selected_idx = None, clear_draw = False, rerun = False):
 
         if clear_draw:
             clear_map_draw(self.map_disp)
@@ -185,14 +185,14 @@ class EventMap:
 
         if selected_idx != None:
             self.handle_update_data_points(selected_idx)
-            st.rerun()
         elif len(self.settings.event.geo_constraint) > 0:
             self.handle_get_events()        
 
             # if len(self.settings.event.geo_constraint)>0:
             #     add_map_draw(self.map_disp, self.settings.event.geo_constraint)
 
-        # st.rerun()
+        if rerun:
+            st.rerun()
 
     def render_top_buttons(self):
         st.markdown("#### Get Events")
@@ -207,7 +207,7 @@ class EventMap:
 
         if clear_prev_events_clicked:
             self.clear_all_data()
-            self.refresh_map(reset_areas=True, clear_draw=True)
+            self.refresh_map(reset_areas=True, clear_draw=True, rerun=True)
 
         self.update_rectangle_areas()
         self.update_circle_areas()
@@ -302,7 +302,7 @@ class EventSelect:
     def refresh_map_selection(self, map_component: EventMap, df_events):
         selected_idx = self.get_selected_idx(df_events)
         map_component.update_selected_catalogs()
-        map_component.refresh_map(reset_areas=False, selected_idx=selected_idx)
+        map_component.refresh_map(reset_areas=False, selected_idx=selected_idx, rerun=True)
 
 
     def render(self, map_component: EventMap):
@@ -407,7 +407,6 @@ class EventComponents:
         self.event_select  = EventSelect(settings)
 
     def render(self):
-        import time
 
         st.sidebar.header("Event Filters")
         with st.sidebar:
@@ -415,8 +414,6 @@ class EventComponents:
             
         self.map_component.render()
         self.map_component = self.event_select.render(self.map_component)
-
-        time.sleep(1)
 
 
 

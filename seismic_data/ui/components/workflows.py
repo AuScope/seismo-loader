@@ -63,7 +63,9 @@ class EventBasedWorkflow:
                 st.write("### Step 2: Select Stations")
             with c3:
                 if st.button("Previous"):
-                    self.previous_stage()                
+                    selected_idx = self.event_components.event_select.get_selected_idx(self.event_components.map_component.df_events)
+                    self.event_components.map_component.refresh_map(selected_idx=selected_idx,clear_draw=True)
+                    self.previous_stage() 
             self.station_components.render(self.stage)
 
         if self.stage == 3:
