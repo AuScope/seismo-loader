@@ -34,10 +34,10 @@ def init_settings():
         st.session_state.event_page = st.session_state.event_page.from_cfg_file(target_file)
         st.session_state.event_page = read_general_settings(st.session_state.event_page)
 
-    if 'data_select_page' not in st.session_state:
-        st.session_state.data_select_page = SeismoLoaderSettings()
-        st.session_state.data_select_page  = st.session_state.data_select_page.from_cfg_file(target_file)
-        st.session_state.data_select_page = read_general_settings(st.session_state.data_select_page)
+    if 'station_page' not in st.session_state:
+        st.session_state.station_page = SeismoLoaderSettings()
+        st.session_state.station_page  = st.session_state.station_page.from_cfg_file(target_file)
+        st.session_state.station_page = read_general_settings(st.session_state.station_page)
 
 
 

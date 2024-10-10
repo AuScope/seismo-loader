@@ -67,6 +67,8 @@ class BaseComponentTexts:
 
         if config_type == Steps.STATION:
             self.BTN_GET_DATA = "Get Stations"
+            self.SELECT_MARKER_TITLE = "#### Select Stations from map"
+            self.SELECT_MARKER_MSG   = "Click on a marker and add the station"
             self.SELECT_DATA_TABLE_TITLE = "Select Stations from table"
 
 
@@ -123,7 +125,7 @@ class BaseComponent:
         if self.config_type == Steps.EVENT:
             self.settings.event.geo_constraint = geo_constraint
         if self.config_type == Steps.STATION:
-            self.settings.event.geo_constraint = geo_constraint
+            self.settings.station.geo_constraint = geo_constraint
 
 
     # ====================
