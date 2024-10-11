@@ -17,22 +17,24 @@ from seismic_data.service.stations import get_station_data, station_response_to_
 from seismic_data.models.config import SeismoLoaderSettings, GeometryConstraint, EventConfig, StationConfig
 from seismic_data.models.common import CircleArea, RectangleArea
 
-from seismic_data.enums.config import GeoConstraintType
+from seismic_data.enums.config import GeoConstraintType, SeismoClients
 from seismic_data.enums.ui import Steps
 import json
+
+
+client_options = [f.name for f in SeismoClients]
 
 
 def event_filter(event: EventConfig):
     st.sidebar.header("Event Filters")
     with st.sidebar:
-        st.header("Select Date Range")
-        event.date_config.start_time = st.date_input("Start Date", datetime.now() - timedelta(days=7))
-        event.date_config.end_time   = st.date_input("End Date", datetime.now())
+        selected_client = st.selectbox('Choose a client:', client_options, index=client_options.index(SeismoClients.IRIS.name), key="event-pg-client-event")
+        event.client = SeismoClients[selected_client]
+        event.date_config.start_time = st.date_input("Start Date", datetime.now() - timedelta(days=7), key="event-pg-start-date-event")
+        event.date_config.end_time   = st.date_input("End Date", datetime.now(), key="event-pg-end-date-event")
 
         if event.date_config.start_time > event.date_config.end_time:
             st.error("Error: End Date must fall after Start Date.")
-
-        st.header("Filter Earthquakes")
         event.min_magnitude, event.max_magnitude = st.slider("Min Magnitude", min_value=-2.0, max_value=10.0, value = (2.4,9.0), step=0.1, key="event-pg-mag")
         event.min_depth, event.max_depth = st.slider("Min Depth (km)", min_value=-5.0, max_value=800.0, value=(0.0,500.0), step=1.0, key=f"event-pg-depth")
 
@@ -41,90 +43,120 @@ def event_filter(event: EventConfig):
 def station_filter(station: StationConfig):
     st.sidebar.header("Station Filters")
     with st.sidebar:
-        st.header("Select Date Range")
-        station.date_config.start_time = st.date_input("Start Date", datetime.now() - timedelta(days=7))
-        station.date_config.end_time   = st.date_input("End Date", datetime.now())
+        selected_client = st.selectbox('Choose a client:', client_options, index=client_options.index(SeismoClients.IRIS.name), key="event-pg-client-station")
+        station.client = SeismoClients[selected_client]
+        station.date_config.start_time = st.date_input("Start Date", datetime.now() - timedelta(days=7), key="event-pg-start-date-station")
+        station.date_config.end_time   = st.date_input("End Date", datetime.now(), key="event-pg-end-date-station")
 
         if station.date_config.start_time > station.date_config.end_time:
             st.error("Error: End Date must fall after Start Date.")
 
-        st.header("Filter SNCL")
-        station.network = st.text_input("Enter Network", "_GSN")
-        station.station = st.text_input("Enter Station", "*")
-        station.location = st.text_input("Enter Location", "*")
-        station.channel = st.text_input("Enter Channel", "*")
+        
+        station.network = st.text_input("Enter Network", "_GSN", key="event-pg-net-txt-station")
+        station.station = st.text_input("Enter Station", "*", key="event-pg-sta-txt-station")
+        station.location = st.text_input("Enter Location", "*", key="event-pg-loc-txt-station")
+        station.channel = st.text_input("Enter Channel", "*", key="event-pg-cha-txt-station")
 
     return station
+
+
 
 class BaseComponentTexts:
     CLEAR_ALL_MAP_DATA = "Clear All"
     def __init__(self, config_type: Steps):
         if config_type == Steps.EVENT:
+            self.STEP   = "event"
+            self.PREV_STEP = "station"
+
+            self.GET_DATA_TITLE = "Select Data Tools"
             self.BTN_GET_DATA = "Get Events"
+            self.SELECT_DATA_TITLE = "Select Events from Map or Table"
             self.SELECT_MARKER_TITLE = "#### Select Events from map"
-            self.SELECT_MARKER_MSG   = "Click on a marker and add the event"
+            self.SELECT_MARKER_MSG   = "Select an event from map and Add to Selection."
             self.SELECT_DATA_TABLE_TITLE = "Select Events from table"
+            self.SELECT_DATA_TABLE_MSG = "Tick events from the table. Use Refresh Map to view your selected events on the map."
+
+            self.PREV_SELECT_NO  = "Total Number of Selected Events"
+            self.SELECT_AREA_AROUND_MSG = "Define an area around the selected events."
 
         if config_type == Steps.STATION:
-            self.BTN_GET_DATA = "Get Stations"
-            self.SELECT_MARKER_TITLE = "#### Select Stations from map"
-            self.SELECT_MARKER_MSG   = "Click on a marker and add the station"
-            self.SELECT_DATA_TABLE_TITLE = "Select Stations from table"
+            self.STEP   = "station"
+            self.PREV_STEP = "event"
 
+            self.GET_DATA_TITLE = "Select Data Tools"
+            self.BTN_GET_DATA = "Get Stations"
+            self.SELECT_DATA_TITLE = "Select Stations from Map or Table"
+            self.SELECT_MARKER_TITLE = "#### Select Stations from map"
+            self.SELECT_MARKER_MSG   = "Select an station from map and Add to Selection."
+            self.SELECT_DATA_TABLE_TITLE = "Select Stations from table"
+            self.SELECT_DATA_TABLE_MSG = "Tick stations from the table. Use Refresh Map to view your selected stations on the map."
+
+            self.PREV_SELECT_NO  = "Total Number of Selected Stations"
+            self.SELECT_AREA_AROUND_MSG = "Define an area around the selected stations."
 
 
 class BaseComponent:
     settings: SeismoLoaderSettings
-    config_type: Steps
+    step_type: Steps
+    prev_step_type: Steps
+
     TXT: BaseComponentTexts
+    stage: int
 
     all_current_drawings: List[GeometryConstraint] = []
     all_feature_drawings: List[GeometryConstraint] = []
-    map_disp = None
-    map_fg_area =None
-    map_fg_marker =None
-    map_height = 500
-    map_output = None
-    df_markers: pd.DataFrame = pd.DataFrame()
-    catalogs: List[Catalog] = []
-    inventories: List[Inventory] = []
-    marker_info = None
-    clicked_marker_info = None
-    warning: str = None
-    error: str = None
-    df_rect: None
-    df_circ: None
-    col_color = None
+    df_markers          : pd  .DataFrame           = pd.DataFrame()
+    df_data_edit        : pd  .DataFrame           = pd.DataFrame()
+    catalogs            : List[Catalog           ] = []
+    inventories         : List[Inventory         ] = []
+    
+    map_disp                    = None
+    map_fg_area                 = None
+    map_fg_marker               = None
+    map_fg_prev_selected_marker = None
+    map_height                  = 500
+    map_output                  = None
+    marker_info                 = None
+    clicked_marker_info         = None
+    warning                     = None
+    error                       = None
+    df_rect                     = None
+    df_circ                     = None
+    col_color                   = None  
+    df_markers_prev             = pd.DataFrame()
 
-    df_data_edit: pd.DataFrame = None    
 
+    def __init__(self, settings: SeismoLoaderSettings, step_type: Steps, prev_step_type: Steps, stage: int):
+        self.settings       = settings
+        self.step_type      = step_type
+        self.prev_step_type = prev_step_type
+        self.stage          = stage
+        self.map_id         = str(uuid.uuid4())
+        self.map_disp       = create_map(map_id=self.map_id)
+        self.TXT            = BaseComponentTexts(step_type)
 
-    def __init__(self, settings: SeismoLoaderSettings, config_type: Steps):
-        self.settings      = settings
-        self.config_type   = config_type
-        self.map_id = str(uuid.uuid4())        
-        self.map_disp = create_map(map_id=self.map_id)
-        self.TXT = BaseComponentTexts(config_type)
-
-        if self.config_type == Steps.EVENT:
+        if self.step_type == Steps.EVENT:
             self.col_color = "magnitude"
             self.config = self.settings.event
-        if self.config_type == Steps.STATION:
+        if self.step_type == Steps.STATION:
             self.col_color = None
             self.config =  self.settings.station
 
+    def get_key_element(self, name):        
+        return f"{name}-{self.step_type.value}-{self.stage}"
+
 
     def get_geo_constraint(self):
-        if self.config_type == Steps.EVENT:
+        if self.step_type == Steps.EVENT:
             return self.settings.event.geo_constraint
-        if self.config_type == Steps.STATION:
+        if self.step_type == Steps.STATION:
             return self.settings.station.geo_constraint
         return None
     
     def set_geo_constraint(self, geo_constraint: List[GeometryConstraint]):
-        if self.config_type == Steps.EVENT:
+        if self.step_type == Steps.EVENT:
             self.settings.event.geo_constraint = geo_constraint
-        if self.config_type == Steps.STATION:
+        if self.step_type == Steps.STATION:
             self.settings.station.geo_constraint = geo_constraint
 
 
@@ -182,13 +214,13 @@ class BaseComponent:
 
 
     def update_selected_data(self):
-        if self.config_type == Steps.EVENT:
+        if self.step_type == Steps.EVENT:
             self.settings.event.selected_catalogs = []
             for i, event in enumerate(self.catalogs):
                 if self.df_markers.loc[i, 'is_selected']:
                     self.settings.event.selected_catalogs.append(event)
             return
-        if self.config_type == Steps.STATION:
+        if self.step_type == Steps.STATION:
             self.settings.station.selected_invs = None
             is_init = False
             for idx, row in self.df_markers[self.df_markers['is_selected']].iterrows():
@@ -206,7 +238,7 @@ class BaseComponent:
             cols_to_disp = {c:c.capitalize() for c in cols }
             if 'detail' in cols_to_disp:
                 cols_to_disp.pop("detail")
-            self.map_fg_marker, self.marker_info = add_data_points( self.df_markers, cols_to_disp, step=self.config_type.value, selected_idx = selected_idx, col_color=self.col_color)
+            self.map_fg_marker, self.marker_info = add_data_points( self.df_markers, cols_to_disp, step=self.step_type.value, selected_idx = selected_idx, col_color=self.col_color)
         else:
             self.warning = "No data found."
 
@@ -230,10 +262,11 @@ class BaseComponent:
         elif len(geo_constraint) > 0:
             self.handle_get_data()
 
-           
+        # self.display_prev_step_selection_marker()
 
         if rerun:
             st.rerun()
+        
     # ====================
     # GET DATA
     # ====================
@@ -242,12 +275,12 @@ class BaseComponent:
         self.error   = None
         
         try:
-            if self.config_type == Steps.EVENT:
+            if self.step_type == Steps.EVENT:
                 self.catalogs = get_event_data(self.settings.model_dump_json())
                 if self.catalogs:
                     self.df_markers = event_response_to_df(self.catalogs)
 
-            if self.config_type == Steps.STATION:
+            if self.step_type == Steps.STATION:
                 self.inventories = get_station_data(self.settings.model_dump_json())
                 if self.inventories:
                     self.df_markers = station_response_to_df(self.inventories)
@@ -257,7 +290,7 @@ class BaseComponent:
                 cols_to_disp = {c:c.capitalize() for c in cols }
                 if 'detail' in cols_to_disp:
                     cols_to_disp.pop("detail")
-                self.map_fg_marker, self.marker_info = add_data_points( self.df_markers, cols_to_disp, step=self.config_type.value, col_color=self.col_color)
+                self.map_fg_marker, self.marker_info = add_data_points( self.df_markers, cols_to_disp, step=self.step_type.value, col_color=self.col_color)
             else:
                 self.warning = "No data available."
 
@@ -269,28 +302,32 @@ class BaseComponent:
     def clear_all_data(self):
         self.map_fg_marker= None
         self.map_fg_area= None
-        self.catalogs=[]
         self.df_markers = pd.DataFrame()
         self.all_current_drawings = []
-        self.settings.event.geo_constraint = []
-        self.settings.station.geo_constraint = []
+        
+        if self.step_type == Steps.EVENT:
+            self.catalogs=[]
+            self.settings.event.geo_constraint = []
+        if self.step_type == Steps.STATION:
+            self.inventories = []
+            self.settings.station.geo_constraint = []
 
 
     def get_selected_marker_info(self):
         info = self.clicked_marker_info
-        if self.config_type == Steps.EVENT:
+        if self.step_type == Steps.EVENT:
             return f"No {info['id']}: {info['Magnitude']}, {info['Depth']} km, {info['Place']}"
-        if self.config_type == Steps.STATION:
+        if self.step_type == Steps.STATION:
             return f"No {info['id']}: {info['Network']}, {info['Station']}"
     # ===================
     # SELECT DATA
     # ===================
-    def get_selected_idx(self, df_data):
-        if df_data.empty:
+    def get_selected_idx(self):
+        if self.df_markers.empty:
             return []
         
-        mask = df_data['is_selected']
-        return df_data[mask].index.tolist()
+        mask = self.df_markers['is_selected']
+        return self.df_markers[mask].index.tolist()
 
     def sync_df_markers_with_df_edit(self):
         if self.df_data_edit is None:
@@ -304,20 +341,137 @@ class BaseComponent:
         self.df_markers['is_selected'] = self.df_data_edit['is_selected']
     
     def refresh_map_selection(self):
-        selected_idx = self.get_selected_idx(self.df_markers)
+        selected_idx = self.get_selected_idx()
         self.update_selected_data()
         self.refresh_map(reset_areas=False, selected_idx=selected_idx, rerun=True)
 
+
+    # ===================
+    # PREV SELECTION
+    # ===================
+    def get_prev_step_df(self):
+        if self.prev_step_type == Steps.EVENT:
+            self.df_markers_prev = event_response_to_df(self.settings.event.selected_catalogs)
+            return
+
+        if self.prev_step_type == Steps.STATION:
+            self.df_markers_prev = station_response_to_df(self.settings.station.selected_invs)
+            return
+
+        self.df_markers_prev = pd.DataFrame()
+
+    def display_prev_step_selection_marker(self):
+        if self.stage > 1:
+            self.warning = None
+            self.error   = None
+            col_color = None
+            if self.prev_step_type == Steps.EVENT:
+                col_color = "magnitude"
+
+            if not self.df_markers_prev.empty:
+                cols = self.df_markers_prev.columns        
+                if "detail" in cols:
+                    cols.pop("detail")
+
+                cols_to_disp = {c:c.capitalize() for c in cols }
+                self.map_fg_prev_selected_marker, _ = add_data_points( self.df_markers_prev, cols_to_disp, step=self.prev_step_type.value,selected_idx=[], col_color=col_color)
+
+        
+    def display_prev_step_selection_table(self):
+        if self.stage > 1:
+            if self.df_markers_prev.empty:
+                st.write(f"No selected {self.TXT.PREV_STEP}s")
+            else:
+                with st.expander(f"Search around {self.TXT.PREV_STEP}"):
+                    self.area_around_prev_step_selections()
+                    st.write(f"Total Number of Selected {self.TXT.PREV_STEP.title()}s: {len(self.df_markers_prev)}")
+                    st.dataframe(self.df_markers_prev, use_container_width=True)
+
+    
+    def area_around_prev_step_selections(self):
+
+        st.markdown(
+            """
+            <style>
+            div.stButton > button {
+                margin-top: 25px;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.write(f"Define an area around the selected {self.TXT.STEP}s.")
+        c1, c2, c3 = st.columns([1, 1, 1])
+
+        with c1:
+            min_radius_str = st.text_input("Minimum radius (km)", value="0")
+        with c2:
+            max_radius_str = st.text_input("Maximum radius (km)", value="1000")
+
+        try:
+            min_radius = float(min_radius_str)
+            max_radius = float(max_radius_str)
+        except ValueError:
+            st.error("Please enter valid numeric values for the radius.")
+            return
+
+        if min_radius >= max_radius:
+            st.error("Maximum radius should be greater than minimum radius.")
+            return
+
+        if not hasattr(self, 'prev_min_radius') or not hasattr(self, 'prev_max_radius'):
+            self.prev_min_radius = None
+            self.prev_max_radius = None
+
+        with c3:
+            if st.button("Draw Area", key=self.get_key_element("Draw Area")):
+                if self.prev_min_radius is None or self.prev_max_radius is None or min_radius != self.prev_min_radius or max_radius != self.prev_max_radius:
+                    self.update_area_around_prev_step_selections(min_radius, max_radius)
+                    self.prev_min_radius = min_radius
+                    self.prev_max_radius = max_radius
+                    st.rerun()
+
+    def update_area_around_prev_step_selections(self, min_radius, max_radius):
+        min_radius_value = float(min_radius) * 1000
+        max_radius_value = float(max_radius) * 1000
+
+        updated_constraints = []
+
+        geo_constraints = self.get_geo_constraint()
+
+        for geo in geo_constraints:
+            if geo.geo_type == GeoConstraintType.CIRCLE:
+                lat, lng = geo.coords.lat, geo.coords.lng
+                matching_event = self.df_markers_prev[(self.df_markers_prev['latitude'] == lat) & (self.df_markers_prev['longitude'] == lng)]
+
+                if not matching_event.empty:
+                    geo.coords.min_radius = min_radius_value
+                    geo.coords.max_radius = max_radius_value
+            updated_constraints.append(geo)
+
+        for _, row in self.df_markers_prev.iterrows():
+            lat, lng = row['latitude'], row['longitude']
+            if not any(
+                geo.geo_type == GeoConstraintType.CIRCLE and geo.coords.lat == lat and geo.coords.lng == lng
+                for geo in updated_constraints
+            ):
+                new_donut = CircleArea(lat=lat, lng=lng, min_radius=min_radius_value, max_radius=max_radius_value)
+                geo = GeometryConstraint(geo_type=GeoConstraintType.CIRCLE, coords=new_donut)
+                updated_constraints.append(geo)
+
+        self.set_geo_constraint(updated_constraints)
+        self.refresh_map(reset_areas=False, clear_draw=True)
     # ===================
     # RENDER
     # ===================
     def render_map_buttons(self):
-        st.markdown(f"#### {self.TXT.BTN_GET_DATA}")
+        # st.markdown(f"#### {self.TXT.GET_DATA_TITLE}")
         c11, c22 = st.columns([1,1])
         with c11:
-            get_data_clicked = st.button(self.TXT.BTN_GET_DATA)
+            get_data_clicked = st.button(self.TXT.BTN_GET_DATA, key=self.get_key_element(self.TXT.BTN_GET_DATA))
         with c22:
-            clear_prev_data_clicked = st.button(self.TXT.CLEAR_ALL_MAP_DATA)
+            clear_prev_data_clicked = st.button(self.TXT.CLEAR_ALL_MAP_DATA, key=self.get_key_element(self.TXT.CLEAR_ALL_MAP_DATA))
 
         if get_data_clicked:
             self.refresh_map(reset_areas=False)
@@ -326,27 +480,28 @@ class BaseComponent:
             self.clear_all_data()
             self.refresh_map(reset_areas=True, clear_draw=True, rerun=True)
 
-        self.update_rectangle_areas()
-        self.update_circle_areas()
+        with st.expander(f"Update Selection Area"):
+            self.update_rectangle_areas()
+            self.update_circle_areas()
 
 
     def render_map(self):
+
         if self.map_disp is not None:
             clear_map_layers(self.map_disp)
-
-        feature_groups = [fg for fg in [self.map_fg_area, self.map_fg_marker] if fg is not None]
-            
         
-        self.map_output = create_card(
-            None,
-            True,
-            st_folium, 
-            self.map_disp, 
+        
+        self.display_prev_step_selection_marker()
+
+        # feature_groups = [fg for fg in [self.map_fg_area, self.map_fg_marker] if fg is not None]
+        feature_groups = [fg for fg in [self.map_fg_area, self.map_fg_marker , self.map_fg_prev_selected_marker] if fg is not None]
+        
+        self.map_output = st_folium(self.map_disp, 
             key=f"map_{self.map_id}",
             feature_group_to_add=feature_groups, 
             use_container_width=True, 
-            height=self.map_height,
-        )
+            height=self.map_height)
+                
 
         self.all_current_drawings = get_selected_areas(self.map_output)
 
@@ -380,7 +535,7 @@ class BaseComponent:
             else:
                 st.warning(selected_data)
 
-            if st.button("Add to Selection"):
+            if st.button("Add to Selection", key=self.get_key_element("Add to Selection")):
                 self.sync_df_markers_with_df_edit()
                 self.df_markers.loc[self.clicked_marker_info['id'] - 1, 'is_selected'] = True          
                 self.refresh_map_selection()
@@ -388,7 +543,7 @@ class BaseComponent:
             
 
             if self.df_markers.loc[self.clicked_marker_info['id'] - 1, 'is_selected']:
-                if st.button("Unselect"):
+                if st.button("Unselect", key=self.get_key_element("Unselect")):
                     self.df_markers.loc[self.clicked_marker_info['id'] - 1, 'is_selected'] = False
                     # map_component.clicked_marker_info = None
                     # map_component.map_output["last_object_clicked"] = None
@@ -397,13 +552,14 @@ class BaseComponent:
 
         def map_tools_card():
             if not self.df_markers.empty:
-                st.markdown(self.TXT.SELECT_MARKER_TITLE)
-                st.write(self.TXT.SELECT_MARKER_MSG)
+                # st.markdown(self.TXT.SELECT_MARKER_TITLE)
+                # st.write(self.TXT.SELECT_MARKER_MSG)
                 if self.clicked_marker_info:
                     handle_marker_select()
                     
         if not self.df_markers.empty:
-            create_card(None, False, map_tools_card)
+            map_tools_card()
+            # create_card(None, False, map_tools_card)
 
 
     def render_data_table(self):
@@ -422,44 +578,61 @@ class BaseComponent:
         def data_table_view():
             c1, c2, c3, c4 = st.columns([1,1,1,3])
             with c1:
-                st.write(f"Total Number of Events: {len(self.df_markers)}")
+                st.write(f"Total Number of {self.TXT.STEP.title()}s: {len(self.df_markers)}")
             with c2:
-                if st.button("Select All"):
+                if st.button("Select All", key=self.get_key_element("Select All")):
                     self.df_markers['is_selected'] = True
             with c3:
-                if st.button("Unselect All"):
+                if st.button("Unselect All", key=self.get_key_element("Unselect All")):
                     self.df_markers['is_selected'] = False
             with c4:
-                if st.button("Refresh Map"):
+                if st.button("Refresh Map", key=self.get_key_element("Refresh Map")):
                     self.sync_df_markers_with_df_edit()
                     self.refresh_map_selection()
 
-            self.df_data_edit = st.data_editor(self.df_markers, hide_index = True, column_config=config, column_order = ordered_col)           
-        create_card(self.TXT.SELECT_DATA_TABLE_TITLE, False, data_table_view)
+            self.df_data_edit = st.data_editor(self.df_markers, hide_index = True, column_config=config, column_order = ordered_col, key=self.get_key_element("Data Table"))           
+        
+        data_table_view()
+        # create_card(self.TXT.SELECT_DATA_TABLE_TITLE, False, data_table_view)
 
 
     def render(self):
 
-        if self.config_type == Steps.EVENT:
+        if self.step_type == Steps.EVENT:
             self.settings.event = event_filter(self.settings.event)
 
-        if self.config_type == Steps.STATION:
+        if self.step_type == Steps.STATION:
             self.settings.station = station_filter(self.settings.station)
 
+
+        self.get_prev_step_df()
 
         c1_top, c2_top = st.columns([2,1])
 
         with c2_top:
-            create_card(None, False, self.render_map_buttons)
+            self.render_map_buttons()
+            self.display_prev_step_selection_table()
 
         with c1_top:
             self.render_map()
-            
-
+        
         if not self.df_markers.empty:
-            c21, c22 = st.columns([2,1])
-            with c22:
+            st.header(self.TXT.SELECT_DATA_TITLE)
+            tab1, tab2 = st.tabs(["📄 Table", "🌍 Map"])
+            with tab1:
+                st.write(self.TXT.SELECT_DATA_TABLE_MSG)
+                self.render_data_table()
+
+            with tab2:
+                st.write(self.TXT.SELECT_MARKER_MSG)
                 self.render_marker_select()
 
-            with c21:
-                self.render_data_table()
+            # c21, c22 = st.columns([2,1])            
+            # with c22:
+            #     self.render_marker_select()
+
+            # with c21:
+            #     self.render_data_table()
+
+
+

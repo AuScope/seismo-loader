@@ -36,7 +36,7 @@ def create_card(title, enforce_padding, content_func, *args, **kwargs):
             <style>
             div[data-testid='stVerticalBlock']:has(div#chat_inner):not(:has(div#chat_outer)) {{
                 border-radius: 8px; /* Rounded corners */
-                box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Shadow for 3D effect */
+                box-shadow: 0 0px 0px rgba(0,0,0,0.1); /* Shadow for 3D effect */
                 border: 1px solid #ddd; /* Light grey border */
                 padding: 10px;
             }};

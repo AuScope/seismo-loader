@@ -1,0 +1,1 @@
+AREA_COLOR = "#5dade2"

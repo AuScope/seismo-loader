@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Literal
+from seismic_data.utils.constants import AREA_COLOR
 
 class RectangleArea(BaseModel):
     min_lat: float
@@ -9,7 +9,7 @@ class RectangleArea(BaseModel):
 
     @property
     def color(self) -> str:
-        return "#5dade2"  
+        return AREA_COLOR  
 
 
 class CircleArea(BaseModel):
@@ -19,4 +19,4 @@ class CircleArea(BaseModel):
     min_radius : float=0
     @property
     def color(self) -> str:
-        return "#5dade2"  
+        return AREA_COLOR 

@@ -3,11 +3,13 @@ from folium.plugins import Draw, Fullscreen
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 import matplotlib.cm as cm
+import time
 
 from typing import List, Union
 
 from seismic_data.models.common import RectangleArea, CircleArea 
 from seismic_data.enums.ui import Steps
+from seismic_data.utils.constants import AREA_COLOR
 # from shapely.geometry import Point
 # from shapely.geometry.polygon import Polygon
 # import geopandas as gpd
@@ -20,6 +22,12 @@ from folium import MacroElement
 import jinja2
 
 DEFAULT_COLOR_MARKER = 'blue'
+
+icon = folium.DivIcon(html="""
+    <svg width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="50,15 90,85 10,85" style="fill:blue;stroke:black;stroke-width:2" />
+    </svg>
+""")
 
 def create_map(map_center=[-25.0000, 135.0000], zoom_start=2, map_id = None):
     """
@@ -69,7 +77,6 @@ def add_area_overlays(areas):
     Add overlays representing areas (Rectangles or Circles) to the map.
     """
     feature_group = folium.FeatureGroup(name="Areas")
-    st.write(areas)
     for area in areas:
         coords = area.coords
         if isinstance(coords, RectangleArea):
@@ -92,7 +99,7 @@ def add_circle_area(feature_group, coords):
         feature_group.add_child(folium.Circle(
             location=[coords.lat, coords.lng],
             radius=coords.max_radius,
-            color="green",
+            color= AREA_COLOR,
             fill=True,
             fill_opacity=0.5
         ))
@@ -160,7 +167,7 @@ def add_marker_to_cluster(fg, latitude, longitude, color, edge_color, size, fill
     ))
 
     # if step == Steps.STATION:
-    #      fg.add_child(folium.RegularPolygonMarker(
+    #     fg.add_child(folium.RegularPolygonMarker(
     #         location=[latitude, longitude],
     #         number_of_sides=3,
     #         rotation=-90,
@@ -171,6 +178,29 @@ def add_marker_to_cluster(fg, latitude, longitude, color, edge_color, size, fill
     #         fill_color=color,
     #         fill_opacity=fill_opacity,
     #     ))
+
+    # if step == Steps.STATION:
+    #     folium.RegularPolygonMarker(
+    #         location=[latitude, longitude],
+    #         number_of_sides=5,  # Change this for different shapes (3 for triangle, 4 for square, etc.)
+    #         rotation=0,
+    #         radius=size,
+    #         popup=popup,
+    #         color=edge_color,
+    #         fill=True,
+    #         fill_color=color,
+    #         fill_opacity=fill_opacity,
+    #     ).add_to(fg)
+    #     # fg.add_child(folium.Marker(
+    #     #     location=[latitude, longitude],
+    #     #     icon=icon,
+    #     #     popup=popup,
+    #     #     # color=edge_color,
+    #     #     # fill=True,
+    #     #     # fill_color=color,
+    #     #     # fill_opacity=fill_opacity,
+    #     # ))
+         
             
 def clear_map_layers(map_object):
     """
