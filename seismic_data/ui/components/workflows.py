@@ -1,3 +1,4 @@
+from seismic_data.ui.components.waveform import WaveformComponents
 import streamlit as st
 import plotly.express as px
 import pandas as pd
@@ -21,7 +22,8 @@ class EventBasedWorkflow:
         self.settings = settings
         self.event_components = EventComponents(self.settings)    
         self.station_components = StationComponents(self.settings)    
-
+        self.waveform_components = WaveformComponents(self.settings)    
+        
     def next_stage(self):
         self.stage += 1
         st.rerun()
@@ -65,36 +67,47 @@ class EventBasedWorkflow:
                 if st.button("Previous"):
                     self.previous_stage()                
             self.station_components.render(self.stage)
-
         if self.stage == 3:
-            c1, c2, c3 = st.columns([1, 1, 1])
-            with c2:
-                st.write("### Step 3: Waveforms")
-            with c3:
-                if st.button("Previous"):
-                    self.previous_stage()
-            st.write(self.settings.event.selected_catalogs)
-            st.write(self.settings.station.selected_invs)
-            time_series = run_event(self.settings)
-            df = pd.DataFrame(time_series)
-            grouped = df.groupby(['Network', 'Station', 'Location'])
-            for (network, station, location), group in grouped:
-                with st.expander(f"Network: {network}, Station: {station}, Location: {location}"):
-                    # with st.expander(f"Station: {station}"):
-                    #     with st.expander(f"Location: {location}"):
-                            # Assuming 'Data' column contains the timeseries data
-                    all_data = pd.DataFrame()
-                    for index, row in group.iterrows():
-                        current_data = row['Data']
-                        if not current_data.empty:
-                            all_data = pd.concat([all_data, current_data])
-                        else:
-                            st.write(f"No data available for channel: {row['Channel']}")
+            if self.stage == 3:
+                c1, c2, c3 = st.columns([1, 1, 1])
+                with c1:
+                    if st.button("Previous"):
+                        self.previous_stage()
+                with c2:
+                    st.write("Step 3: Select Waveforms")
+                with c3:
+                    if st.button("Next"):
+                        self.next_stage()
+                self.waveform_components.render()
+        # if self.stage == 3:
+        #     c1, c2, c3 = st.columns([1, 1, 1])
+        #     with c2:
+        #         st.write("### Step 3: Waveforms")
+        #     with c3:
+        #         if st.button("Previous"):
+        #             self.previous_stage()
+        #     st.write(self.settings.event.selected_catalogs)
+        #     st.write(self.settings.station.selected_invs)
+        #     time_series = run_event(self.settings)
+        #     df = pd.DataFrame(time_series)
+        #     grouped = df.groupby(['Network', 'Station', 'Location'])
+        #     for (network, station, location), group in grouped:
+        #         with st.expander(f"Network: {network}, Station: {station}, Location: {location}"):
+        #             # with st.expander(f"Station: {station}"):
+        #             #     with st.expander(f"Location: {location}"):
+        #                     # Assuming 'Data' column contains the timeseries data
+        #             all_data = pd.DataFrame()
+        #             for index, row in group.iterrows():
+        #                 current_data = row['Data']
+        #                 if not current_data.empty:
+        #                     all_data = pd.concat([all_data, current_data])
+        #                 else:
+        #                     st.write(f"No data available for channel: {row['Channel']}")
 
-                    # Now plot all channels on one plot
-                    title = f'Waveform Data - {network}.{station}.{location}'
-                    fig = px.line(all_data, x='time', y='amplitude', color='channel',
-                                title=title)
-                    st.plotly_chart(fig, use_container_width=True, key=f"event_waveform_{title}")
+        #             # Now plot all channels on one plot
+        #             title = f'Waveform Data - {network}.{station}.{location}'
+        #             fig = px.line(all_data, x='time', y='amplitude', color='channel',
+        #                         title=title)
+        #             st.plotly_chart(fig, use_container_width=True, key=f"event_waveform_{title}")
 
 

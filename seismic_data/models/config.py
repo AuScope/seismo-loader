@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List, Union, Any
+from typing import Dict, Optional, List, Union, Any
 from datetime import date, timedelta, datetime
 from enum import Enum
 import os
@@ -176,7 +176,11 @@ class EventConfig(BaseModel):
         }
         exclude = {"selected_catalogs"}
 
-
+class PredictionData(BaseModel):
+    event_id: str
+    station_id: str
+    p_arrival: datetime
+    s_arrival: datetime
 class SeismoLoaderSettings(BaseModel):
     sds_path     : str                        = None
     db_path      : str                        = None
@@ -186,6 +190,7 @@ class SeismoLoaderSettings(BaseModel):
     waveform     : WaveformConfig             = None
     station      : StationConfig              = None
     event        : EventConfig                = None
+    predictions  : Dict[str, PredictionData]  = {}
 
     # main: Union[EventConfig, StationConfig] = None
 
@@ -484,3 +489,20 @@ class SeismoLoaderSettings(BaseModel):
                 config['EVENT']['maxlongitude'] = convert_to_str(self.event.geo_constraint[0].coords.max_lng)
 
         return config
+    
+    def add_prediction(self, event_id: str, station_id: str, p_arrival: datetime, s_arrival: datetime):
+        key = f"{event_id}|{station_id}"
+        self.predictions[key] = PredictionData(
+            event_id=event_id,
+            station_id=station_id,
+            p_arrival=p_arrival,
+            s_arrival=s_arrival
+        )
+
+    def get_prediction(self, event_id: str, station_id: str) -> Optional[PredictionData]:
+        key = f"{event_id}|{station_id}"
+        return self.predictions.get(key)
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
