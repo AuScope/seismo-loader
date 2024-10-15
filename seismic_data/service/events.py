@@ -16,10 +16,15 @@ from seismic_data.models.config import SeismoLoaderSettings
 from seismic_data.service.seismoloader import get_events
 
 
-@st.cache_data
-def get_event_data(settings_json_str: str):
+# @st.cache_data
+# def get_event_data(settings_json_str: str):
 
-    settings = SeismoLoaderSettings.model_validate_json(settings_json_str)
+#     settings = SeismoLoaderSettings.model_validate_json(settings_json_str)
+#     return get_events(settings)
+
+
+# @st.cache_data
+def get_event_data(settings: SeismoLoaderSettings):
     return get_events(settings)
 
 

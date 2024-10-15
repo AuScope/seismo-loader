@@ -17,10 +17,15 @@ from seismic_data.service.seismoloader import get_stations
 
 
 
-@st.cache_data
-def get_station_data(settings_json_str: str):
+# @st.cache_data
+# def get_station_data(settings_json_str: str):
 
-    settings = SeismoLoaderSettings.model_validate_json(settings_json_str)
+#     settings = SeismoLoaderSettings.model_validate_json(settings_json_str)
+#     return get_stations(settings)
+
+
+# @st.cache_data
+def get_station_data(settings: SeismoLoaderSettings):
     return get_stations(settings)
 
 
@@ -44,7 +49,7 @@ def station_response_to_df(inventory):
                 'latitude': latitude,
                 'longitude': longitude,
                 'elevation': elevation,
-                'detail': station,
+                # 'detail': station,
             }
 
             records.append(record)

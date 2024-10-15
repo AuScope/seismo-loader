@@ -1077,10 +1077,10 @@ def run_main(settings: SeismoLoaderSettings = None, from_file=None):
 
     download_type = settings.download_type.value # config['PROCESSING']['download_type'].lower()
     if not is_in_enum(download_type, DownloadType):
-        download_type = DownloadType.CONTIN # 'continuous' # default
+        download_type = DownloadType.CONTINUOUS # 'continuous' # default
 
 
-    if download_type == DownloadType.CONTIN:
+    if download_type == DownloadType.CONTINUOUS:
         inv = get_stations(settings)
         run_continuous(settings, inv)
 

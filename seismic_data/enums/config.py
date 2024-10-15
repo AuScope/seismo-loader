@@ -3,7 +3,7 @@ from enum import Enum
 
 class DownloadType(str, Enum):
     EVENT  = 'event'
-    CONTIN = 'continuous'
+    CONTINUOUS = 'continuous'
 
 
 class SeismoClients(str, Enum):

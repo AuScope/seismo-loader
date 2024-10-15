@@ -297,7 +297,7 @@ class SeismoLoaderSettings(BaseModel):
         )
 
         if download_type not in DownloadType:
-            raise ValueError(f"Incorrect value for download_type. Possible values are: {DownloadType.EVENT} or {DownloadType.CONTIN}.")
+            raise ValueError(f"Incorrect value for download_type. Possible values are: {DownloadType.EVENT} or {DownloadType.CONTINUOUS}.")
             
 
         # Parse the EVENT section

@@ -276,12 +276,14 @@ class BaseComponent:
         
         try:
             if self.step_type == Steps.EVENT:
-                self.catalogs = get_event_data(self.settings.model_dump_json())
+                # self.catalogs = get_event_data(self.settings.model_dump_json())
+                self.catalogs = get_event_data(self.settings)
                 if self.catalogs:
                     self.df_markers = event_response_to_df(self.catalogs)
 
             if self.step_type == Steps.STATION:
-                self.inventories = get_station_data(self.settings.model_dump_json())
+                # self.inventories = get_station_data(self.settings.model_dump_json())
+                self.inventories = get_station_data(self.settings)
                 if self.inventories:
                     self.df_markers = station_response_to_df(self.inventories)
                 
@@ -369,11 +371,10 @@ class BaseComponent:
                 col_color = "magnitude"
 
             if not self.df_markers_prev.empty:
-                cols = self.df_markers_prev.columns        
-                if "detail" in cols:
-                    cols.pop("detail")
-
+                cols = self.df_markers_prev.columns
                 cols_to_disp = {c:c.capitalize() for c in cols }
+                if "detail" in cols_to_disp:
+                    cols_to_disp.pop("detail")
                 self.map_fg_prev_selected_marker, _ = add_data_points( self.df_markers_prev, cols_to_disp, step=self.prev_step_type.value,selected_idx=[], col_color=col_color)
 
         
