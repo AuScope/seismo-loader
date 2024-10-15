@@ -5,6 +5,7 @@
 #requirements: obspy, tqdm, tabulate, sqlite3, contexlib
 
 # ver 0.33 
+# - fix bug in days_per_request not being administered, other small things
 # - update archive_data function to be MUCH faster when data is highly segmented
 # - some typos, bugs fixed
 # - force stations and NSLC to be uppercase
@@ -72,7 +73,7 @@ def read_config(config_file):
     for section in config.sections():
         processed_config.add_section(section)
         for key, value in config.items(section):
-            if section in ['AUTH','WAVEFORM']:
+            if section in ['AUTH','DATABASE','SDS','WAVEFORM']:
                 # Preserve case for both key and value in AUTH section
                 processed_key = key
                 processed_value = value if value is not None else None
@@ -377,8 +378,8 @@ def populate_database_from_sds_old(sds_path, db_path):
 
 
 # Requests for ~continuous data
-def collect_requests(inv, time0, time1, days_per_request=5):
-    """ Collect all requests required to download everything in inventory, split into 5-day periods """
+def collect_requests(inv, time0, time1, days_per_request=2):
+    """ Collect all requests required to download everything in inventory, split into X-day periods """
     requests = []  # network, station, location, channel, starttime, endtime
 
     for net in inv:
@@ -809,9 +810,9 @@ if __name__ == "__main__":
         event_client = waveform_client   
 
 
-    days_per_request = config['WAVEFORM']['days_per_request']
+    days_per_request = int(config['WAVEFORM']['days_per_request'])
     if not days_per_request:
-        days_per_request = 3 # a resonable default? It probably will have to depend on the total number of samples of the request (TODO)
+        days_per_request = 2 # a resonable default? It probably will have to depend on the total number of samples of the request (TODO)
 
     # if user is specifying / filtering, use these in N.S.L.C order
     net = config['STATION']['network'].upper()
@@ -924,6 +925,7 @@ if __name__ == "__main__":
                     print("No events found!") #TODO elaborate
                     sys.exit()
             #TODO: filter existing/saved catalog based on search parameters as well
+        
         elif config['EVENT']['search_type'] in ['box','bounding']:
             if not catalog:
                 try:
@@ -971,6 +973,12 @@ if __name__ == "__main__":
             # Remove any for data we already have (requires db be updated)
             pruned_requests= prune_requests(requests, db_path)
 
+            # Skip out if there aren't any requests left!
+            if len(pruned_requests) == 0:
+                print("--> Event already downloaded (%d/%d) %s (%.4f lat %.4f lon %.1f km dep) ...\n" % (i+1,len(catalog),
+                eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))
+                continue
+
             # Combine these into fewer (but larger) requests
             # (n.b. this probably makes little for sense EVENTS, but no harm in it)
             combined_requests = combine_requests(pruned_requests)
@@ -1001,37 +1009,41 @@ if __name__ == "__main__":
 
     else: # Continuous Data downloading
         # Collect requests
-        requests = collect_requests(inv,starttime,endtime)
+        requests = collect_requests(inv,starttime,endtime,days_per_request=days_per_request)
 
         # Remove any for data we already have (requires db be updated)
         pruned_requests= prune_requests(requests, db_path)
 
-        # Combine these into fewer (but larger) requests
-        combined_requests = combine_requests(pruned_requests)
+        # Only proceed if there is work to do
+        if len(pruned_requests) > 0:
+            
+            # Combine these into fewer (but larger) requests
+            combined_requests = combine_requests(pruned_requests)
 
-        # Add additional clients if user is requesting any restricted data
-        waveform_clients= {'open':waveform_client}
-        requested_networks = [ele[0] for ele in combined_requests]
-        credentials = list(config['AUTH'].items())
-        for ele in credentials:
-            if ele[0].split('.')[0] not in requested_networks:
-                continue
-            uname,pw = ele[1].split(':')
-            try:
-                new_client = Client(config['WAVEFORM']['client'],user=uname,password=pw)
-            except:
-                print("Issue creating client: %s %s via %s:%s" % (config['WAVEFORM']['client'],ele[0],uname,pw))
-                continue
-            waveform_clients.update({ele[0]:new_client})
+            # Add additional clients if user is requesting any restricted data
+            waveform_clients= {'open':waveform_client}
+            requested_networks = [ele[0] for ele in combined_requests]
+            credentials = list(config['AUTH'].items())
+            for ele in credentials:
+                if ele[0].split('.')[0] not in requested_networks:
+                    continue
+                uname,pw = ele[1].split(':')
+                try:
+                    new_client = Client(config['WAVEFORM']['client'],user=uname,password=pw)
+                except:
+                    print("Issue creating client: %s %s via %s:%s" % \
+                          (config['WAVEFORM']['client'],ele[0],uname,pw))
+                    continue
+                waveform_clients.update({ele[0]:new_client})
 
-        # Archive to disk and updated database
-        for request in combined_requests:
-            print(request)
-            time.sleep(0.05) #to help ctrl-C out if needed
-            try: 
-                archive_request(request,waveform_clients,sds_path,db_path)
-            except:
-                print("Continous request not successful: ",request)
+            # Archive to disk and updated database
+            for request in combined_requests:
+                print(request)
+                time.sleep(0.05) #to help ctrl-C out if needed
+                try:
+                    archive_request(request,waveform_clients,sds_path,db_path)
+                except:
+                    print("Continous request not successful: ",request)
 
 
     # Now we can optionally clean up our database (stich continous segments, etc)
