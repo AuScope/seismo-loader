@@ -7,6 +7,7 @@ import uuid
 from obspy.core.event import Catalog
 from obspy.core.inventory import Inventory
 
+
 from seismic_data.ui.components.card import create_card
 from seismic_data.ui.components.map import create_map, add_area_overlays, add_data_points, clear_map_layers, clear_map_draw,add_map_draw
 from seismic_data.ui.pages.helpers.common import get_selected_areas
@@ -608,25 +609,41 @@ class BaseComponent:
 
         self.get_prev_step_df()
 
-        c1_top, c2_top = st.columns([2,1])
+        tab1, tab2, tab3 = st.tabs(["🌍 Map", "📄 Config", "Code"])
+        with tab1:
+            c1_top, c2_top = st.columns([2,1])
 
-        with c2_top:
-            self.render_map_buttons()
-            self.display_prev_step_selection_table()
+            with c2_top:
+                self.render_map_buttons()
+                self.display_prev_step_selection_table()
 
-        with c1_top:
-            self.render_map()
-        
-        if not self.df_markers.empty:
-            st.header(self.TXT.SELECT_DATA_TITLE)
-            tab1, tab2 = st.tabs(["📄 Table", "🌍 Map"])
-            with tab1:
-                st.write(self.TXT.SELECT_DATA_TABLE_MSG)
+            with c1_top:
+                self.render_map()
+
+            with st.expander(self.TXT.SELECT_MARKER_MSG):
+            # st.write(self.TXT.SELECT_MARKER_MSG)
+                self.render_marker_select()
+
+            with st.expander(self.TXT.SELECT_DATA_TABLE_MSG):
+            # st.write(self.TXT.SELECT_DATA_TABLE_MSG)
                 self.render_data_table()
 
-            with tab2:
-                st.write(self.TXT.SELECT_MARKER_MSG)
-                self.render_marker_select()
+        with tab2:
+            st.write("Placeholder for config")
+
+        with tab3:
+            st.write("Placeholder for code")
+        
+        # if not self.df_markers.empty:
+        #     st.header(self.TXT.SELECT_DATA_TITLE)
+        #     tab1, tab2 = st.tabs(["📄 Table", "🌍 Map"])
+        #     with tab1:
+        #         st.write(self.TXT.SELECT_DATA_TABLE_MSG)
+        #         self.render_data_table()
+
+        #     with tab2:
+        #         st.write(self.TXT.SELECT_MARKER_MSG)
+        #         self.render_marker_select()
 
             # c21, c22 = st.columns([2,1])            
             # with c22:

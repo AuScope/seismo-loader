@@ -669,6 +669,13 @@ def convert_radius_to_degrees(radius_meters):
     return degrees
 
 
+def convert_degress_to_radius_km(radius_degree):
+    return radius_degree * 111.32
+
+def convert_degrees_to_radius_meter(radius_degree):
+    return convert_degress_to_radius_km(radius_degree) * 1000
+
+
 def get_stations(settings: SeismoLoaderSettings):
     """
     Refine input args to what is needed for get_stations
