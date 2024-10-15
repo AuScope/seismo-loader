@@ -14,6 +14,7 @@ from seismic_data.ui.pages.helpers.common import get_selected_areas
 
 from seismic_data.service.events import get_event_data, event_response_to_df
 from seismic_data.service.stations import get_station_data, station_response_to_df
+from seismic_data.service.seismoloader import convert_radius_to_degrees, convert_degrees_to_radius_meter
 
 from seismic_data.models.config import SeismoLoaderSettings, GeometryConstraint, EventConfig, StationConfig
 from seismic_data.models.common import CircleArea, RectangleArea
@@ -187,7 +188,7 @@ class BaseComponent:
                     if area.geo_type == GeoConstraintType.CIRCLE ]
 
         if lst_circ:
-            st.write(f"Circle Areas")
+            st.write(f"Circle Areas (Degree)")
             original_df_circ = pd.DataFrame(lst_circ, columns=CircleArea.model_fields)
             self.df_circ = st.data_editor(original_df_circ, key=f"circ_area")
 
@@ -407,9 +408,9 @@ class BaseComponent:
         c1, c2, c3 = st.columns([1, 1, 1])
 
         with c1:
-            min_radius_str = st.text_input("Minimum radius (km)", value="0")
+            min_radius_str = st.text_input("Minimum radius (degree)", value="0")
         with c2:
-            max_radius_str = st.text_input("Maximum radius (km)", value="1000")
+            max_radius_str = st.text_input("Maximum radius (degree)", value="15")
 
         try:
             min_radius = float(min_radius_str)
@@ -435,8 +436,8 @@ class BaseComponent:
                     st.rerun()
 
     def update_area_around_prev_step_selections(self, min_radius, max_radius):
-        min_radius_value = float(min_radius) * 1000
-        max_radius_value = float(max_radius) * 1000
+        min_radius_value = float(min_radius) # * 1000
+        max_radius_value = float(max_radius) # * 1000
 
         updated_constraints = []
 

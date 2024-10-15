@@ -6,6 +6,7 @@ import os
 from seismic_data.models.common import RectangleArea, CircleArea
 from seismic_data.enums.common import GeometryType
 from seismic_data.models.config import SeismoLoaderSettings, GeometryConstraint
+from seismic_data.service.seismoloader import convert_radius_to_degrees
 
 
 current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -68,7 +69,7 @@ def handle_circle(geo) -> GeometryConstraint:
             lat = coords[1],
             lng = coords[0],
             min_radius = 0,
-            max_radius = radius
+            max_radius = convert_radius_to_degrees(radius)
         )
     )
 

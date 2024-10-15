@@ -10,6 +10,7 @@ from typing import List, Union
 from seismic_data.models.common import RectangleArea, CircleArea 
 from seismic_data.enums.ui import Steps
 from seismic_data.utils.constants import AREA_COLOR
+from seismic_data.service.seismoloader import convert_degrees_to_radius_meter
 # from shapely.geometry import Point
 # from shapely.geometry.polygon import Polygon
 # import geopandas as gpd
@@ -98,7 +99,7 @@ def add_circle_area(feature_group, coords):
     if coords.min_radius == 0:
         feature_group.add_child(folium.Circle(
             location=[coords.lat, coords.lng],
-            radius=coords.max_radius,
+            radius=convert_degrees_to_radius_meter(coords.max_radius),
             color= AREA_COLOR,
             fill=True,
             fill_opacity=0.5
@@ -107,7 +108,7 @@ def add_circle_area(feature_group, coords):
         # Outer Circle
         feature_group.add_child(folium.Circle(
             location=[coords.lat, coords.lng],
-            radius=coords.max_radius,
+            radius=convert_degrees_to_radius_meter(coords.max_radius),
             color=coords.color,
             fill=False,
             dash_array='2, 4',
@@ -116,7 +117,7 @@ def add_circle_area(feature_group, coords):
         # Inner Circle
         feature_group.add_child(folium.Circle(
             location=[coords.lat, coords.lng],
-            radius=coords.min_radius,
+            radius=convert_degrees_to_radius_meter(coords.min_radius),
             color=coords.color,
             fill=False,
             dash_array='2, 4',

@@ -730,8 +730,10 @@ def get_stations(settings: SeismoLoaderSettings):
                     starttime=starttime,endtime=endtime,
                     latitude = geo.coords.lat, # float(config['STATION']['latitude']),
                     longitude= geo.coords.lng, # float(config['STATION']['longitude']),
-                    minradius=convert_radius_to_degrees(geo.coords.min_radius), # float(config['STATION']['minradius']),
-                    maxradius=convert_radius_to_degrees (geo.coords.max_radius), # float(config['STATION']['maxradius']),
+                    # minradius=convert_radius_to_degrees(geo.coords.min_radius), # float(config['STATION']['minradius']),
+                    # maxradius=convert_radius_to_degrees (geo.coords.max_radius), # float(config['STATION']['maxradius']),
+                    minradius=geo.coords.min_radius, # float(config['STATION']['minradius']),
+                    maxradius=geo.coords.max_radius, # float(config['STATION']['maxradius']),
                     includerestricted=settings.station.include_restricted, # config['STATION']['includerestricted'],
                     level=settings.station.level.value
                 )
@@ -806,8 +808,10 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
 
                     latitude = geo.coords.lat, # float(config['EVENT']['latitude']),
                     longitude= geo.coords.lng, # float(config['EVENT']['longitude']),
-                    minradius= convert_radius_to_degrees(geo.coords.min_radius), # loat(config['EVENT']['minsearchradius']),
-                    maxradius= convert_radius_to_degrees(geo.coords.max_radius), # float(config['EVENT']['maxsearchradius']),
+                    # minradius= convert_radius_to_degrees(geo.coords.min_radius), # loat(config['EVENT']['minsearchradius']),
+                    # maxradius= convert_radius_to_degrees(geo.coords.max_radius), # float(config['EVENT']['maxsearchradius']),
+                    minradius= geo.coords.min_radius, # loat(config['EVENT']['minsearchradius']),
+                    maxradius= geo.coords.max_radius, # float(config['EVENT']['maxsearchradius']),
 
                     #TODO add catalog,contributor
                     includeallorigins= settings.event.include_all_origins, # False,
