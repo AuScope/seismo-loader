@@ -385,7 +385,7 @@ class BaseComponent:
             if self.df_markers_prev.empty:
                 st.write(f"No selected {self.TXT.PREV_STEP}s")
             else:
-                with st.expander(f"Search around {self.TXT.PREV_STEP}"):
+                with st.expander(f"Search around {self.TXT.PREV_STEP}", expanded = True):
                     self.area_around_prev_step_selections()
                     st.write(f"Total Number of Selected {self.TXT.PREV_STEP.title()}s: {len(self.df_markers_prev)}")
                     st.dataframe(self.df_markers_prev, use_container_width=True)
@@ -483,7 +483,7 @@ class BaseComponent:
             self.clear_all_data()
             self.refresh_map(reset_areas=True, clear_draw=True, rerun=True)
 
-        with st.expander(f"Update Selection Area"):
+        with st.expander(f"Update Selection Area", expanded = True):
             self.update_rectangle_areas()
             self.update_circle_areas()
 
@@ -556,46 +556,53 @@ class BaseComponent:
         def map_tools_card():
             if not self.df_markers.empty:
                 # st.markdown(self.TXT.SELECT_MARKER_TITLE)
-                # st.write(self.TXT.SELECT_MARKER_MSG)
+                st.write(self.TXT.SELECT_MARKER_MSG)
                 if self.clicked_marker_info:
                     handle_marker_select()
+
+            else:                
+                st.warning("No data available.")
                     
-        if not self.df_markers.empty:
-            map_tools_card()
+        # if not self.df_markers.empty:
+        map_tools_card()
             # create_card(None, False, map_tools_card)
 
 
     def render_data_table(self):
-        cols = self.df_markers.columns
-        orig_cols   = [col for col in cols if col != 'is_selected']
-        ordered_col = ['is_selected'] + orig_cols
+        if self.df_markers.empty:
+            st.warning("No data available.")
+        else:
+            st.write(self.TXT.SELECT_DATA_TABLE_MSG)
+            cols = self.df_markers.columns
+            orig_cols   = [col for col in cols if col != 'is_selected']
+            ordered_col = ['is_selected'] + orig_cols
 
-        config = {col: {'disabled': True} for col in orig_cols}
+            config = {col: {'disabled': True} for col in orig_cols}
 
-        if 'is_selected' not in self.df_markers.columns:
-            self.df_markers['is_selected'] = False
-        config['is_selected']  = st.column_config.CheckboxColumn(
-            'Select'
-        )
+            if 'is_selected' not in self.df_markers.columns:
+                self.df_markers['is_selected'] = False
+            config['is_selected']  = st.column_config.CheckboxColumn(
+                'Select'
+            )
 
-        def data_table_view():
-            c1, c2, c3, c4 = st.columns([1,1,1,3])
-            with c1:
-                st.write(f"Total Number of {self.TXT.STEP.title()}s: {len(self.df_markers)}")
-            with c2:
-                if st.button("Select All", key=self.get_key_element("Select All")):
-                    self.df_markers['is_selected'] = True
-            with c3:
-                if st.button("Unselect All", key=self.get_key_element("Unselect All")):
-                    self.df_markers['is_selected'] = False
-            with c4:
-                if st.button("Refresh Map", key=self.get_key_element("Refresh Map")):
-                    self.sync_df_markers_with_df_edit()
-                    self.refresh_map_selection()
+            def data_table_view():
+                c1, c2, c3, c4 = st.columns([1,1,1,3])
+                with c1:
+                    st.write(f"Total Number of {self.TXT.STEP.title()}s: {len(self.df_markers)}")
+                with c2:
+                    if st.button("Select All", key=self.get_key_element("Select All")):
+                        self.df_markers['is_selected'] = True
+                with c3:
+                    if st.button("Unselect All", key=self.get_key_element("Unselect All")):
+                        self.df_markers['is_selected'] = False
+                with c4:
+                    if st.button("Refresh Map", key=self.get_key_element("Refresh Map")):
+                        self.sync_df_markers_with_df_edit()
+                        self.refresh_map_selection()
 
-            self.df_data_edit = st.data_editor(self.df_markers, hide_index = True, column_config=config, column_order = ordered_col, key=self.get_key_element("Data Table"))           
-        
-        data_table_view()
+                self.df_data_edit = st.data_editor(self.df_markers, hide_index = True, column_config=config, column_order = ordered_col, key=self.get_key_element("Data Table"))           
+            
+            data_table_view()
         # create_card(self.TXT.SELECT_DATA_TABLE_TITLE, False, data_table_view)
 
 
@@ -621,12 +628,10 @@ class BaseComponent:
             with c1_top:
                 self.render_map()
 
-            with st.expander(self.TXT.SELECT_MARKER_MSG):
-            # st.write(self.TXT.SELECT_MARKER_MSG)
+            with st.expander(self.TXT.SELECT_MARKER_TITLE, expanded = not self.df_markers.empty):
                 self.render_marker_select()
 
-            with st.expander(self.TXT.SELECT_DATA_TABLE_MSG):
-            # st.write(self.TXT.SELECT_DATA_TABLE_MSG)
+            with st.expander(self.TXT.SELECT_DATA_TABLE_TITLE, expanded = not self.df_markers.empty):
                 self.render_data_table()
 
         with tab2:
