@@ -857,7 +857,7 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
 
 
 
-def run_continuous(settings: SeismoLoaderSettings, inv: Inventory):
+def run_continuous(settings: SeismoLoaderSettings):
     """
     Retrieves continuous seismic data over long time intervals for a set of stations
     defined by the `inv` parameter. The function manages multiple steps including
@@ -903,7 +903,7 @@ def run_continuous(settings: SeismoLoaderSettings, inv: Inventory):
     waveform_client = Client(settings.waveform.client.value) # note we may have three different clients here: waveform, station, and event. be careful to keep track
 
     # Collect requests
-    requests = collect_requests(inv,starttime,endtime)
+    requests = collect_requests(settings.station.selected_invs,starttime,endtime)
 
     # Remove any for data we already have (requires db be updated)
     pruned_requests= prune_requests(requests, settings.db_path)
@@ -1092,13 +1092,13 @@ def run_main(settings: SeismoLoaderSettings = None, from_file=None):
 
 
     if download_type == DownloadType.CONTINUOUS:
-        inv = get_stations(settings)
-        run_continuous(settings, inv)
+        settings.station.selected_invs = get_stations(settings)
+        run_continuous(settings)
 
     if download_type == DownloadType.EVENT:
-        catalog = get_events(settings)
-        inv     = get_stations(settings)
-        run_event(settings, inv, catalog)
+        settings.event.selected_catalogs = get_events(settings)
+        settings.station.selected_invs     = get_stations(settings)
+        run_event(settings)
     # Now we can optionally clean up our database (stich continous segments, etc)
     print("\n ~~ Cleaning up database ~~")
     join_continuous_segments(settings.db_path, settings.proccess.gap_tolerance) # gap_tolerance=float(config['PROCESSING']['gap_tolerance']))

@@ -195,6 +195,9 @@ class SeismoLoaderSettings(BaseModel):
         config = configparser.ConfigParser()
         cfg_path = os.path.abspath(cfg_path)
 
+        if not os.path.exists(cfg_path):
+            raise ValueError(f"File not found in following path: {cfg_path}")
+
         config.read(cfg_path)
 
         # Parse values from the [SDS] section
