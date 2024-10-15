@@ -1,3 +1,4 @@
+from seismic_data.ui.components.waveform import WaveformComponents
 import streamlit as st
 import plotly.express as px
 import pandas as pd
@@ -18,13 +19,13 @@ class EventBasedWorkflow:
     stage: int = 1
     event_components: BaseComponent
     station_components: BaseComponent
-
+    waveform_components: WaveformComponents
 
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
         self.event_components = BaseComponent(self.settings, step_type=Steps.EVENT, prev_step_type=None, stage=1)    
         self.station_components = BaseComponent(self.settings, step_type=Steps.STATION, prev_step_type=Steps.EVENT, stage=2)    
-
+        self.waveform_components = WaveformComponents(self.settings)
     def next_stage(self):
         self.stage += 1
         st.rerun()
@@ -76,30 +77,7 @@ class EventBasedWorkflow:
                     selected_idx = self.station_components.get_selected_idx()
                     self.station_components.refresh_map(selected_idx=selected_idx,clear_draw=True)
                     self.previous_stage()
-            st.write(self.settings.event.selected_catalogs)
-            st.write(self.settings.station.selected_invs)
-            time_series = run_event(self.settings)
-            df = pd.DataFrame(time_series)
-            grouped = df.groupby(['Network', 'Station', 'Location'])
-            for (network, station, location), group in grouped:
-                with st.expander(f"Network: {network}, Station: {station}, Location: {location}"):
-                    # with st.expander(f"Station: {station}"):
-                    #     with st.expander(f"Location: {location}"):
-                            # Assuming 'Data' column contains the timeseries data
-                    all_data = pd.DataFrame()
-                    for index, row in group.iterrows():
-                        current_data = row['Data']
-                        if not current_data.empty:
-                            all_data = pd.concat([all_data, current_data])
-                        else:
-                            st.write(f"No data available for channel: {row['Channel']}")
-
-                    # Now plot all channels on one plot
-                    title = f'Waveform Data - {network}.{station}.{location}'
-                    fig = px.line(all_data, x='time', y='amplitude', color='channel',
-                                title=title)
-                    st.plotly_chart(fig, use_container_width=True, key=f"event_waveform_{title}")
-
+            self.waveform_components.render()
 
 
 
@@ -109,12 +87,14 @@ class StationBasedWorkflow:
     stage: int = 1
     event_components: BaseComponent
     station_components: BaseComponent
+    waveform_components: WaveformComponents
 
 
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings   
         self.station_components = BaseComponent(self.settings, step_type=Steps.STATION, prev_step_type=None, stage=1)   
         self.event_components = BaseComponent(self.settings, step_type=Steps.EVENT, prev_step_type=Steps.STATION, stage=2)  
+        self.waveform_components = WaveformComponents(self.settings)
 
     def next_stage(self):
         if self.settings.download_type == DownloadType.EVENT:
@@ -185,28 +165,6 @@ class StationBasedWorkflow:
 
             if self.settings.download_type == DownloadType.EVENT:
                 
-                st.write(self.settings.event.selected_catalogs)
-                st.write(self.settings.station.selected_invs)
-                time_series = run_event(self.settings)
-                df = pd.DataFrame(time_series)
-                grouped = df.groupby(['Network', 'Station', 'Location'])
-                for (network, station, location), group in grouped:
-                    with st.expander(f"Network: {network}, Station: {station}, Location: {location}"):
-                        # with st.expander(f"Station: {station}"):
-                        #     with st.expander(f"Location: {location}"):
-                                # Assuming 'Data' column contains the timeseries data
-                        all_data = pd.DataFrame()
-                        for index, row in group.iterrows():
-                            current_data = row['Data']
-                            if not current_data.empty:
-                                all_data = pd.concat([all_data, current_data])
-                            else:
-                                st.write(f"No data available for channel: {row['Channel']}")
-
-                        # Now plot all channels on one plot
-                        title = f'Waveform Data - {network}.{station}.{location}'
-                        fig = px.line(all_data, x='time', y='amplitude', color='channel',
-                                    title=title)
-                        st.plotly_chart(fig, use_container_width=True, key=f"event_waveform_{title}")
+                self.waveform_components.render()
 
 

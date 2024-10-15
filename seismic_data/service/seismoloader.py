@@ -437,7 +437,7 @@ def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=1
     return requests_per_eq
 
 
-def collect_requests_event_revised(eq,inv,before_p_sec=10,after_p_sec=120,model=None): #todo add params for before_p, after_p, etc
+def collect_requests_event_revised(eq,inv,before_p_sec=10,after_p_sec=120,model=None, settings=None): #todo add params for before_p, after_p, etc
     """ 
     @Review: Rob please review this
     
@@ -460,7 +460,9 @@ def collect_requests_event_revised(eq,inv,before_p_sec=10,after_p_sec=120,model=
         for sta in net:
             p_time, s_time = get_p_s_times(eq,sta.latitude,sta.longitude,model)
             if not p_time: continue # TOTO need error msg also
+            print(f"Calculated prediction: Event {eq.resource_id.id}, Station {net.code}.{sta.code}, P: {p_time}, S: {s_time}")
 
+            settings.add_prediction(eq.resource_id.id, f"{net.code}.{sta.code}", p_time, s_time)
             t_start = p_time - abs(before_p_sec)
             t_end = p_time + abs(after_p_sec)
 
@@ -1018,7 +1020,8 @@ def run_event(settings: SeismoLoaderSettings):
             eq, settings.station.selected_invs,
             before_p_sec=settings.event.before_p_sec if settings.event.before_p_sec else 10,
             after_p_sec=settings.event.after_p_sec if settings.event.after_p_sec else 120,
-            model=ttmodel
+            model=ttmodel,
+            settings=settings
         )
 
         # Remove any for data we already have (requires db be updated)
