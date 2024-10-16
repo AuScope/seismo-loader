@@ -5,6 +5,17 @@ import random
 import datetime
 from obspy import UTCDateTime
 
+def to_timestamp(time_obj):
+    """ Anything to timestamp helper """
+    if isinstance(time_obj, (int, float)):
+        return float(time_obj)
+    elif isinstance(time_obj, datetime):
+        return time_obj.timestamp()
+    elif isinstance(time_obj, UTCDateTime):
+        return time_obj.timestamp
+    else:
+        raise ValueError(f"Unsupported time type: {type(time_obj)}")
+
 class DatabaseManager:
     def __init__(self, db_path):
         self.db_path = db_path
@@ -118,15 +129,6 @@ class DatabaseManager:
         :param endtime: End time for the query (can be timestamp, datetime, or UTCDateTime)
         :param limit: Maximum number of rows to return
         """
-        def to_timestamp(time_obj):
-            if isinstance(time_obj, (int, float)):
-                return float(time_obj)
-            elif isinstance(time_obj, datetime.datetime):
-                return time_obj.timestamp()
-            elif isinstance(time_obj, UTCDateTime):
-                return time_obj.timestamp
-            else:
-                raise ValueError(f"Unsupported time type: {type(time_obj)}")
 
         try:
             start_timestamp = to_timestamp(start_time)
@@ -183,18 +185,8 @@ class DatabaseManager:
         """ Delete elements from table_name between start and end_time """
 
         if table_name.lower() not in ['archive_data','arrival_data']:
-            print("table_name mustbe archive_data or arrival_data")
+            print("table_name must be archive_data or arrival_data")
             return 0
-
-        def to_timestamp(time_obj):
-            if isinstance(time_obj, (int, float)):
-                return float(time_obj)
-            elif isinstance(time_obj, datetime):
-                return time_obj.timestamp()
-            elif isinstance(time_obj, UTCDateTime):
-                return time_obj.timestamp
-            else:
-                raise ValueError(f"Unsupported time type: {type(time_obj)}")
 
         try:
             start_timestamp = to_timestamp(start_time)
@@ -221,14 +213,14 @@ class DatabaseManager:
         with self.connection() as conn:
             cursor = conn.cursor()
             try:
-                cursor.execute(query, (start_timestamp, end_timestamp))
+                cursor.execute(query)
             except sqlite3.Error as e:
                 print(f"SQLite error: {e}")
                 # Print the SQL statement and the data being inserted
         return
 
     def bulk_insert_archive_data(self, archive_list):
-        if not results:
+        if not archive_list:
             return 0
 
         with self.connection() as conn:
