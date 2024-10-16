@@ -2,7 +2,7 @@ from typing import List, Any, Optional, Union
 import streamlit as st
 from streamlit_folium import st_folium
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta,date
 import uuid
 from obspy.core.event import Catalog, read_events
 from obspy.core.inventory import Inventory, read_inventory
@@ -23,43 +23,73 @@ from seismic_data.models.common import CircleArea, RectangleArea
 
 from seismic_data.enums.config import GeoConstraintType, SeismoClients
 from seismic_data.enums.ui import Steps
-import json
 
+from seismic_data.service.utils import convert_to_date
+import json
+import io
+import jinja2
+import os
+import pickle
 
 client_options = [f.name for f in SeismoClients]
 
 
 def event_filter(event: EventConfig):
+    start_time = convert_to_date(event.date_config.start_time)
+    end_time = convert_to_date(event.date_config.end_time)
+
     st.sidebar.header("Event Filters")
     with st.sidebar:
-        selected_client = st.selectbox('Choose a client:', client_options, index=client_options.index(SeismoClients.IRIS.name), key="event-pg-client-event")
+        selected_client = st.selectbox('Choose a client:', client_options, 
+                                        index=client_options.index(event.client.name), 
+                                        key="event-pg-client-event")
+        
         event.client = SeismoClients[selected_client]
-        event.date_config.start_time = st.date_input("Start Date", datetime.now() - timedelta(days=7), key="event-pg-start-date-event")
-        event.date_config.end_time   = st.date_input("End Date", datetime.now(), key="event-pg-end-date-event")
+
+        event.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-event")
+        event.date_config.end_time = st.date_input("End Date", end_time, key="event-pg-end-date-event")
 
         if event.date_config.start_time > event.date_config.end_time:
             st.error("Error: End Date must fall after Start Date.")
-        event.min_magnitude, event.max_magnitude = st.slider("Min Magnitude", min_value=-2.0, max_value=10.0, value = (2.4,9.0), step=0.1, key="event-pg-mag")
-        event.min_depth, event.max_depth = st.slider("Min Depth (km)", min_value=-5.0, max_value=800.0, value=(0.0,500.0), step=1.0, key=f"event-pg-depth")
+
+        event.min_magnitude, event.max_magnitude = st.slider(
+            "Min Magnitude", 
+            min_value=-2.0, max_value=10.0, 
+            value=(event.min_magnitude, event.max_magnitude), 
+            step=0.1, key="event-pg-mag"
+        )
+
+        event.min_depth, event.max_depth = st.slider(
+            "Min Depth (km)", 
+            min_value=-5.0, max_value=800.0, 
+            value=(event.min_depth, event.max_depth), 
+            step=1.0, key=f"event-pg-depth"
+        )
 
     return event
 
 def station_filter(station: StationConfig):
+
+    start_time = convert_to_date(station.date_config.start_time)
+    end_time = convert_to_date(station.date_config.end_time)
+
     st.sidebar.header("Station Filters")
     with st.sidebar:
-        selected_client = st.selectbox('Choose a client:', client_options, index=client_options.index(SeismoClients.IRIS.name), key="event-pg-client-station")
+        selected_client = st.selectbox('Choose a client:', client_options, 
+                                       index=client_options.index(station.client.name), 
+                                       key="event-pg-client-station")
         station.client = SeismoClients[selected_client]
-        station.date_config.start_time = st.date_input("Start Date", datetime.now() - timedelta(days=7), key="event-pg-start-date-station")
-        station.date_config.end_time   = st.date_input("End Date", datetime.now(), key="event-pg-end-date-station")
+
+        station.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-station")
+        station.date_config.end_time = st.date_input("End Date", end_time, key="event-pg-end-date-station")
 
         if station.date_config.start_time > station.date_config.end_time:
             st.error("Error: End Date must fall after Start Date.")
 
-        
-        station.network = st.text_input("Enter Network", "_GSN", key="event-pg-net-txt-station")
-        station.station = st.text_input("Enter Station", "*", key="event-pg-sta-txt-station")
-        station.location = st.text_input("Enter Location", "*", key="event-pg-loc-txt-station")
-        station.channel = st.text_input("Enter Channel", "*", key="event-pg-cha-txt-station")
+        station.network = st.text_input("Enter Network", station.network, key="event-pg-net-txt-station")
+        station.station = st.text_input("Enter Station", station.station, key="event-pg-sta-txt-station")
+        station.location = st.text_input("Enter Location", station.location, key="event-pg-loc-txt-station")
+        station.channel = st.text_input("Enter Channel", station.channel, key="event-pg-cha-txt-station")
 
     return station
 
@@ -67,6 +97,12 @@ def station_filter(station: StationConfig):
 
 class BaseComponentTexts:
     CLEAR_ALL_MAP_DATA = "Clear All"
+    DOWNLOAD_CONFIG = "Download Config"
+    SAVE_CONFIG = "Save Config"
+    CONFIG_TEMPLATE_FILE="config_template.cfg"
+    CONFIG_EVENT_FILE="config_event"
+    CONFIG_STATION_FILE="config_station"
+
     def __init__(self, config_type: Steps):
         if config_type == Steps.EVENT:
             self.STEP   = "event"
@@ -129,6 +165,12 @@ class BaseComponent:
     col_color                   = None  
     df_markers_prev             = pd.DataFrame()
 
+    @property
+    def page_type(self) -> str:
+        if self.prev_step_type is not None and self.prev_step_type != Steps.NONE:
+            return self.prev_step_type
+        else:
+            return self.step_type
 
     def __init__(self, settings: SeismoLoaderSettings, step_type: Steps, prev_step_type: Steps, stage: int):
         self.settings       = settings
@@ -138,6 +180,12 @@ class BaseComponent:
         self.map_id         = str(uuid.uuid4())
         self.map_disp       = create_map(map_id=self.map_id)
         self.TXT            = BaseComponentTexts(step_type)
+
+        self.all_feature_drawings = self.get_geo_constraint()
+        self.map_fg_area= add_area_overlays(areas=self.get_geo_constraint())    
+        print(self.catalogs)    
+        if self.catalogs:
+            self.df_markers = event_response_to_df(self.catalogs)
 
         if self.step_type == Steps.EVENT:
             self.col_color = "magnitude"
@@ -247,8 +295,8 @@ class BaseComponent:
             self.warning = "No data found."
 
     def refresh_map(self, reset_areas = False, selected_idx = None, clear_draw = False, rerun = False):
-
         geo_constraint = self.get_geo_constraint()
+        
         if clear_draw:
             clear_map_draw(self.map_disp)
             self.all_feature_drawings = geo_constraint
@@ -554,7 +602,7 @@ class BaseComponent:
 
 
     def render_map(self):
-
+        
         if self.map_disp is not None:
             clear_map_layers(self.map_disp)
         
@@ -572,7 +620,6 @@ class BaseComponent:
         )                
 
         self.all_current_drawings = get_selected_areas(self.map_output)
-
         if self.map_output and self.map_output.get('last_object_clicked') is not None:
             last_clicked = self.map_output['last_object_clicked']
             if isinstance(last_clicked, dict):
@@ -692,6 +739,59 @@ class BaseComponent:
         # create_card(self.TXT.SELECT_DATA_TABLE_TITLE, False, data_table_view)
 
 
+    def render_config(self):                
+
+        current_directory = os.path.dirname(os.path.abspath(__file__))
+        target_file = os.path.join(current_directory, '../../service')
+        target_file = os.path.abspath(target_file)
+        template_loader = jinja2.FileSystemLoader(searchpath=target_file)  
+        template_env = jinja2.Environment(loader=template_loader)
+        template = template_env.get_template(self.TXT.CONFIG_TEMPLATE_FILE)
+        config_str = template.render(vars(self.settings))
+        
+        fileName = "config"
+        if self.page_type == Steps.EVENT:
+            fileName = self.TXT.CONFIG_EVENT_FILE
+        else:
+            fileName = self.TXT.CONFIG_STATION_FILE
+
+        c11, c22, c33 = st.columns([1, 1, 1])
+        
+        with c11:
+            save_config_clicked = st.button(self.TXT.SAVE_CONFIG, key=self.get_key_element(self.TXT.SAVE_CONFIG))
+        
+        with c22:
+            st.download_button(
+                label="Download Settings as cfg",
+                data=config_str,  
+                file_name=fileName + ".cfg",  
+                mime="text/plain", 
+            )
+        
+        with c33:
+            pickle_data = pickle.dumps(self.settings)  
+            st.download_button(
+                label="Download Settings as Pickle",
+                data=pickle_data,  
+                file_name=fileName + ".pkl",  
+                mime="application/octet-stream",  
+            )
+
+        if save_config_clicked:
+            save_path = os.path.join(target_file, fileName + ".cfg")
+            with open(save_path, "w") as f:
+                f.write(config_str)
+
+            pickle_save_path = os.path.join(target_file, fileName + ".pkl")
+            self.settings.to_pickle(pickle_save_path)
+
+            st.success(f"Configuration saved.")
+        
+        st.code(config_str, language="python")
+
+
+
+
     def render(self):
 
         if self.step_type == Steps.EVENT:
@@ -720,8 +820,7 @@ class BaseComponent:
                 self.render_data_table()
 
         with tab2:
-            st.write("Placeholder for config")
-
+            self.render_config()
         with tab3:
             st.write("Placeholder for code")
         

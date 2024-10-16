@@ -5,6 +5,7 @@ from enum import Enum
 import os
 import configparser
 from configparser import ConfigParser
+import pickle
 
 from obspy import UTCDateTime
 from obspy.core.inventory import Inventory
@@ -509,3 +510,14 @@ class SeismoLoaderSettings(BaseModel):
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
+
+    def to_pickle(self, pickle_path: str) -> None:
+        """Serialize the SeismoLoaderSettings instance to a pickle file."""
+        with open(pickle_path, "wb") as f:
+            pickle.dump(self, f)
+    
+    @classmethod
+    def from_pickle_file(cls, pickle_path: str) -> "SeismoLoaderSettings":
+        """Load a SeismoLoaderSettings instance from a pickle file."""
+        with open(pickle_path, "rb") as f:
+            return pickle.load(f)        

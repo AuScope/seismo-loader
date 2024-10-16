@@ -389,3 +389,31 @@ class AddMapDraw(MacroElement):
 #         {% endfor %}
 #         {% endmacro %}
 #         """)
+
+
+class DrawEventHandler(MacroElement):
+    def __init__(self):
+        super().__init__()
+        self._template = jinja2.Template("""
+        {% macro script(this, kwargs) %}
+        console.log("JavaScript is running to detect drawn layers.");
+
+        // Access the map using the dynamic name provided by Folium
+        var map = {{ this._parent.get_name() }};
+        console.log("Map instance:", map);
+
+        // Ensure map exists before attaching event listeners
+        if (map) {
+            console.log('Map instance found:', map);
+
+            // Listen for the draw:created event
+            map.on(L.Draw.Event.CREATED, function (e) {
+                var layer = e.layer;  // Get the drawn layer (circle, rectangle, etc.)
+                var geojsonData = layer.toGeoJSON();
+                console.log("Sending data to backend:", geojsonData);
+            });
+        } else {
+            console.log("Map instance not found.");
+        }
+        {% endmacro %}
+        """)

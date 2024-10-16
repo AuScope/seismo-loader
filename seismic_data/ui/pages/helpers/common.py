@@ -3,6 +3,8 @@ from typing import List
 import numpy as np
 import streamlit as st
 import os
+from pprint import pprint
+
 from seismic_data.models.common import RectangleArea, CircleArea
 from seismic_data.enums.common import GeometryType
 from seismic_data.models.config import SeismoLoaderSettings, GeometryConstraint
@@ -12,7 +14,10 @@ from seismic_data.service.seismoloader import convert_radius_to_degrees
 current_directory = os.path.dirname(os.path.abspath(__file__))
 target_file = os.path.join(current_directory, '../../../service/example_event.cfg')
 target_file = os.path.abspath(target_file)
-
+config_event_file = os.path.join(current_directory, '../../../service/config_event.pkl')
+config_event_file = os.path.abspath(config_event_file)
+config_station_file = os.path.join(current_directory, '../../../service/config_station.pkl')
+config_station_file = os.path.abspath(config_station_file)
 
 def read_general_settings(settings: SeismoLoaderSettings):
     """
@@ -34,16 +39,22 @@ def init_settings():
         st.session_state['uploaded_file_processed'] = False
     if 'event_page' not in st.session_state:
         st.session_state.event_page = SeismoLoaderSettings()
-        st.session_state.event_page = st.session_state.event_page.from_cfg_file(target_file)
-        st.session_state.event_page = read_general_settings(st.session_state.event_page)
+
+        if os.path.exists(config_event_file):
+            st.session_state.event_page = SeismoLoaderSettings.from_pickle_file(config_event_file)
+        else:
+            st.session_state.event_page = st.session_state.event_page.from_cfg_file(target_file)          
+            st.session_state.event_page = read_general_settings(st.session_state.event_page)
+        # pprint(st.session_state.event_page.dict())
 
     if 'station_page' not in st.session_state:
         st.session_state.station_page = SeismoLoaderSettings()
-        st.session_state.station_page  = st.session_state.station_page.from_cfg_file(target_file)
-        st.session_state.station_page = read_general_settings(st.session_state.station_page)
 
-
-
+        if os.path.exists(config_station_file):
+            st.session_state.station_page = SeismoLoaderSettings.from_pickle_file(config_station_file)
+        else:
+            st.session_state.station_page = st.session_state.event_page.from_cfg_file(target_file)        
+            st.session_state.station_page = read_general_settings(st.session_state.station_page)
 
 def handle_polygon(geo) -> GeometryConstraint:
     coords_arr = np.array(geo.get("geometry").get("coordinates")[0])
