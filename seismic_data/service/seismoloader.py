@@ -799,7 +799,7 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
         except Exception as e:
             raise Exception(f"An unexpected error occurred: {e}")
 
-    catalog = []    
+    catalog = Catalog(events=None)    
     for geo in settings.event.geo_constraint:
         if geo.geo_type == GeoConstraintType.CIRCLE: # config['EVENT']['search_type'].lower() == 'radial':
             try:

@@ -1,3 +1,5 @@
+# Remove this later, not required for the app.
+
 import configparser
 from textwrap import indent
 

@@ -30,6 +30,8 @@ def save_general_settings(settings: SeismoLoaderSettings):
 
 
 def init_settings():
+    if 'uploaded_file_processed' not in st.session_state:
+        st.session_state['uploaded_file_processed'] = False
     if 'event_page' not in st.session_state:
         st.session_state.event_page = SeismoLoaderSettings()
         st.session_state.event_page = st.session_state.event_page.from_cfg_file(target_file)

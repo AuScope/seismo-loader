@@ -127,7 +127,7 @@ class StationConfig(BaseModel):
     station            : Optional   [ str           ] = None
     location           : Optional   [ str           ] = None
     channel            : Optional   [ str           ] = None
-    selected_invs      : Optional   [ List          [Any]] = []
+    selected_invs      : Optional   [Any] = None
     geo_constraint     : Optional   [ List          [GeometryConstraint]] = None
     include_restricted : bool       = False
     level              : Levels     = Levels        .CHANNEL
@@ -167,7 +167,7 @@ class EventConfig(BaseModel):
     contributor           : Optional[str] = None
     updated_after         : Optional[str] = None
 
-    selected_catalogs     : Optional[List[Any]] = []
+    selected_catalogs     : Optional[Any] = None
 
     geo_constraint: Optional[List[GeometryConstraint]] = None
     class Config:
