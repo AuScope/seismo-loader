@@ -404,6 +404,7 @@ class DatabaseManager:
                 return (result[0], result[1])
         return None
 
+
 def miniseed_to_db_element(file_path):
     "Create a database element from a miniseed file"
     try:
@@ -631,13 +632,14 @@ def join_continuous_segments__OLD(db_path, gap_tolerance=60):
     
     print(f"Joined segments. Deleted {len(to_delete)} rows, updated {len(to_update)} rows.")
 
+"""
 def reset_id_counter(db_manager, table_name):
-    """
-    Reset the ID counter for a specified table in the SQLite database.
-    
-    :param db_manager: DatabaseManager instance
-    :param table_name: Name of the table whose ID counter should be reset
-    """
+
+    #Reset the ID counter for a specified table in the SQLite database.
+    #
+    #:param db_manager: DatabaseManager instance
+    #:param table_name: Name of the table whose ID counter should be reset
+
     with db_manager.safe_db_connection() as conn:
         cursor = conn.cursor()
         
@@ -653,6 +655,8 @@ def reset_id_counter(db_manager, table_name):
             cursor.execute("INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)", (table_name, max_id))
     
     print(f"Reset ID counter for table '{table_name}' to {max_id}")
+"""
+
 
 """
 def display_database_contents(db_manager, limit=100):
