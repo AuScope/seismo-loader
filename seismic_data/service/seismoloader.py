@@ -277,7 +277,7 @@ def collect_requests(inv, time0, time1, days_per_request=3):
     return requests
 
 # Requests for shorter, event-based data
-def get_p_s_times(eq,dist_deg,sta_lat,sta_lon,ttmodel):
+def get_p_s_times(eq,dist_deg,ttmodel):
     eq_lat = eq.origins[0].latitude
     eq_lon = eq.origins[0].longitude
     eq_depth = eq.origins[0].depth / 1000 # depths are in meters for QuakeML
@@ -351,7 +351,7 @@ def TOFIX__output_best_channels(nn,sta,t):
         print("no valid channels found in output_best_channels")
         return []
 
-def collect_requests_event(eq, inv, min_dist_deg=30, max_dist_deg=90, 
+def collect_requests_event__OLD(eq, inv, min_dist_deg=30, max_dist_deg=90, 
                            before_p_sec=20, after_p_sec=160, model=None):
     """
     Collect all requests for data in inventory for given event eq.
@@ -434,7 +434,7 @@ def collect_requests_event(eq, inv, min_dist_deg=30, max_dist_deg=90,
     return requests_per_eq, arrivals_per_eq
 
 
-def collect_requests_event_revised(eq,inv,before_p_sec=20,after_p_sec=160,model=None,settings=None):
+def collect_requests_event(eq,inv,before_p_sec=20,after_p_sec=160,model=None,settings=None):
     """ 
     @Review: Rob please review this
     
@@ -473,7 +473,7 @@ def collect_requests_event_revised(eq,inv,before_p_sec=20,after_p_sec=160,model=
                                              sta.latitude,sta.longitude)
                 if dist_deg < min_dist_deg or dist_deg > max_dist_deg:
                     continue
-                p_time, s_time = get_p_s_times(eq,dist_deg,sta.latitude,sta.longitude,model) #not timestamp!
+                p_time, s_time = get_p_s_times(eq,dist_deg,model) #not timestamp!
                 if not p_time: continue # TOTO need error msg also
 
                 t_start = p_time - abs(before_p_sec) #not timestamps!
@@ -482,7 +482,7 @@ def collect_requests_event_revised(eq,inv,before_p_sec=20,after_p_sec=160,model=
                 t_start = t_start.timestamp
                 t_end = t_end.timestamp
 
-                # add to our arrival database
+                # Add to our arrival database
                 arrivals_per_eq.append((str(eq.preferred_origin_id),
                                     eq.magnitudes[0].mag,
                                     origin.latitude, origin.longitude,origin.depth/1000,
@@ -492,7 +492,7 @@ def collect_requests_event_revised(eq,inv,before_p_sec=20,after_p_sec=160,model=
                                     dist_deg,dist_m/1000,azi,p_time.timestamp,
                                     s_time.timestamp,settings.event.model))
                                           
-            # add to our requests
+            # Add to our requests
             for cha in sta: # TODO will have to had filtered channels prior to this, else will grab them all
                 requests_per_eq.append((
                     net.code,
@@ -1073,7 +1073,7 @@ def run_event(settings: SeismoLoaderSettings):
             eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))
 
         # Collect requests
-        requests,new_arrivals = collect_requests_event_revised(
+        requests,new_arrivals = collect_requests_event(
             eq, settings.station.selected_invs,
             before_p_sec=settings.event.before_p_sec if settings.event.before_p_sec else 20,
             after_p_sec=settings.event.after_p_sec if settings.event.after_p_sec else 160,
