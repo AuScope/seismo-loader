@@ -208,16 +208,84 @@ class DatabaseManager:
             
             return deleted_count
 
-    def run_query(self,query):
-        """Run any query!"""
+    def join_continuous_segments(self, gap_tolerance=30):
+        """
+        Join continuous data segments in the database, even across day boundaries.
+        
+        :param gap_tolerance: Maximum allowed gap (in seconds) to still consider segments continuous
+        """
         with self.connection() as conn:
             cursor = conn.cursor()
-            try:
-                cursor.execute(query)
-            except sqlite3.Error as e:
-                print(f"SQLite error: {e}")
-                # Print the SQL statement and the data being inserted
-        return
+            
+            # Fetch all data sorted by network, station, location, channel, and starttime
+            cursor.execute('''
+                SELECT id, network, station, location, channel, starttime, endtime, importtime
+                FROM archive_data
+                ORDER BY network, station, location, channel, starttime
+            ''')
+            
+            all_data = cursor.fetchall()
+            
+            to_delete = []
+            to_update = []
+            current_segment = None
+            
+            for row in all_data:
+                id, network, station, location, channel, starttime, endtime, importtime = row
+                starttime = UTCDateTime(starttime)
+                endtime = UTCDateTime(endtime)
+                
+                if current_segment is None:
+                    current_segment = list(row)
+                else:
+                    # Check if this segment is continuous with the current one
+                    if (network == current_segment[1] and
+                        station == current_segment[2] and
+                        location == current_segment[3] and
+                        channel == current_segment[4] and
+                        starttime - UTCDateTime(current_segment[6]) <= gap_tolerance):
+                        
+                        # Extend the current segment
+                        current_segment[6] = max(endtime, UTCDateTime(current_segment[6])).isoformat()
+                        # Keep the latest importtime
+                        current_segment[7] = max(importtime, current_segment[7])
+                        to_delete.append(id)
+                    else:
+                        # Start a new segment
+                        to_update.append(tuple(current_segment))
+                        current_segment = list(row)
+            
+            # Don't forget the last segment
+            if current_segment:
+                to_update.append(tuple(current_segment))
+            
+            # Perform updates
+            cursor.executemany('''
+                UPDATE archive_data
+                SET endtime = ?, importtime = ?
+                WHERE id = ?
+            ''', [(row[6], row[7], row[0]) for row in to_update])
+            
+            # Delete the merged segments
+            if to_delete:
+                cursor.execute(f'''
+                    DELETE FROM archive_data
+                    WHERE id IN ({','.join('?' * len(to_delete))})
+                ''', to_delete)
+            
+        print(f"Joined segments. Deleted {len(to_delete)} rows, updated {len(to_update)} rows.")
+
+
+        def run_query(self,query):
+            """Run any query!"""
+            with self.connection() as conn:
+                cursor = conn.cursor()
+                try:
+                    cursor.execute(query)
+                except sqlite3.Error as e:
+                    print(f"SQLite error: {e}")
+                    # Print the SQL statement and the data being inserted
+            return
 
     def bulk_insert_archive_data(self, archive_list):
         if not archive_list:

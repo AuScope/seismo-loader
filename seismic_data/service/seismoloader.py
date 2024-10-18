@@ -179,7 +179,7 @@ def populate_database_from_sds(sds_path, db_path,
     print(f"Processed {total_files} files, inserted {num_inserted} records into the database.")
 
 
-#### this should be moved to class in db.py TODO
+#### now moved to db.py as part of DatabaseManager class
 def join_continuous_segments(db_manager, gap_tolerance=60):
     """
     Join continuous data segments in the database, even across day boundaries.
@@ -1130,7 +1130,7 @@ def run_main(settings: SeismoLoaderSettings = None, from_file=None):
 
     # Now we can optionally clean up our database (stich continous segments, etc)
     print("\n ~~ Cleaning up database ~~")
-    join_continuous_segments(db_manager, settings.proccess.gap_tolerance) #note that this function should be moved to DatabaseManager class in db.py
+    db_manager.join_continuous_segments(settings.proccess.gap_tolerance)
 
 
 
