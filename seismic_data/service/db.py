@@ -276,16 +276,16 @@ class DatabaseManager:
         print(f"Joined segments. Deleted {len(to_delete)} rows, updated {len(to_update)} rows.")
 
 
-        def run_query(self,query):
-            """Run any query!"""
-            with self.connection() as conn:
-                cursor = conn.cursor()
-                try:
-                    cursor.execute(query)
-                except sqlite3.Error as e:
-                    print(f"SQLite error: {e}")
-                    # Print the SQL statement and the data being inserted
-            return
+    def run_query(self,query):
+        """Run any query!"""
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(query)
+            except sqlite3.Error as e:
+                print(f"SQLite error: {e}")
+                # Print the SQL statement and the data being inserted
+        return
 
     def bulk_insert_archive_data(self, archive_list):
         if not archive_list:
