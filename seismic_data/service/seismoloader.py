@@ -277,7 +277,7 @@ def collect_requests(inv, time0, time1, days_per_request=3):
     return requests
 
 # Requests for shorter, event-based data
-def get_p_s_times(eq,dist_deg,sta_lat,sta_lon,ttmodel):
+def get_p_s_times(eq,dist_deg,ttmodel):
     eq_lat = eq.origins[0].latitude
     eq_lon = eq.origins[0].longitude
     eq_depth = eq.origins[0].depth / 1000 # depths are in meters for QuakeML
@@ -351,7 +351,7 @@ def TOFIX__output_best_channels(nn,sta,t):
         print("no valid channels found in output_best_channels")
         return []
 
-def collect_requests_event(eq, inv, min_dist_deg=30, max_dist_deg=90, 
+def collect_requests_event__OLD(eq, inv, min_dist_deg=30, max_dist_deg=90, 
                            before_p_sec=20, after_p_sec=160, model=None):
     """
     Collect all requests for data in inventory for given event eq.
@@ -373,6 +373,10 @@ def collect_requests_event(eq, inv, min_dist_deg=30, max_dist_deg=90,
     sub_inv = select_highest_samplerate(inv, time=ot)
     requests_per_eq = []
     arrivals_per_eq = []
+
+    # Failsafe to ensure a model is loaded
+    if not model:
+        model = TauPyModel('IASP91')
 
     for net in sub_inv:
         for sta in net:
@@ -430,7 +434,7 @@ def collect_requests_event(eq, inv, min_dist_deg=30, max_dist_deg=90,
     return requests_per_eq, arrivals_per_eq
 
 
-def collect_requests_event_revised(eq,inv,before_p_sec=10,after_p_sec=120,model=None, settings=None): #todo add params for before_p, after_p, etc
+def collect_requests_event(eq,inv,before_p_sec=20,after_p_sec=160,model=None,settings=None):
     """ 
     @Review: Rob please review this
     
@@ -440,35 +444,65 @@ def collect_requests_event_revised(eq,inv,before_p_sec=10,after_p_sec=120,model=
     events and stations.
     """
 
-    # n.b. "eq" is an earthquake object, e.g. one element of the array collected in a "catalog" object
-
     origin = eq.origins[0] # default to the primary I suppose (possible TODO but don't see why anyone would want anything else)
     ot = origin.time
     sub_inv = inv.select(time = ot) # Loose filter to select only stations that were running during the earthquake start
+
+    # Failsafe to ensure a model is loaded
+    if not model:
+        model = TauPyModel('IASP91')
 
     # TODO: further filter by selecting best available channels
 
     requests_per_eq = []
     for net in sub_inv:
         for sta in net:
-            p_time, s_time = get_p_s_times(eq,sta.latitude,sta.longitude,model)
-            if not p_time: continue # TOTO need error msg also
-            print(f"Calculated prediction: Event {eq.resource_id.id}, Station {net.code}.{sta.code}, P: {p_time}, S: {s_time}")
 
-            settings.add_prediction(eq.resource_id.id, f"{net.code}.{sta.code}", p_time, s_time)
-            t_start = p_time - abs(before_p_sec)
-            t_end = p_time + abs(after_p_sec)
+            # Check if we've already calculated this event-station pair
+            fetched_arrivals = db_manager.fetch_arrivals(str(eq.preferred_origin_id), \
+                               net.code,sta.code) #TODO also check models are consistent? not critical. in fact we might be better off just forcing everything to IASP91
 
+            if fetched_arrivals:
+                p_time,s_time = fetched_arrivals # timestamps
+                t_start = p_time - abs(before_p_sec)
+                t_end = s_time + abs(after_p_sec)
+            else:
+                dist_deg = locations2degrees(origin.latitude,origin.longitude,\
+                                             sta.latitude,sta.longitude)
+                dist_m,azi,backazi = gps2dist_azimuth(origin.latitude,origin.longitude,\
+                                             sta.latitude,sta.longitude)
+                if dist_deg < min_dist_deg or dist_deg > max_dist_deg:
+                    continue
+                p_time, s_time = get_p_s_times(eq,dist_deg,model) #not timestamp!
+                if not p_time: continue # TOTO need error msg also
+
+                t_start = p_time - abs(before_p_sec) #not timestamps!
+                t_end = p_time + abs(after_p_sec)
+
+                t_start = t_start.timestamp
+                t_end = t_end.timestamp
+
+                # Add to our arrival database
+                arrivals_per_eq.append((str(eq.preferred_origin_id),
+                                    eq.magnitudes[0].mag,
+                                    origin.latitude, origin.longitude,origin.depth/1000,
+                                    ot.timestamp,
+                                    net.code,sta.code,sta.latitude,sta.longitude,sta.elevation/1000,
+                                    sta.start_date.timestamp,sta.end_date.timestamp,
+                                    dist_deg,dist_m/1000,azi,p_time.timestamp,
+                                    s_time.timestamp,settings.event.model))
+                                          
+            # Add to our requests
             for cha in sta: # TODO will have to had filtered channels prior to this, else will grab them all
                 requests_per_eq.append((
                     net.code,
                     sta.code,
                     cha.location_code,
                     cha.code,
-                    t_start.isoformat() + "Z",
-                    t_end.isoformat() + "Z" ))
+                    datetime.datetime.fromtimestamp(t_start).isoformat() + "Z",
+                    datetime.datetime.fromtimestamp(t_end).isoformat() + "Z" ))
 
-    return requests_per_eq
+    return requests_per_eq, arrivals_per_eq
 
 
 def combine_requests(requests):
@@ -644,7 +678,7 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
 # MAIN RUN FUNCTIONS
 # ==================================================================
 def setup_paths(settings: SeismoLoaderSettings):
-    sds_path = settings.sds_path # config['SDS']['sds_path']
+    sds_path = settings.sds_path # config['SDS']['sds_path']  <<<<<<<<< should this be settings.sds.sds_path?
     if not sds_path:
         raise ValueError("SDS Path not set!!!")
 
@@ -653,7 +687,7 @@ def setup_paths(settings: SeismoLoaderSettings):
         os.makedirs(sds_path)
 
     # Setup database directory
-    db_path = settings.db_path # config['DATABASE']['db_path']
+    db_path = settings.db_path # config['DATABASE']['db_path'] <<<<<<< should this be settings.database.db_path?
     if not db_path:
         if not os.path.exists(db_path):
             os.makedirs(db_path)
@@ -673,7 +707,7 @@ def setup_paths(settings: SeismoLoaderSettings):
     return settings
 
 
-## use ObsPy for the below
+## ***use ObsPy for the below functions
 from obspy.geodetics import kilometer2degrees, degrees2kilometers
 
 def convert_radius_to_degrees(radius_meters):
@@ -1017,7 +1051,11 @@ def run_event(settings: SeismoLoaderSettings):
 
     waveform_client = Client(settings.waveform.client.value)
     
-    ttmodel = TauPyModel(settings.event.model)
+    try:
+        ttmodel = TauPyModel(settings.event.model)
+    except Exception as e:
+        print("Issue loading TauPyModel ",settings.event.model, e, "defaulting to IASP91")
+        ttmodel = TauPyModel('IASP91')
 
     # @FIXME: Below line seems to be redundant as in above lines, event_client was set.
     # event_client = Client(config['EVENT']['client'])
@@ -1035,7 +1073,7 @@ def run_event(settings: SeismoLoaderSettings):
             eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))
 
         # Collect requests
-        requests = collect_requests_event_revised(
+        requests,new_arrivals = collect_requests_event(
             eq, settings.station.selected_invs,
             before_p_sec=settings.event.before_p_sec if settings.event.before_p_sec else 20,
             after_p_sec=settings.event.after_p_sec if settings.event.after_p_sec else 160,
@@ -1043,11 +1081,16 @@ def run_event(settings: SeismoLoaderSettings):
             settings=settings
         )
 
+        # Import any new arrival info into our database
+        if new_arrivals:
+            db_manager.bulk_insert_arrival_data(new_arrivals)
+            print(" ~ %d new arrivals added to database" % len(new_arrivals))        
+
         # Remove any for data we already have (requires db be updated)
         pruned_requests= prune_requests(requests, db_manager)
 
         if len(pruned_requests) < 1:
-            print("--> Event already downloaded (%d/%d) %s (%.4f lat %.4f lon %.1f km dep) ...\n" % (i+1,len(settings.event.selected_catalogs),
+            print("--> Event already downloaded (%d/%d) %s (%.4f lat %.4f lon %.1f km depth) ...\n" % (i+1,len(settings.event.selected_catalogs),
             eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))
             continue
 
