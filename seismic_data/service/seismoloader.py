@@ -786,7 +786,7 @@ def get_stations(settings: SeismoLoaderSettings):
                     level=settings.station.level.value
                 )
             except:
-                print("Could not find requested station %s at %s" % (ele.cmb_str,settings.station.client.value))
+                print("Could not find requested station %s at %s" % (f"{n}.{s}",settings.station.client.value))
                 continue
 
     return inv

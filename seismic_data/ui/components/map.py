@@ -3,7 +3,10 @@ from folium.plugins import Draw, Fullscreen
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 import matplotlib.cm as cm
+import matplotlib.colors as mcolors
 import time
+import numpy as np
+import pandas as pd
 
 from typing import List, Union
 
@@ -124,33 +127,98 @@ def add_circle_area(feature_group, coords):
             weight=2,
         ))
 
-def add_data_points(df, cols_to_disp, step: Steps, selected_idx=[], col_color=None):
 
-    fg = folium.FeatureGroup(name="Marker "+ step)
+def add_data_points(df, cols_to_disp, step: Steps, selected_idx=[], col_color=None, col_size=None):
+    fg = folium.FeatureGroup(name="Marker " + step)
 
     marker_info = {}
 
-    for index, row in df.iterrows():
-        color = DEFAULT_COLOR_MARKER if col_color is None else get_marker_color(row[col_color])
+    # Handling the color map
+    if col_color is not None:
+        if pd.api.types.is_numeric_dtype(df[col_color]):
+            # norm = mcolors.Normalize(vmin=df[col_color].min(), vmax=df[col_color].max())
+            norm = mcolors.Normalize(vmin=-5, vmax=100)
+            colormap = cm.get_cmap('YlOrRd')
+        else:
+            unique_categories = df[col_color].unique()
+            colors = cm.get_cmap('tab10', len(unique_categories))
+            category_color_map = {category: mcolors.rgb2hex(colors(i)[:3]) for i, category in enumerate(unique_categories)}
 
+    for index, row in df.iterrows():
+        # Determine color
+        if col_color is None:
+            color = DEFAULT_COLOR_MARKER
+        elif pd.api.types.is_numeric_dtype(df[col_color]):
+            color = mcolors.rgb2hex(colormap(norm(row[col_color]))[:3])
+        else:
+            color = category_color_map[row[col_color]]
+
+        # Determine marker size
+        size = 5
+        if col_size is None:
+            size = 5
+        else:
+            if col_size == "magnitude":
+                size = get_marker_size(row[col_size])
+            else:
+                size = 2 + (10 * (row[col_size]) / (9))
+            size = np.clip(size, 5, 15)
+
+        if index in selected_idx:
+            size = 1.2 *size
+
+        # Determine edge color and fill opacity for selected markers
         edge_color = 'black' if index in selected_idx else color
-        size = 7 if index in selected_idx else 5
+        # size = 7 if index in selected_idx else size
         fill_opacity = 1.0 if index in selected_idx else 0.2
 
+        # Create popup content
         popup_content = create_popup(index, row, cols_to_disp)
         popup = folium.Popup(html=popup_content, max_width=2650, min_width=200)
 
+        # Add marker to the cluster
         latitude, longitude = row['latitude'], row['longitude']
-        add_marker_to_cluster(fg, latitude, longitude, color, edge_color, size, fill_opacity, popup,step)
+        add_marker_to_cluster(fg, latitude, longitude, color, edge_color, size, fill_opacity, popup, step)
 
-        marker_key = (latitude, longitude)
+        # Store marker information
+        # marker_key = (latitude, longitude)
+        marker_key = int(index + 1)
         if marker_key not in marker_info:
-            marker_info[marker_key] = {"id": index + 1}
+            marker_info[marker_key] = {"id": int(index + 1)}
 
         for k, v in cols_to_disp.items():
             marker_info[marker_key][v] = row[k]
 
     return fg, marker_info
+
+# def add_data_points(df, cols_to_disp, step: Steps, selected_idx=[], col_color=None, col_size = None):
+
+#     fg = folium.FeatureGroup(name="Marker "+ step)
+
+#     marker_info = {}
+
+#     for index, row in df.iterrows():
+#         color = DEFAULT_COLOR_MARKER if col_color is None else get_marker_color(row[col_color])
+
+#         edge_color = 'black' if index in selected_idx else color
+#         size = 7 if index in selected_idx else 5
+#         fill_opacity = 1.0 if index in selected_idx else 0.2
+
+#         popup_content = create_popup(index, row, cols_to_disp)
+#         popup = folium.Popup(html=popup_content, max_width=2650, min_width=200)
+
+#         latitude, longitude = row['latitude'], row['longitude']
+#         add_marker_to_cluster(fg, latitude, longitude, color, edge_color, size, fill_opacity, popup,step)
+
+#         # marker_key = (latitude, longitude)
+#         marker_key = index + 1
+#         if marker_key not in marker_info:
+#             marker_info[marker_key] = {"id": index + 1}
+
+#         for k, v in cols_to_disp.items():
+#             marker_info[marker_key][v] = row[k]
+
+#     return fg, marker_info
 
 def add_marker_to_cluster(fg, latitude, longitude, color, edge_color, size, fill_opacity, popup, step):
     """
@@ -217,6 +285,21 @@ def clear_map_layers(map_object):
             map_object._children.pop(key)
         
 
+def get_marker_size(magnitude):
+    if magnitude < 1.8:
+        return 2.0
+    elif 1.8 <= magnitude < 2.4:
+        return 3.0
+    elif 2.4 <= magnitude < 5:
+        return 5.0
+    elif 5 <= magnitude < 7:
+        return 7.0
+    elif 7 <= magnitude < 8.5:
+        return 10.0
+    else:
+        return 15.0
+
+
 
 def get_marker_color(magnitude):
     if magnitude < 1.8:
@@ -245,7 +328,7 @@ def get_color_map(df, c, offset=0.0, cmap='viridis'):
     
 
 def create_popup(index, row, cols_to_disp):
-    html_disp = f"<h4>No: {index}</h4>"
+    html_disp = f"<h4>No: {index + 1}</h4>"
     for k,v in cols_to_disp.items():
         html_disp += f"<h6>{v}: {row[k]}</h6>"
 

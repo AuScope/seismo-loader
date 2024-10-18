@@ -6,6 +6,7 @@ from seismic_data.ui.components.workflows import EventBasedWorkflow
 init_settings()
 st.set_page_config(layout="wide")
 
+
 if "event_based_workflow" not in st.session_state:
     event_based_workflow                  = EventBasedWorkflow(st.session_state.event_page)
     st.session_state.event_based_workflow = event_based_workflow

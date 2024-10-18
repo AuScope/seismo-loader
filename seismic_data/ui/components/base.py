@@ -163,6 +163,7 @@ class BaseComponent:
     df_rect                     = None
     df_circ                     = None
     col_color                   = None  
+    col_size                    = None
     df_markers_prev             = pd.DataFrame()
 
     @property
@@ -188,10 +189,12 @@ class BaseComponent:
             self.df_markers = event_response_to_df(self.catalogs)
 
         if self.step_type == Steps.EVENT:
-            self.col_color = "magnitude"
+            self.col_color = "depth"
+            self.col_size  = "magnitude"
             self.config = self.settings.event
         if self.step_type == Steps.STATION:
-            self.col_color = None
+            self.col_color = "network"
+            self.col_size  = None
             self.config =  self.settings.station
 
     def get_key_element(self, name):        
@@ -290,7 +293,7 @@ class BaseComponent:
             cols_to_disp = {c:c.capitalize() for c in cols }
             if 'detail' in cols_to_disp:
                 cols_to_disp.pop("detail")
-            self.map_fg_marker, self.marker_info = add_data_points( self.df_markers, cols_to_disp, step=self.step_type.value, selected_idx = selected_idx, col_color=self.col_color)
+            self.map_fg_marker, self.marker_info = add_data_points( self.df_markers, cols_to_disp, step=self.step_type.value, selected_idx = selected_idx, col_color=self.col_color, col_size=self.col_size)
         else:
             self.warning = "No data found."
 
@@ -350,7 +353,8 @@ class BaseComponent:
                 cols_to_disp = {c:c.capitalize() for c in cols }
                 if 'detail' in cols_to_disp:
                     cols_to_disp.pop("detail")
-                self.map_fg_marker, self.marker_info = add_data_points( self.df_markers, cols_to_disp, step=self.step_type.value, col_color=self.col_color)
+                self.map_fg_marker, self.marker_info = add_data_points( self.df_markers, cols_to_disp, step=self.step_type.value, col_color=self.col_color, col_size=self.col_size)
+
             else:
                 self.warning = "No data available."
 
@@ -425,15 +429,20 @@ class BaseComponent:
             self.warning = None
             self.error   = None
             col_color = None
+            col_size  = None
             if self.prev_step_type == Steps.EVENT:
-                col_color = "magnitude"
+                col_color = "depth"
+                col_size  = "magnitude"
+            
+            if self.prev_step_type == Steps.STATION:
+                col_color = "network"
 
             if not self.df_markers_prev.empty:
                 cols = self.df_markers_prev.columns
                 cols_to_disp = {c:c.capitalize() for c in cols }
                 if "detail" in cols_to_disp:
                     cols_to_disp.pop("detail")
-                self.map_fg_prev_selected_marker, _ = add_data_points( self.df_markers_prev, cols_to_disp, step=self.prev_step_type.value,selected_idx=[], col_color=col_color)
+                self.map_fg_prev_selected_marker, _ = add_data_points( self.df_markers_prev, cols_to_disp, step=self.prev_step_type.value,selected_idx=[], col_color=col_color, col_size=col_size)
 
         
     def display_prev_step_selection_table(self):
@@ -617,20 +626,27 @@ class BaseComponent:
             feature_group_to_add=feature_groups, 
             use_container_width=True, 
             height=self.map_height
-        )                
+        )
 
         self.all_current_drawings = get_selected_areas(self.map_output)
         if self.map_output and self.map_output.get('last_object_clicked') is not None:
-            last_clicked = self.map_output['last_object_clicked']
-            if isinstance(last_clicked, dict):
-                clicked_lat_lng = (last_clicked.get('lat'), last_clicked.get('lng'))
-            elif isinstance(last_clicked, list):
-                clicked_lat_lng = (last_clicked[0], last_clicked[1])
-            else:
-                clicked_lat_lng = (None, None)
+            # last_clicked = self.map_output['last_object_clicked']
+            last_clicked = self.map_output['last_object_clicked_popup']
 
-            if clicked_lat_lng in self.marker_info:
-                self.clicked_marker_info = self.marker_info[clicked_lat_lng]
+            if isinstance(last_clicked, str):
+                idx = int(last_clicked.splitlines()[0].split()[1])
+                self.clicked_marker_info = self.marker_info[idx]
+            # if isinstance(last_clicked, dict):
+            #     clicked_lat_lng = (last_clicked.get('lat'), last_clicked.get('lng'))
+            # elif isinstance(last_clicked, list):
+            #     clicked_lat_lng = (last_clicked[0], last_clicked[1])
+            else:
+                self.clicked_marker_info = None
+                # clicked_lat_lng = (None, None)
+
+            # if clicked_lat_lng in self.marker_info:
+            #     self.clicked_marker_info = self.marker_info[clicked_lat_lng]
+
 
         if self.warning:
             st.warning(self.warning)
