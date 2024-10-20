@@ -266,13 +266,17 @@ class DatabaseManager:
                 WHERE id = ?
             ''', [(row[6], row[7], row[0]) for row in to_update])
             
-            # Delete the merged segments
+            # Delete the merged segments (break into pieces to avoid SQL3 limit)
             if to_delete:
-                cursor.execute(f'''
-                    DELETE FROM archive_data
-                    WHERE id IN ({','.join('?' * len(to_delete))})
-                ''', to_delete)
+                for i in range(0, len(to_delete), 500):
+                    chunk = to_delete[i:i + 500]
+                    cursor.executemany(
+                        'DELETE FROM archive_data WHERE id = ?',
+                        [(id,) for id in chunk]
+                    )
             
+            conn.commit()
+
         print(f"Joined segments. Deleted {len(to_delete)} rows, updated {len(to_update)} rows.")
 
 
