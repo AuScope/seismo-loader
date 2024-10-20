@@ -274,8 +274,6 @@ class DatabaseManager:
                         'DELETE FROM archive_data WHERE id = ?',
                         [(id,) for id in chunk]
                     )
-            
-            conn.commit()
 
         print(f"Joined segments. Deleted {len(to_delete)} rows, updated {len(to_update)} rows.")
 
