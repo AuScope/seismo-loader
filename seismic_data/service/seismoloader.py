@@ -474,7 +474,7 @@ def collect_requests_event(eq,inv,before_p_sec=20,after_p_sec=160,model=None,set
                 if dist_deg < min_dist_deg or dist_deg > max_dist_deg:
                     continue
                 p_time, s_time = get_p_s_times(eq,dist_deg,model) #not timestamp!
-                if not p_time: continue # TOTO need error msg also
+                if not p_time: continue # TODO need error msg also
 
                 t_start = p_time - abs(before_p_sec) #not timestamps!
                 t_end = p_time + abs(after_p_sec)
@@ -610,10 +610,31 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
             wc = waveform_clients[request[0]+'.'+request[1]]
         else:
             wc = waveform_clients['open']
+
+        kwargs = {
+            'network':request[0],
+            'station':request[1],
+            'location':request[2],
+            'channel':request[3],
+            'starttime':UTCDateTime(request[4]),
+            'endtime':UTCDateTime(request[5])
+        }
         
-        st = wc.get_waveforms(network=request[0], station=request[1],
-                              location=request[2], channel=request[3],
-                              starttime=UTCDateTime(request[4]), endtime=UTCDateTime(request[5]))
+        # issue here if any of these array values are too long (probably station list)
+        # if so, break them apart
+        if any(len(s) > 24 for s in request):
+            st = obspy.Stream()
+            nu_kw = kwargs.copy()
+            split_stations = request[1].split(',')
+            for s in split_stations:
+                nu_kw['station'] = s
+                try:
+                    st += wc.get_waveforms(**nu_kw)
+                except:
+                    pass
+        else:
+            st = wc.get_waveforms(**kwargs)
+        
     except Exception as e:
         print(f"Error fetching data: {request} {str(e)}")
         # >> TODO add failure & denied to database also? will require DB structuring and logging HTTP error response
@@ -711,7 +732,7 @@ def setup_paths(settings: SeismoLoaderSettings):
 from obspy.geodetics import kilometer2degrees, degrees2kilometers
 
 def convert_radius_to_degrees(radius_meters):
-    """ Convert radius from meters to degrees. """
+    #Convert radius from meters to degrees.
     kilometers = radius_meters / 1000
     degrees = kilometers / 111.32
     return degrees
@@ -748,41 +769,45 @@ def get_stations(settings: SeismoLoaderSettings):
     if not cha:
         cha = '*'
 
+    kwargs = {
+        'network': net,
+        'station': sta,
+        'location': loc,
+        'channel': cha,
+        'starttime': starttime,
+        'endtime': endtime,
+        'includerestricted': settings.station.include_restricted,
+        'level': settings.station.level.value
+    }
+
+    # check station_client compatibility
+    for key in kwargs.keys():
+        if key not in station_client['station'].keys()
+            del kwargs[key]        
+
     inv = None
     inventory = settings.station.local_inventory
-    if inventory: # config['STATION']['inventory']:
+    if inventory:
         # User has specified this specific pre-existing (filepath) inventory to use
         inv = obspy.read_inventory(inventory)
 
     elif (not inventory and settings.station.geo_constraint):
         for geo in settings.station.geo_constraint:
             if geo.geo_type == GeoConstraintType.BOUNDING:
-                    ## TODO Test if all variables exist / error if not  
+                ## TODO Test if all variables exist / error if not
                 curr_inv = station_client.get_stations(
-                    network=net,station=sta,
-                    location=loc,channel=cha,
-                    starttime=starttime,endtime=endtime,
-                    minlatitude =geo.coords.min_lat, # float(config['STATION']['minlatitude']),
+                    minlatitude =geo.coords.min_lat,
                     maxlatitude =geo.coords.max_lat,
                     minlongitude=geo.coords.min_lng,
                     maxlongitude=geo.coords.max_lng,
-                    includerestricted= settings.station.include_restricted, # config['STATION']['includerestricted'],
-                    level=settings.station.level.value
+                    **kwargs
                 )
             elif geo.geo_type == GeoConstraintType.CIRCLE:
                 ## TODO Test if all variables exist / error if not
                 curr_inv = station_client.get_stations(
-                    network=net,station=sta,
-                    location=loc,channel=cha,
-                    starttime=starttime,endtime=endtime,
-                    latitude = geo.coords.lat, # float(config['STATION']['latitude']),
-                    longitude= geo.coords.lng, # float(config['STATION']['longitude']),
-                    # minradius=convert_radius_to_degrees(geo.coords.min_radius), # float(config['STATION']['minradius']),
-                    # maxradius=convert_radius_to_degrees (geo.coords.max_radius), # float(config['STATION']['maxradius']),
-                    minradius=geo.coords.min_radius, # float(config['STATION']['minradius']),
-                    maxradius=geo.coords.max_radius, # float(config['STATION']['maxradius']),
-                    includerestricted=settings.station.include_restricted, # config['STATION']['includerestricted'],
-                    level=settings.station.level.value
+                    minradius=geo.coords.min_radius,
+                    maxradius=geo.coords.max_radius,
+                    **kwargs
                 )
             else:
                 print(f"Unknown Geometry type: {geo.geo_type}")
@@ -792,12 +817,7 @@ def get_stations(settings: SeismoLoaderSettings):
             else:
                 inv = curr_inv
     else: # No geographic constraint, search via inventory alone
-        inv = station_client.get_stations(
-            network=net,station=sta,
-            location=loc,channel=cha, 
-            starttime=starttime,endtime=endtime,
-            level=settings.station.level.value
-        )
+        inv = station_client.get_stations(**kwargs)
 
     # Remove unwanted stations or networks
     if settings.station.exclude_stations: # config['STATION']['exclude_stations']:
@@ -816,7 +836,7 @@ def get_stations(settings: SeismoLoaderSettings):
                     network=n,
                     station=s,
                     location='*',
-                    channel='?H?',
+                    channel='[FGDCESHBML][HN]?',
                     level=settings.station.level.value
                 )
             except:
@@ -846,26 +866,35 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
         except Exception as e:
             raise Exception(f"An unexpected error occurred: {e}")
 
-    catalog = Catalog(events=None)    
+    catalog = Catalog(events=None)
+
+    # todo add more e.g. catalog, contributor
+    kwargs = {
+        'starttime':starttime,
+        'endtime':endtime,
+        'minmagnitude':settings.event.min_magnitude,
+        'maxmagnitude':settings.event.max_magnitude,
+        'mindepth':settings.event.min_depth,
+        'maxdepth':settings.event.max_depth,
+        'includeallorigins':settings.event.include_all_origins,
+        'includeallmagnitudes':settings.event.include_all_magnitudes,
+        'includearrivals':settings.event.include_arrivals,
+    }
+
+    # check event_client level for compatibility 
+    for key in kwargs.keys():
+        if key not in event_client['event'].keys()
+            del kwargs[key]
+
     for geo in settings.event.geo_constraint:
-        if geo.geo_type == GeoConstraintType.CIRCLE: # config['EVENT']['search_type'].lower() == 'radial':
+        if geo.geo_type == GeoConstraintType.CIRCLE:
             try:
                 cat = event_client.get_events(
-                    starttime=starttime,endtime=endtime,
-                    minmagnitude= settings.event.min_magnitude, # float(config['EVENT']['minmagnitude']),
-                    maxmagnitude= settings.event.max_magnitude, # float(config['EVENT']['maxmagnitude']),
-
-                    latitude = geo.coords.lat, # float(config['EVENT']['latitude']),
-                    longitude= geo.coords.lng, # float(config['EVENT']['longitude']),
-                    # minradius= convert_radius_to_degrees(geo.coords.min_radius), # loat(config['EVENT']['minsearchradius']),
-                    # maxradius= convert_radius_to_degrees(geo.coords.max_radius), # float(config['EVENT']['maxsearchradius']),
-                    minradius= geo.coords.min_radius, # loat(config['EVENT']['minsearchradius']),
-                    maxradius= geo.coords.max_radius, # float(config['EVENT']['maxsearchradius']),
-
-                    #TODO add catalog,contributor
-                    includeallorigins= settings.event.include_all_origins, # False,
-                    includeallmagnitudes= settings.event.include_all_magnitudes, # False,
-                    includearrivals= settings.event.include_arrivals, # False
+                    latitude = geo.coords.lat,
+                    longitude= geo.coords.lng,
+                    minradius= geo.coords.min_radius,
+                    maxradius= geo.coords.max_radius,
+                    **kwargs
                 )
                 print("Found %d events from %s" % (len(cat),settings.event.client.value))
                 catalog.extend(cat)
@@ -873,24 +902,14 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
                 print("No events found!") #TODO elaborate
                 # return catalog # sys.exit()
                 
-        elif geo.geo_type == GeoConstraintType.BOUNDING: # 'box' in config['EVENT']['search_type'].lower():
+        elif geo.geo_type == GeoConstraintType.BOUNDING:
             try:
                 cat = event_client.get_events(
-                    starttime=starttime,endtime=endtime,
-                    minmagnitude= settings.event.min_magnitude, # float(config['EVENT']['minmagnitude']),
-                    maxmagnitude= settings.event.max_magnitude, # float(config['EVENT']['maxmagnitude']),
-                    mindepth    = settings.event.min_depth,
-                    maxdepth    = settings.event.max_depth,
-
-                    minlatitude  = geo.coords.min_lat, # float(config['EVENT']['minlatitude']),
-                    minlongitude = geo.coords.min_lng, # float(config['EVENT']['minlongitude']),
-                    maxlatitude  = geo.coords.max_lat, # float(config['EVENT']['maxlatitude']),
-                    maxlongitude = geo.coords.max_lng, # float(config['EVENT']['maxlongitude']),
-
-                    #TODO add catalog,contributor
-                    includeallorigins= settings.event.include_all_origins, # False,
-                    includeallmagnitudes= settings.event.include_all_magnitudes, # False,
-                    includearrivals= settings.event.include_arrivals, # False
+                    minlatitude  = geo.coords.min_lat,
+                    minlongitude = geo.coords.min_lng,
+                    maxlatitude  = geo.coords.max_lat,
+                    maxlongitude = geo.coords.max_lng,
+                    **kwargs
                 )
                 print("Found %d events from %s" % (len(cat),settings.event.client.value))
                 catalog.extend(cat)
@@ -901,7 +920,6 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
             raise ValueError("Event search type: %s is invalid. Must be 'radial' or 'box'" % geo.geo_type.value)
     
     return catalog
-
 
 
 def run_continuous(settings: SeismoLoaderSettings):
