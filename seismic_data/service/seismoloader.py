@@ -742,6 +742,8 @@ def get_stations(settings: SeismoLoaderSettings):
     """
     Refine input args to what is needed for get_stations
     """
+    print("Running get_stations") #debug for now
+
     starttime = UTCDateTime(settings.station.date_config.start_time)
     endtime = UTCDateTime(settings.station.date_config.end_time)
     waveform_client = Client(settings.waveform.client.value)
@@ -775,9 +777,12 @@ def get_stations(settings: SeismoLoaderSettings):
     }
 
     # check station_client compatibility
+    if 'station' not in station_client.services.keys():
+        print("Station service not available at %s, no stations returned" % station_client.base_url)
+        return None
     for key in kwargs.keys():
-        if key not in station_client['station'].keys():
-            del kwargs[key]        
+        if key not in station_client.services['station'].keys():
+            del kwargs[key]
 
     inv = None
     inventory = settings.station.local_inventory
@@ -841,6 +846,9 @@ def get_stations(settings: SeismoLoaderSettings):
 
 
 def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
+
+    print("Running get_events") #debug for now
+
     starttime = UTCDateTime(settings.event.date_config.start_time)
     endtime = UTCDateTime(settings.event.date_config.end_time)
 
@@ -875,9 +883,12 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
         'includearrivals':settings.event.include_arrivals,
     }
 
-    # check event_client level for compatibility 
+    # check event_client for compatibility
+    if 'event' not in event_client.services.keys():
+        print("Event service not available at %s, no events returned" % event_client.base_url)
+        return catalog
     for key in kwargs.keys():
-        if key not in event_client['event'].keys():
+        if key not in event_client.services['event'].keys():
             del kwargs[key]
 
     for geo in settings.event.geo_constraint:
@@ -894,7 +905,6 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
                 catalog.extend(cat)
             except:
                 print("No events found!") #TODO elaborate
-                # return catalog # sys.exit()
                 
         elif geo.geo_type == GeoConstraintType.BOUNDING:
             try:
@@ -908,7 +918,7 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
                 print("Found %d events from %s" % (len(cat),settings.event.client.value))
                 catalog.extend(cat)
             except:
-                print("Mo events found!") #TODO elaborate
+                print("No events found!") #TODO elaborate
         else:
             # FIXME: Once concluded on Geo Type, fix below terms: radial and box
             raise ValueError("Event search type: %s is invalid. Must be 'radial' or 'box'" % geo.geo_type.value)
