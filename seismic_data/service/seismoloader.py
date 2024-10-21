@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
 
-# CLI SDS data downloader/archiver/database management, use: $ ./seismoloader.py 
-
-#requirements: obspy, tqdm, tabulate, sqlite3, contexlib
-
-# ver 0.3 04/09/2024
-# - add event capability, add example continuous/event cfg files, fix a LOT of bugs, other significant renames/structural changes
-
-# ver 0.2 08/2024
-# - first shared edition
-
 import os
 import sys
 import time
@@ -634,7 +624,7 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
                     pass
         else:
             st = wc.get_waveforms(**kwargs)
-        
+
     except Exception as e:
         print(f"Error fetching data: {request} {str(e)}")
         # >> TODO add failure & denied to database also? will require DB structuring and logging HTTP error response
@@ -679,14 +669,18 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
             existing_st += day_stream
             existing_st.merge(method=-1, fill_value=None)
             existing_st._cleanup()
-            print(f"  merging {full_path}")
+            if existing_st:
+                print(f"  merging {full_path}")
         else:
             existing_st = day_stream
-            print(f"  writing {full_path}")
-        
-        existing_st.write(full_path, format="MSEED", encoding='STEIM2') #STEIM2 is default?
+            if existing_st:
+                print(f"  writing {full_path}")
 
-        to_insert_db.append(stream_to_db_element(existing_st))
+        existing_st = obspy.Stream([tr for tr in existing_st if len(tr.data) > 0])
+
+        if existing_st:
+            existing_st.write(full_path, format="MSEED", encoding='STEIM2') #STEIM2 is default?
+            to_insert_db.append(stream_to_db_element(existing_st))
 
     # Update database
     try:
@@ -1001,8 +995,8 @@ def run_continuous(settings: SeismoLoaderSettings):
         time.sleep(0.05) #to help ctrl-C out if needed
         try: 
             archive_request(request, waveform_clients, settings.sds_path, db_manager) # think should this be waveform_clientS plural ?
-        except:
-            print("Continous request not successful: ",request)
+        except Exception as e:
+            print("Continuous request not successful: ",request, " with exception: ", e)
 
     # Goint through all original requests //// ** not sure what this does from here on
     time_series = []
