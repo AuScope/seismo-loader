@@ -776,7 +776,7 @@ def get_stations(settings: SeismoLoaderSettings):
 
     # check station_client compatibility
     for key in kwargs.keys():
-        if key not in station_client['station'].keys()
+        if key not in station_client['station'].keys():
             del kwargs[key]        
 
     inv = None
