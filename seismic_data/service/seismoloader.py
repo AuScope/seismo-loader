@@ -877,7 +877,7 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
 
     # check event_client level for compatibility 
     for key in kwargs.keys():
-        if key not in event_client['event'].keys()
+        if key not in event_client['event'].keys():
             del kwargs[key]
 
     for geo in settings.event.geo_constraint:
