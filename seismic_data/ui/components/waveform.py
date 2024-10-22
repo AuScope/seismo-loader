@@ -1,6 +1,7 @@
 import math
 import re
 from typing import List, Dict
+from obspy import UTCDateTime
 from seismic_data.models.config import SeismoLoaderSettings
 from seismic_data.service.seismoloader import run_event
 from obspy.clients.fdsn import Client
@@ -15,15 +16,15 @@ from plotly.subplots import make_subplots
 
 class WaveformFilterMenu:
     settings: SeismoLoaderSettings
-    event_filter: str
     network_filter: str
     station_filter: str
+    channel_filter: str
 
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
-        self.event_filter = "All events"
         self.network_filter = "All networks"
         self.station_filter = "All stations"
+        self.channel_filter = "All channels"
 
     def render(self):
         st.sidebar.header("Waveform Analysis Options")
@@ -34,13 +35,6 @@ class WaveformFilterMenu:
             value=self.settings.waveform.days_per_request,
             min_value=1,
             max_value=30,
-        )
-
-        # Event filter
-        event_times = ["All events"] + [ev.origins[0].time.isoformat() for ev in self.settings.event.selected_catalogs]
-        self.event_filter = st.sidebar.selectbox(
-            "Event:",
-            event_times
         )
 
         # Network filter
@@ -55,9 +49,19 @@ class WaveformFilterMenu:
         for inv in self.settings.station.selected_invs:
             stations.extend([sta.code for sta in inv])
         stations = list(set(stations))
+        stations.remove("All stations")
+        stations.insert(0, "All stations")  # Ensure "All stations" is at the top
         self.station_filter = st.sidebar.selectbox(
             "Station:",
-            stations
+            stations,
+            index=0  # Set default index to 0, which is "All stations"
+        )
+
+        # Channel filter
+        channels = ["All channels", "BHE", "BHN", "BHZ"]  # Add more channels as needed
+        self.channel_filter = st.sidebar.selectbox(
+            "Channel:",
+            channels
         )
 
         # Time window around P arrival
@@ -100,15 +104,17 @@ class WaveformDisplay:
         self.filter_menu = filter_menu
         self.client = Client(self.settings.waveform.client.value)
         self.ttmodel = TauPyModel("iasp91")
+
         
     def apply_filters(self, df):
-        if self.filter_menu.event_filter != "All events":
-            df = df[df["Event Time"] == self.filter_menu.event_filter]
+        filtered_df = df.copy()
         if self.filter_menu.network_filter != "All networks":
-            df = df[df["Network"] == self.filter_menu.network_filter]
+            filtered_df = filtered_df[filtered_df["Network"] == self.filter_menu.network_filter]
         if self.filter_menu.station_filter != "All stations":
-            df = df[df["Station"] == self.filter_menu.station_filter]
-        return df
+            filtered_df = filtered_df[filtered_df["Station"] == self.filter_menu.station_filter]
+        if self.filter_menu.channel_filter != "All channels":
+            filtered_df = filtered_df[filtered_df["Channel"] == self.filter_menu.channel_filter]
+        return filtered_df
     
     def retrieve_waveforms(self):
         if (
@@ -119,10 +125,15 @@ class WaveformDisplay:
                 "Please select events and stations before downloading waveforms."
             )
             return
-
+        
+        # self.prediction_data = self.settings.predictions
+        # if waveform data is empty, don't even try to filter
         self.waveforms = run_event(self.settings)
-        self.prediction_data = self.settings.predictions
-
+        st.write("settings: ", self.settings)
+        
+        if not self.waveforms:
+            st.warning("No waveforms retrieved. Please check your selection criteria.")
+            return
         filtered_waveforms = [
             ts
             for ts in self.waveforms
@@ -137,14 +148,6 @@ class WaveformDisplay:
             st.warning("No waveforms retrieved. Please check your selection criteria.")
         
         return None
-    def apply_filters(self, df):
-        if self.filter_menu.event_filter != "All events":
-            df = df[df["Event Time"] == self.filter_menu.event_filter]
-        if self.filter_menu.network_filter != "All networks":
-            df = df[df["Network"] == self.filter_menu.network_filter]
-        if self.filter_menu.station_filter != "All stations":
-            df = df[df["Station"] == self.filter_menu.station_filter]
-        return df
 
     def display_waveform_data(self):
         if not self.waveforms:
@@ -153,16 +156,16 @@ class WaveformDisplay:
             )
             return
 
-        filtered_waveforms = self.apply_filters(pd.DataFrame(self.waveforms))
+        all_waveforms = pd.DataFrame(self.waveforms)
+        filtered_waveforms = self.apply_filters(all_waveforms)
 
-        if filtered_waveforms.empty:
-            st.warning("No waveforms match the current filters.")
-            return
+        if filtered_waveforms.empty and len(all_waveforms) > 0:
+            filtered_waveforms = all_waveforms
 
         # Pagination
         waveforms_per_page = 5
         num_pages = (len(filtered_waveforms) - 1) // waveforms_per_page + 1
-        page = st.selectbox("Page", range(1, num_pages + 1)) - 1
+        page = st.selectbox("Page top", range(1, num_pages + 1), key="top_pagination") - 1
 
         start_idx = page * waveforms_per_page
         end_idx = min((page + 1) * waveforms_per_page, len(filtered_waveforms))
@@ -172,7 +175,7 @@ class WaveformDisplay:
             rows=len(page_waveforms),
             cols=1,
             shared_xaxes=True,
-            vertical_spacing=0.05,
+            vertical_spacing=0.08,
             subplot_titles=[
                 f"{w['Network']}.{w['Station']}.{w['Location']}.{w['Channel']}"
                 for w in page_waveforms.to_dict("records")
@@ -198,42 +201,8 @@ class WaveformDisplay:
                 name=f"{waveform['Network']}.{waveform['Station']}.{waveform['Location']}.{waveform['Channel']}",
                 hovertemplate="Time: %{x}<br>Amplitude: %{y:.2f}<extra></extra>",
             )
-            # Look up the prediction for this waveform
-            event_id = self.filter_menu.event_filter if self.filter_menu.event_filter != "All events" else self.settings.event.selected_catalogs[0].resource_id.id
-            station_id = f"{waveform['Network']}.{waveform['Station']}"
-            prediction_key = f"{event_id}|{station_id}"
-
-            if prediction_key in self.prediction_data:
-                prediction = self.prediction_data[prediction_key]
-                p_arrival = prediction.p_arrival
-
-                # Add P arrival line (vertical)
-                fig.add_vline(
-                    x=p_arrival, 
-                    line_width=2, 
-                    line_dash="dash", 
-                    line_color="red",
-                    row=i, 
-                    col=1
-                )
-
-                # Add annotations for P and S arrivals
-                fig.add_annotation(
-                    x=p_arrival,
-                    y=1,
-                    yref="paper",
-                    text="P",
-                    showarrow=False,
-                    font=dict(color="red"),
-                    row=i,
-                    col=1,
-                )
             # Add the trace to the subplot
             fig.add_trace(trace, row=i, col=1)
-
-            # Update y-axis label and range
-            y_range = [df["amplitude"].min(), df["amplitude"].max()]
-            fig.update_yaxes(title_text="Amplitude", row=i, col=1, range=y_range)
 
         fig.update_layout(
             height=300 * len(page_waveforms),
@@ -252,15 +221,8 @@ class WaveformDisplay:
             col=1,
         )
 
-        # Update y-axes
-        fig.update_yaxes(
-            gridcolor="lightgrey",
-            zerolinecolor="red",
-            zerolinewidth=1,
-        )
-
         st.plotly_chart(fig, use_container_width=True)
-
+        
         # Display waveform information and data quality summary
         st.subheader("Waveform Information and Data Quality Summary")
         quality_summary = []
@@ -273,16 +235,6 @@ class WaveformDisplay:
             data_range = (
                 df["amplitude"].max() - df["amplitude"].min() if not df.empty else 0
             )
-            event_id = self.filter_menu.event_filter if self.filter_menu.event_filter != "All events" else self.settings.event.selected_catalogs[0].resource_id.id
-            station_id = f"{waveform['Network']}.{waveform['Station']}"
-            prediction_key = f"{event_id}|{station_id}"
-
-            p_arrival = "N/A"
-            s_arrival = "N/A"
-            if prediction_key in self.prediction_data:
-                prediction = self.prediction_data[prediction_key]
-                p_arrival = prediction.p_arrival.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                s_arrival = prediction.s_arrival.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
             quality_summary.append(
                 {
@@ -299,9 +251,7 @@ class WaveformDisplay:
                     ),
                     "Data Points": len(df),
                     "Non-zero Data (%)": f"{non_zero_percentage:.2f}%",
-                    "Amplitude Range": f"{data_range:.2e}",
-                    "Predicted P Arrival": p_arrival,
-                    "Predicted S Arrival": s_arrival,
+                    "Amplitude Range": f"{data_range:.2e}"
                 }
             )
         st.dataframe(pd.DataFrame(quality_summary))
@@ -317,28 +267,7 @@ class WaveformDisplay:
         
         if st.button("Get Waveforms"):
             self.retrieve_waveforms()
-        # col1, col2, col3 = st.columns(3)
-        # with col1:
-        #     # TODO event is not time. check self.settings.event.selected_catalogs
-        #     event_times = [ev.origins[0].time.isoformat() for ev in self.settings.event.selected_catalogs]
-        #     self.event_filter = st.selectbox(
-        #         "Event:",
-        #         ["All events"] + event_times
-        #     )
-
-        # with col2:
-        #     self.network_filter = st.selectbox(
-        #         "Network:",
-        #         ["All networks"] + list(set([wf["Network"] for wf in self.waveforms])),
-        #     )
-        # with col3:
-        #     self.station_filter = st.selectbox(
-        #         "Station:",
-        #         ["All stations"] + list(set([wf["Station"] for wf in self.waveforms])),
-        #     )
-
         self.display_waveform_data()
-
 
 class WaveformComponents:
     settings: SeismoLoaderSettings

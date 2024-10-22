@@ -20,7 +20,6 @@ class DatabaseManager:
     def __init__(self, db_path):
         self.db_path = db_path
         self.setup_database()
-
     @contextlib.contextmanager
     def connection(self, max_retries=3, initial_delay=1):
         """Context manager for safe database connections with retry mechanism."""
@@ -266,13 +265,15 @@ class DatabaseManager:
                 WHERE id = ?
             ''', [(row[6], row[7], row[0]) for row in to_update])
             
-            # Delete the merged segments
+            # Delete the merged segments (break into pieces to avoid SQL3 limit)
             if to_delete:
-                cursor.execute(f'''
-                    DELETE FROM archive_data
-                    WHERE id IN ({','.join('?' * len(to_delete))})
-                ''', to_delete)
-            
+                for i in range(0, len(to_delete), 500):
+                    chunk = to_delete[i:i + 500]
+                    cursor.executemany(
+                        'DELETE FROM archive_data WHERE id = ?',
+                        [(id,) for id in chunk]
+                    )
+
         print(f"Joined segments. Deleted {len(to_delete)} rows, updated {len(to_update)} rows.")
 
 
@@ -297,7 +298,6 @@ class DatabaseManager:
             # Add import time
             now = int(datetime.datetime.now().timestamp())
             archive_list = [tuple(list(ele) + [now]) for ele in archive_list if ele is not None]
-            
             # Do the insert
             cursor.executemany('''
                 INSERT OR REPLACE INTO archive_data
@@ -405,12 +405,13 @@ def setup_database(db_path):
             location TEXT,
             channel TEXT,
             starttime TEXT,
-            endtime TEXT
+            endtime TEXT,
+            importtime REAL
             )
         ''')
     cursor.execute('''
         CREATE INDEX IF NOT EXISTS idx_archive_data 
-        ON archive_data (network, station, location, channel, starttime, endtime)
+        ON archive_data (network, station, location, channel, starttime, endtime, importtime)
         ''')
     conn.commit()
     return
