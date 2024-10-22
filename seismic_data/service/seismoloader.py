@@ -813,6 +813,8 @@ def get_stations(settings: SeismoLoaderSettings):
                 curr_inv = station_client.get_stations(
                     minradius=geo.coords.min_radius,
                     maxradius=geo.coords.max_radius,
+                    latitude=geo.coords.lat,
+                    longitude=geo.coords.lng,
                     **kwargs
                 )
             else:

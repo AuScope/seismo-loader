@@ -12,7 +12,7 @@ from obspy.core.inventory import Inventory
 from obspy.core.event import Catalog
 
 from .common import RectangleArea, CircleArea
-from seismic_data.enums.config import DownloadType, SeismoClients, GeoConstraintType, Levels, EventModels
+from seismic_data.enums.config import DownloadType, WorkflowType, SeismoClients, GeoConstraintType, Levels, EventModels
 
 # TODO: Not sure if these values are controlled values
 # check to see if should we use controlled values or
@@ -183,17 +183,28 @@ class PredictionData(BaseModel):
     p_arrival: datetime
     s_arrival: datetime
 class SeismoLoaderSettings(BaseModel):
-    sds_path     : str                        = None
-    db_path      : str                        = None
-    download_type: DownloadType               = DownloadType.EVENT
-    proccess     : ProcessingConfig           = None
-    auths        : Optional[List[AuthConfig]] = []
-    waveform     : WaveformConfig             = None
-    station      : StationConfig              = None
-    event        : EventConfig                = None
-    predictions  : Dict[str, PredictionData]  = {}
+    sds_path          : str                                   = None
+    db_path           : str                                   = None
+    download_type     : DownloadType                          = DownloadType.EVENT
+    selected_workflow : WorkflowType                          = WorkflowType.EVENT_BASED
+    proccess          : ProcessingConfig                      = None
+    auths             : Optional        [List[AuthConfig]]    = []
+    waveform          : WaveformConfig                        = None
+    station           : StationConfig                         = None
+    event             : EventConfig                           = None
+    predictions       : Dict            [str, PredictionData] = {}
 
     # main: Union[EventConfig, StationConfig] = None
+
+    def set_download_type_from_workflow(self):
+        if (
+            self.selected_workflow == WorkflowType.EVENT_BASED or
+            self.selected_workflow == WorkflowType.STATION_BASED
+        ):
+            self.download_type = DownloadType.EVENT
+
+        if (self.selected_workflow == WorkflowType.CONTINUOUS):
+            self.download_type = DownloadType.CONTINUOUS
 
 
     @classmethod

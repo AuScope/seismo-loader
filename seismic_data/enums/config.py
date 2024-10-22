@@ -1,9 +1,15 @@
 from enum import Enum
-
+from .common import DescribedEnum
 
 class DownloadType(str, Enum):
     EVENT  = 'event'
     CONTINUOUS = 'continuous'
+
+
+class WorkflowType(DescribedEnum):
+    EVENT_BASED = ("Start by selecting events", "Here, add a paragraph describing the Event-Based workflow")
+    STATION_BASED = ("Start by selecting stations", "Here, add a paragraph describing the Station-Based workflow")
+    CONTINUOUS = ("Requesting Continuous Data", "Here, add a paragraph describing the Continuous workflow")
 
 
 class SeismoClients(str, Enum):
