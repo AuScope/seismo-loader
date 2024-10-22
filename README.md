@@ -16,8 +16,14 @@ git clone git@github.com:AuScope/seismo-loader.git
 
 For a quick start follow these steps:
 
-1. Setup environment:  `source setup.sh`
-2. Run app: `source run.sh`
+```
+git clone https://github.com/AuScope/seismo-loader.git
+cd seismo-loader
+sudo apt update
+sudo apt install python3.12-venv 
+source setup.sh
+source run.sh
+```
 
 **Note:** For Win OS, you would need to convert the shell scripts to PowerShell. Or simply follow the steps in the shell scripts to set up the app. 
 

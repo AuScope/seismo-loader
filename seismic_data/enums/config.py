@@ -7,8 +7,8 @@ class DownloadType(str, Enum):
 
 
 class WorkflowType(DescribedEnum):
-    EVENT_BASED = ("Start by selecting events", "Here, add a paragraph describing the Event-Based workflow")
-    STATION_BASED = ("Start by selecting stations", "Here, add a paragraph describing the Station-Based workflow")
+    EVENT_BASED = ("Event Based - Starting from Selecting Events", "Here, add a paragraph describing the Event-Based workflow")
+    STATION_BASED = ("Station Based - Starting from Selecting Stations", "Here, add a paragraph describing the Station-Based workflow")
     CONTINUOUS = ("Requesting Continuous Data", "Here, add a paragraph describing the Continuous workflow")
 
 

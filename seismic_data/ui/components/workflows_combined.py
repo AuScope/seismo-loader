@@ -68,7 +68,7 @@ class CombinedBasedWorkflow:
             st.write("## Select the Seismic Data Request Flow")
         with c2:
             selected_flow_type = st.selectbox(
-                'Flow Type:', 
+                "", 
                 workflow_options_list, 
                 index=workflow_options_list.index(self.settings.selected_workflow.value), 
                 key="combined-pg-download-type",
@@ -77,22 +77,22 @@ class CombinedBasedWorkflow:
             if selected_flow_type:
                 self.settings.selected_workflow = workflow_options[selected_flow_type]
 
-        with c3:
-            if st.button("Next"):
-                st.session_state.selected_flow_type = selected_flow_type
-                self.settings.set_download_type_from_workflow()
-                if self.settings.selected_workflow == WorkflowType.EVENT_BASED:
-                    self.event_components = BaseComponent(self.settings, step_type=Steps.EVENT, prev_step_type=None, stage=1)    
-                    self.station_components = BaseComponent(self.settings, step_type=Steps.STATION, prev_step_type=Steps.EVENT, stage=2)    
-                    self.waveform_components = WaveformComponents(self.settings)
+        # with c3:
+        if st.button("Start"):
+            st.session_state.selected_flow_type = selected_flow_type
+            self.settings.set_download_type_from_workflow()
+            if self.settings.selected_workflow == WorkflowType.EVENT_BASED:
+                self.event_components = BaseComponent(self.settings, step_type=Steps.EVENT, prev_step_type=None, stage=1)    
+                self.station_components = BaseComponent(self.settings, step_type=Steps.STATION, prev_step_type=Steps.EVENT, stage=2)    
+                self.waveform_components = WaveformComponents(self.settings)
 
-                if self.settings.selected_workflow == WorkflowType.STATION_BASED:
-                    self.station_components = BaseComponent(self.settings, step_type=Steps.STATION, prev_step_type=None, stage=1)   
-                    self.event_components = BaseComponent(self.settings, step_type=Steps.EVENT, prev_step_type=Steps.STATION, stage=2)  
-                    self.waveform_components = WaveformComponents(self.settings) 
-                self.next_stage()
+            if self.settings.selected_workflow == WorkflowType.STATION_BASED:
+                self.station_components = BaseComponent(self.settings, step_type=Steps.STATION, prev_step_type=None, stage=1)   
+                self.event_components = BaseComponent(self.settings, step_type=Steps.EVENT, prev_step_type=Steps.STATION, stage=2)  
+                self.waveform_components = WaveformComponents(self.settings) 
+            self.next_stage()
 
-        st.write(self.settings.selected_workflow.description)
+        st.info(self.settings.selected_workflow.description)
 
 
     def render_stage_1(self):
