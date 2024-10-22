@@ -33,67 +33,172 @@ import pickle
 
 client_options = [f.name for f in SeismoClients]
 
+from streamlit_cookies_manager import EncryptedCookieManager
 
-def event_filter(event: EventConfig):
-    start_time = convert_to_date(event.date_config.start_time)
-    end_time = convert_to_date(event.date_config.end_time)
+# password = "your-secure-password"  # Use an environment variable for better security in production
+# cookies = EncryptedCookieManager(prefix="my_app", password=password)
 
-    st.sidebar.header("Event Filters")
-    with st.sidebar:
-        selected_client = st.selectbox('Choose a client:', client_options, 
-                                        index=client_options.index(event.client.name), 
-                                        key="event-pg-client-event")
-        
-        event.client = SeismoClients[selected_client]
+# if not cookies.ready():
+#     st.stop()
 
-        event.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-event")
-        event.date_config.end_time = st.date_input("End Date", end_time, key="event-pg-end-date-event")
+# def get_filter_from_cookies(page_type, filter_name, default_filter):
+#     """Retrieve the filter settings from cookies or return the default if not present."""
+#     saved_filter_json = cookies.get(f"_{page_type}_{filter_name}")
+    
+#     # If the cookie is None, return the default filter
+#     if saved_filter_json is None:
+#         return default_filter
 
-        if event.date_config.start_time > event.date_config.end_time:
-            st.error("Error: End Date must fall after Start Date.")
+#     # Otherwise, parse the JSON and return the saved filter
+#     return json.loads(saved_filter_json)
 
-        event.min_magnitude, event.max_magnitude = st.slider(
-            "Min Magnitude", 
-            min_value=-2.0, max_value=10.0, 
-            value=(event.min_magnitude, event.max_magnitude), 
-            step=0.1, key="event-pg-mag"
-        )
+# def save_filter_to_cookies(page_type, filter_name, filter_data):
+#     """Save the filter settings to cookies."""
+#     cookies[f"_{page_type}_{filter_name}"] = json.dumps(filter_data)
+#     cookies.save()
 
-        event.min_depth, event.max_depth = st.slider(
-            "Min Depth (km)", 
-            min_value=-5.0, max_value=800.0, 
-            value=(event.min_depth, event.max_depth), 
-            step=1.0, key=f"event-pg-depth"
-        )
+# def convert_date_to_str(date):
+#     """Convert a date object to an ISO format string if it's not already a string."""
+#     if isinstance(date, str):
+#         return date 
+#     return date.isoformat()
+
+# def convert_str_to_date(date_str):
+#     """Convert an ISO format date string to a date object."""
+#     return datetime.fromisoformat(date_str).date()
+
+def event_filter(event: EventConfig, page_type):
+    # # Default filter settings
+    # default_filter = {
+    #     "client": event.client.name,
+    #     "start_date": convert_date_to_str(event.date_config.start_time),
+    #     "end_date": convert_date_to_str(event.date_config.end_time),
+    #     "min_magnitude": event.min_magnitude,
+    #     "max_magnitude": event.max_magnitude,
+    #     "min_depth": event.min_depth,
+    #     "max_depth": event.max_depth,
+    # }
+
+    # # Retrieve the filter settings from cookies or use defaults
+    # saved_filter = get_filter_from_cookies(page_type, "event_filter", default_filter)
+
+    # # Convert the dates back to Python date objects
+    # start_time = convert_str_to_date(saved_filter["start_date"])
+    # end_time = convert_str_to_date(saved_filter["end_date"])
+
+    # st.sidebar.header("Event Filters")
+    # with st.sidebar:
+    #     selected_client = st.selectbox(
+    #         'Choose a client:', client_options,
+    #         index=client_options.index(saved_filter["client"]),
+    #         key="event-pg-client-event"
+    #     )
+
+    #     # Update the event client and save in the filter
+    #     event.client = SeismoClients[selected_client]
+    #     saved_filter["client"] = selected_client
+
+    #     start_date = st.date_input("Start Date", start_time, key="event-pg-start-date-event")
+    #     end_date = st.date_input("End Date", end_time, key="event-pg-end-date-event")
+
+    #     event.date_config.start_time = start_date
+    #     event.date_config.end_time = end_date
+    #     saved_filter["start_date"] = convert_date_to_str(start_date)
+    #     saved_filter["end_date"] = convert_date_to_str(end_date)
+
+    #     if event.date_config.start_time > event.date_config.end_time:
+    #         st.error("Error: End Date must fall after Start Date.")
+
+    #     min_magnitude, max_magnitude = st.slider(
+    #         "Min Magnitude",
+    #         min_value=-2.0, max_value=10.0,
+    #         value=(saved_filter["min_magnitude"], saved_filter["max_magnitude"]),
+    #         step=0.1, key="event-pg-mag"
+    #     )
+
+    #     event.min_magnitude = min_magnitude
+    #     event.max_magnitude = max_magnitude
+    #     saved_filter["min_magnitude"] = min_magnitude
+    #     saved_filter["max_magnitude"] = max_magnitude
+
+    #     min_depth, max_depth = st.slider(
+    #         "Min Depth (km)",
+    #         min_value=-5.0, max_value=800.0,
+    #         value=(saved_filter["min_depth"], saved_filter["max_depth"]),
+    #         step=1.0, key="event-pg-depth"
+    #     )
+
+    #     event.min_depth = min_depth
+    #     event.max_depth = max_depth
+    #     saved_filter["min_depth"] = min_depth
+    #     saved_filter["max_depth"] = max_depth
+
+    # # Save the filter settings in cookies
+    # save_filter_to_cookies(page_type, "event_filter", saved_filter)
 
     return event
 
-def station_filter(station: StationConfig):
+def station_filter(station: StationConfig, page_type):
+    # # Default filter settings
+    # default_filter = {
+    #     "client": station.client.name,
+    #     "start_date": convert_date_to_str(station.date_config.start_time),
+    #     "end_date": convert_date_to_str(station.date_config.end_time),
+    #     "network": station.network,
+    #     "station": station.station,
+    #     "location": station.location,
+    #     "channel": station.channel,
+    # }
 
-    start_time = convert_to_date(station.date_config.start_time)
-    end_time = convert_to_date(station.date_config.end_time)
+    # # Retrieve the filter settings from cookies or use defaults
+    # saved_filter = get_filter_from_cookies(page_type, "station_filter", default_filter)
 
-    st.sidebar.header("Station Filters")
-    with st.sidebar:
-        selected_client = st.selectbox('Choose a client:', client_options, 
-                                       index=client_options.index(station.client.name), 
-                                       key="event-pg-client-station")
-        station.client = SeismoClients[selected_client]
+    # # Convert the dates back to Python date objects
+    # start_time = convert_str_to_date(saved_filter["start_date"])
+    # end_time = convert_str_to_date(saved_filter["end_date"])
 
-        station.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-station")
-        station.date_config.end_time = st.date_input("End Date", end_time, key="event-pg-end-date-station")
+    # st.sidebar.header("Station Filters")
+    # with st.sidebar:
+    #     selected_client = st.selectbox(
+    #         'Choose a client:', client_options,
+    #         index=client_options.index(saved_filter["client"]),
+    #         key="event-pg-client-station"
+    #     )
 
-        if station.date_config.start_time > station.date_config.end_time:
-            st.error("Error: End Date must fall after Start Date.")
+    #     # Update the station client and save in the filter
+    #     station.client = SeismoClients[selected_client]
+    #     saved_filter["client"] = selected_client
 
-        station.network = st.text_input("Enter Network", station.network, key="event-pg-net-txt-station")
-        station.station = st.text_input("Enter Station", station.station, key="event-pg-sta-txt-station")
-        station.location = st.text_input("Enter Location", station.location, key="event-pg-loc-txt-station")
-        station.channel = st.text_input("Enter Channel", station.channel, key="event-pg-cha-txt-station")
+    #     start_date = st.date_input("Start Date", start_time, key="event-pg-start-date-station")
+    #     end_date = st.date_input("End Date", end_time, key="event-pg-end-date-station")
+
+    #     station.date_config.start_time = start_date
+    #     station.date_config.end_time = end_date
+    #     saved_filter["start_date"] = convert_date_to_str(start_date)
+    #     saved_filter["end_date"] = convert_date_to_str(end_date)
+
+    #     if station.date_config.start_time > station.date_config.end_time:
+    #         st.error("Error: End Date must fall after Start Date.")
+
+    #     network = st.text_input("Enter Network", saved_filter["network"], key="event-pg-net-txt-station")
+    #     station_name = st.text_input("Enter Station", saved_filter["station"], key="event-pg-sta-txt-station")
+    #     location = st.text_input("Enter Location", saved_filter["location"], key="event-pg-loc-txt-station")
+    #     channel = st.text_input("Enter Channel", saved_filter["channel"], key="event-pg-cha-txt-station")
+
+    #     # Update station configuration and saved filter
+    #     station.network = network
+    #     station.station = station_name
+    #     station.location = location
+    #     station.channel = channel
+    #     saved_filter["network"] = network
+    #     saved_filter["station"] = station_name
+    #     saved_filter["location"] = location
+    #     saved_filter["channel"] = channel
+
+    # # Save the filter settings in cookies
+    # save_filter_to_cookies(page_type, "station_filter", saved_filter)
 
     return station
-
-
 
 class BaseComponentTexts:
     CLEAR_ALL_MAP_DATA = "Clear All"
@@ -811,10 +916,10 @@ class BaseComponent:
     def render(self):
 
         if self.step_type == Steps.EVENT:
-            self.settings.event = event_filter(self.settings.event)
+            self.settings.event = event_filter(self.settings.event, self.page_type)
 
         if self.step_type == Steps.STATION:
-            self.settings.station = station_filter(self.settings.station)
+            self.settings.station = station_filter(self.settings.station, self.page_type)
 
 
         self.get_prev_step_df()

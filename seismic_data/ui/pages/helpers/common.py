@@ -50,22 +50,26 @@ def init_settings():
     if 'event_page' not in st.session_state:
         st.session_state.event_page = SeismoLoaderSettings()
 
-        if os.path.exists(config_event_file):
-            st.session_state.event_page = SeismoLoaderSettings.from_pickle_file(config_event_file)
-        else:
-            st.session_state.event_page = st.session_state.event_page.from_cfg_file(target_file)          
-            st.session_state.event_page = read_general_settings(st.session_state.event_page)
-        # pprint(st.session_state.event_page.dict())
+        # if os.path.exists(config_event_file):
+        #     st.session_state.event_page = SeismoLoaderSettings.from_pickle_file(config_event_file)
+        # else:
+        #     st.session_state.event_page = st.session_state.event_page.from_cfg_file(target_file)          
+        #     st.session_state.event_page = read_general_settings(st.session_state.event_page)
+        st.session_state.event_page = st.session_state.event_page.from_cfg_file(target_file)          
+        st.session_state.event_page = read_general_settings(st.session_state.event_page)
 
     if 'station_page' not in st.session_state:
         st.session_state.station_page = SeismoLoaderSettings()
 
-        if os.path.exists(config_station_file):
-            st.session_state.station_page = SeismoLoaderSettings.from_pickle_file(config_station_file)
-        else:
-            st.session_state.station_page = st.session_state.event_page.from_cfg_file(target_file)        
-            st.session_state.station_page = read_general_settings(st.session_state.station_page)
+        # if os.path.exists(config_station_file):
+        #     st.session_state.station_page = SeismoLoaderSettings.from_pickle_file(config_station_file)
+        # else:
+        #     st.session_state.station_page = st.session_state.event_page.from_cfg_file(target_file)        
+        #     st.session_state.station_page = read_general_settings(st.session_state.station_page)
 
+        st.session_state.station_page = st.session_state.event_page.from_cfg_file(target_file)        
+        st.session_state.station_page = read_general_settings(st.session_state.station_page)
+        
 def handle_polygon(geo) -> GeometryConstraint:
     coords_arr = np.array(geo.get("geometry").get("coordinates")[0])
     max_vals   = coords_arr.max(axis=0)
