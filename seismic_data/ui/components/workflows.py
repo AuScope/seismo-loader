@@ -51,7 +51,7 @@ class EventBasedWorkflow:
 
         if self.stage == 2:            
             c1, c2, c3 = st.columns([1, 1, 1])
-            with c1:
+            with c3:
                 if st.button("Next"):
                     self.station_components.sync_df_markers_with_df_edit()
                     self.station_components.update_selected_data()
@@ -61,7 +61,7 @@ class EventBasedWorkflow:
                         st.error("Please select a station to proceed to the next step.")
             with c2:
                 st.write("### Step 2: Select Stations")
-            with c3:
+            with c1:
                 if st.button("Previous"):
                     selected_idx = self.event_components.get_selected_idx()
                     self.event_components.refresh_map(selected_idx=selected_idx,clear_draw=True)
@@ -72,7 +72,7 @@ class EventBasedWorkflow:
             c1, c2, c3 = st.columns([1, 1, 1])
             with c2:
                 st.write("### Step 3: Waveforms")
-            with c3:
+            with c1:
                 if st.button("Previous"):
                     selected_idx = self.station_components.get_selected_idx()
                     self.station_components.refresh_map(selected_idx=selected_idx,clear_draw=True)
@@ -134,7 +134,7 @@ class StationBasedWorkflow:
 
         if self.stage == 2:            
             c1, c2, c3 = st.columns([1, 1, 1])
-            with c1:
+            with c3:
                 if st.button("Next"):
                     self.event_components.sync_df_markers_with_df_edit()
                     self.event_components.update_selected_data()
@@ -144,7 +144,7 @@ class StationBasedWorkflow:
                         st.error("Please select an event to proceed to the next step.")
             with c2:
                 st.write("### Step 2: Select Events")
-            with c3:
+            with c1:
                 if st.button("Previous"):
                     selected_idx = self.station_components.get_selected_idx()
                     self.station_components.refresh_map(selected_idx=selected_idx,clear_draw=True)
@@ -155,7 +155,7 @@ class StationBasedWorkflow:
             c1, c2, c3 = st.columns([1, 1, 1])
             with c2:
                 st.write("### Step 3: Waveforms")
-            with c3:
+            with c1:
                 if st.button("Previous"):
                     selected_idx = self.station_components.get_selected_idx()
                     self.station_components.refresh_map(selected_idx=selected_idx,clear_draw=True)
