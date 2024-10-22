@@ -26,7 +26,7 @@ from seismic_data.models.config import SeismoLoaderSettings, SeismoQuery
 from seismic_data.enums.config import DownloadType, GeoConstraintType
 from seismic_data.service.utils import is_in_enum
 from seismic_data.service.db import DatabaseManager
-from seismic_data.service.db import setup_database, safe_db_connection # legacy imports, can soon remove
+#from seismic_data.service.db import setup_database, safe_db_connection # legacy imports, can soon remove
 from seismic_data.service.waveform import get_local_waveform, stream_to_dataframe
 
 ### request status codes (TBD more:
@@ -276,7 +276,7 @@ def get_p_s_times(eq, dist_deg, ttmodel):
         phasearrivals = ttmodel.get_travel_times(
             source_depth_in_km=eq_depth,
             distance_in_degree=dist_deg,
-            phase_list=['P', 'S']  # Explicitly request P and S phases
+            phase_list=['P', 'S']  # Explicitly request P and S phases // needs review.. local events may not have direct S arrivals so 'ttbasic' is more robust
         )
     except Exception as e:
         print(f"Error calculating travel times: {str(e)}")
@@ -286,7 +286,7 @@ def get_p_s_times(eq, dist_deg, ttmodel):
     s_arrival_time = None
 
     for arrival in phasearrivals:
-        if arrival.name == 'P' and p_arrival_time is None:
+        if arrival.name == 'P' and p_arrival_time is None:  # TODO make more robust for non-standard first arrivals. for teleseisms P and S are fine though
             p_arrival_time = eq.origins[0].time + arrival.time
         elif arrival.name == 'S' and s_arrival_time is None:
             s_arrival_time = eq.origins[0].time + arrival.time
@@ -427,7 +427,7 @@ def collect_requests_event__OLD(eq, inv, min_dist_deg=30, max_dist_deg=90,
     return requests_per_eq, arrivals_per_eq
 
 
-def collect_requests_event(eq,inv,min_dist_deg=10,max_dist_deg=150,before_p_sec=20,after_p_sec=160,model=None,settings=None):
+def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=20,after_p_sec=160,model=None,settings=None):
     """ 
     @Review: Rob please review this
     
@@ -648,6 +648,11 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
         cha = tr.stats.channel
         starttime = tr.stats.starttime
         endtime = tr.stats.endtime
+
+        # address instances where trace start leaks into previous date
+        day_boundary = UTCDateTime(starttime.date + datetime.timedelta(days=1))
+        if (day_boundary - starttime) <= tr.stats.delta:
+            starttime = day_boundary
         
         current_time = UTCDateTime(starttime.date)
         while current_time < endtime:
@@ -657,7 +662,7 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
             next_day = current_time + 86400 
             day_end = min(next_day - tr.stats.delta, endtime)
             
-            day_tr = tr.slice(current_time, day_end)
+            day_tr = tr.slice(current_time, day_end, nearest_sample=True)
             day_key = (year, doy, net, sta, loc, cha)
             traces_by_day[day_key] += day_tr
             
