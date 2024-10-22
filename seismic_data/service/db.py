@@ -20,7 +20,6 @@ class DatabaseManager:
     def __init__(self, db_path):
         self.db_path = db_path
         self.setup_database()
-
     @contextlib.contextmanager
     def connection(self, max_retries=3, initial_delay=1):
         """Context manager for safe database connections with retry mechanism."""
@@ -299,7 +298,6 @@ class DatabaseManager:
             # Add import time
             now = int(datetime.datetime.now().timestamp())
             archive_list = [tuple(list(ele) + [now]) for ele in archive_list if ele is not None]
-            
             # Do the insert
             cursor.executemany('''
                 INSERT OR REPLACE INTO archive_data
@@ -407,12 +405,13 @@ def setup_database(db_path):
             location TEXT,
             channel TEXT,
             starttime TEXT,
-            endtime TEXT
+            endtime TEXT,
+            importtime REAL
             )
         ''')
     cursor.execute('''
         CREATE INDEX IF NOT EXISTS idx_archive_data 
-        ON archive_data (network, station, location, channel, starttime, endtime)
+        ON archive_data (network, station, location, channel, starttime, endtime, importtime)
         ''')
     conn.commit()
     return

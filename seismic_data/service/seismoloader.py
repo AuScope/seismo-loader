@@ -16,11 +16,11 @@ from collections import defaultdict
 
 import obspy
 from obspy.clients.fdsn import Client
-from obspy.geodetics.base import locations2degrees
 from obspy import UTCDateTime
 from obspy.taup import TauPyModel
 from obspy.core.inventory import Inventory
 from obspy.core.event import Catalog
+from obspy.geodetics.base import locations2degrees,gps2dist_azimuth
 
 from seismic_data.models.config import SeismoLoaderSettings, SeismoQuery
 from seismic_data.enums.config import DownloadType, GeoConstraintType
@@ -267,36 +267,39 @@ def collect_requests(inv, time0, time1, days_per_request=3):
     return requests
 
 # Requests for shorter, event-based data
-def get_p_s_times(eq,dist_deg,ttmodel):
+def get_p_s_times(eq, dist_deg, ttmodel):
     eq_lat = eq.origins[0].latitude
     eq_lon = eq.origins[0].longitude
-    eq_depth = eq.origins[0].depth / 1000 # depths are in meters for QuakeML
+    eq_depth = eq.origins[0].depth / 1000  # depths are in meters for QuakeML
 
     try:
-        phasearrivals = ttmodel.get_travel_times(source_depth_in_km=eq_depth,
-                                                 distance_in_degree=dist_deg,
-                                                 phase_list=['ttbasic'])
-    except:
-        try:
-            phasearrivals = ttmodel.get_travel_times(source_depth_in_km=0,
-                                                     distance_in_degree=dist_deg,
-                                                     phase_list=['ttbasic'])
-        except:
-            return None,None
+        phasearrivals = ttmodel.get_travel_times(
+            source_depth_in_km=eq_depth,
+            distance_in_degree=dist_deg,
+            phase_list=['P', 'S']  # Explicitly request P and S phases
+        )
+    except Exception as e:
+        print(f"Error calculating travel times: {str(e)}")
+        return None, None
 
-    try:
-        p_duration = phasearrivals[0].time #seconds it takes for p-wave to reach station
-    except:
-        p_duration = None
-    p_arrival_time = eq.origins[0].time + p_duration
-    
-    try:
-        s_duration = phasearrivals[1].time
-    except:
-        s_duration = None
-    s_arrival_time = eq.origins[0].time + s_duration
+    p_arrival_time = None
+    s_arrival_time = None
 
-    return p_arrival_time,s_arrival_time
+    for arrival in phasearrivals:
+        if arrival.name == 'P' and p_arrival_time is None:
+            p_arrival_time = eq.origins[0].time + arrival.time
+        elif arrival.name == 'S' and s_arrival_time is None:
+            s_arrival_time = eq.origins[0].time + arrival.time
+
+        if p_arrival_time and s_arrival_time:
+            break
+
+    if p_arrival_time is None:
+        print(f"No P-wave arrival found for distance {dist_deg} degrees")
+    if s_arrival_time is None:
+        print(f"No S-wave arrival found for distance {dist_deg} degrees")
+
+    return p_arrival_time, s_arrival_time
 
 
 def select_highest_samplerate(inv, time=None, minSR=10):
@@ -424,7 +427,7 @@ def collect_requests_event__OLD(eq, inv, min_dist_deg=30, max_dist_deg=90,
     return requests_per_eq, arrivals_per_eq
 
 
-def collect_requests_event(eq,inv,before_p_sec=20,after_p_sec=160,model=None,settings=None):
+def collect_requests_event(eq,inv,min_dist_deg=10,max_dist_deg=150,before_p_sec=20,after_p_sec=160,model=None,settings=None):
     """ 
     @Review: Rob please review this
     
@@ -433,7 +436,7 @@ def collect_requests_event(eq,inv,before_p_sec=20,after_p_sec=160,model=None,set
     1. No more need for params: `min_dist_deg` and `max_dist_deg`. This function will accept a shortlist of selected 
     events and stations.
     """
-
+    settings, db_manager = setup_paths(settings)
     origin = eq.origins[0] # default to the primary I suppose (possible TODO but don't see why anyone would want anything else)
     ot = origin.time
     sub_inv = inv.select(time = ot) # Loose filter to select only stations that were running during the earthquake start
@@ -445,13 +448,20 @@ def collect_requests_event(eq,inv,before_p_sec=20,after_p_sec=160,model=None,set
     # TODO: further filter by selecting best available channels
 
     requests_per_eq = []
+    arrivals_per_eq = []
+    p_arrivals = {}  # Dictionary to store P arrivals
+
     for net in sub_inv:
         for sta in net:
-
+            try:
+                sta_start = sta.start_date.timestamp
+                sta_end = sta.end_date.timestamp
+            except:
+                sta_start = None
+                sta_end = None
             # Check if we've already calculated this event-station pair
             fetched_arrivals = db_manager.fetch_arrivals(str(eq.preferred_origin_id), \
                                net.code,sta.code) #TODO also check models are consistent? not critical. in fact we might be better off just forcing everything to IASP91
-
             if fetched_arrivals:
                 p_time,s_time = fetched_arrivals # timestamps
                 t_start = p_time - abs(before_p_sec)
@@ -461,27 +471,27 @@ def collect_requests_event(eq,inv,before_p_sec=20,after_p_sec=160,model=None,set
                                              sta.latitude,sta.longitude)
                 dist_m,azi,backazi = gps2dist_azimuth(origin.latitude,origin.longitude,\
                                              sta.latitude,sta.longitude)
-                if dist_deg < min_dist_deg or dist_deg > max_dist_deg:
+                # if dist_deg < min_dist_deg or dist_deg > max_dist_deg:
+                #     continue
+                
+                p_time, s_time = get_p_s_times(eq,dist_deg,model)
+                if p_time is None:
+                    print(f"Warning: Unable to calculate P time for {net.code}.{sta.code}")
                     continue
-                p_time, s_time = get_p_s_times(eq,dist_deg,model) #not timestamp!
-                if not p_time: continue # TODO need error msg also
-
                 t_start = p_time - abs(before_p_sec) #not timestamps!
                 t_end = p_time + abs(after_p_sec)
-
+                p_arrivals[f"{net.code}.{sta.code}"] = p_time.timestamp
                 t_start = t_start.timestamp
                 t_end = t_end.timestamp
-
                 # Add to our arrival database
                 arrivals_per_eq.append((str(eq.preferred_origin_id),
                                     eq.magnitudes[0].mag,
                                     origin.latitude, origin.longitude,origin.depth/1000,
                                     ot.timestamp,
                                     net.code,sta.code,sta.latitude,sta.longitude,sta.elevation/1000,
-                                    sta.start_date.timestamp,sta.end_date.timestamp,
+                                    sta_start,sta_end,
                                     dist_deg,dist_m/1000,azi,p_time.timestamp,
                                     s_time.timestamp,settings.event.model))
-                                          
             # Add to our requests
             for cha in sta: # TODO will have to had filtered channels prior to this, else will grab them all
                 requests_per_eq.append((
@@ -492,7 +502,7 @@ def collect_requests_event(eq,inv,before_p_sec=20,after_p_sec=160,model=None,set
                     datetime.datetime.fromtimestamp(t_start).isoformat() + "Z",
                     datetime.datetime.fromtimestamp(t_end).isoformat() + "Z" ))
 
-    return requests_per_eq, arrivals_per_eq
+    return requests_per_eq, arrivals_per_eq, p_arrivals
 
 
 def combine_requests(requests):
@@ -594,12 +604,12 @@ def prune_requests(requests, db_manager, min_request_window=3):
 def archive_request(request, waveform_clients, sds_path, db_manager):
     """ Send a request to an FDSN center, parse it, save to archive, and update database """
     try:
-        if request[0] in waveform_clients.keys():  # Per-network authentication
-            wc = waveform_clients[request[0]]
-        elif request[0]+'.'+request[1] in waveform_clients.keys():  # Per-station e.g. NN.SSSSS
-            wc = waveform_clients[request[0]+'.'+request[1]]
-        else:
-            wc = waveform_clients['open']
+        # if request[0] in waveform_clients.keys():  # Per-network authentication
+        #     wc = waveform_clients[request[0]]
+        # elif request[0]+'.'+request[1] in waveform_clients.keys():  # Per-station e.g. NN.SSSSS
+        #     wc = waveform_clients[request[0]+'.'+request[1]]
+        # else:
+        #     wc = waveform_clients['open']
 
         kwargs = {
             'network':request[0],
@@ -612,21 +622,19 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
         
         # issue here if any of these array values are too long (probably station list)
         # if so, break them apart
-        if any(len(s) > 24 for s in request):
+        if len(request[1]) > 24:  # Assuming station is the field that might be too long
             st = obspy.Stream()
-            nu_kw = kwargs.copy()
             split_stations = request[1].split(',')
             for s in split_stations:
-                nu_kw['station'] = s
                 try:
-                    st += wc.get_waveforms(**nu_kw)
-                except:
-                    pass
+                    st += waveform_clients.get_waveforms(station=s, **{k: v for k, v in kwargs.items() if k != 'station'})
+                except Exception as e:
+                    print(f"Error fetching data for station {s}: {str(e)}")
         else:
-            st = wc.get_waveforms(**kwargs)
+            st = waveform_clients.get_waveforms(**kwargs)
 
     except Exception as e:
-        print(f"Error fetching data: {request} {str(e)}")
+        print(f"Error fetching data ---------------: {request} {str(e)}")
         # >> TODO add failure & denied to database also? will require DB structuring and logging HTTP error response
         return
 
@@ -681,7 +689,6 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
         if existing_st:
             existing_st.write(full_path, format="MSEED", encoding='STEIM2') #STEIM2 is default?
             to_insert_db.append(stream_to_db_element(existing_st))
-
     # Update database
     try:
         num_inserted = db_manager.bulk_insert_archive_data(to_insert_db)
@@ -719,7 +726,7 @@ def setup_paths(settings: SeismoLoaderSettings):
     settings.sds_path = sds_path
     settings.db_path  = db_path
 
-    return settings
+    return settings, db_manager
 
 
 ## ***use ObsPy for the below functions
@@ -965,7 +972,7 @@ def run_continuous(settings: SeismoLoaderSettings):
     - The function logs detailed information about the processing steps and errors to aid
       in debugging and monitoring of data retrieval processes.
     """
-    settings = setup_paths(settings)
+    settings, db_manager = setup_paths(settings)
 
     starttime = UTCDateTime(settings.station.date_config.start_time)
     endtime = UTCDateTime(settings.station.date_config.end_time)
@@ -1069,7 +1076,7 @@ def run_event(settings: SeismoLoaderSettings):
     - Care should be taken when modifying settings and handling authentication to ensure the integrity and security
       of data access and retrieval.
     """
-    settings = setup_paths(settings)
+    settings, db_manager = setup_paths(settings)
 
     waveform_client = Client(settings.waveform.client.value)
     
@@ -1095,7 +1102,7 @@ def run_event(settings: SeismoLoaderSettings):
             eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))
 
         # Collect requests
-        requests,new_arrivals = collect_requests_event(
+        requests,new_arrivals,p_arrivals = collect_requests_event(
             eq, settings.station.selected_invs,
             before_p_sec=settings.event.before_p_sec if settings.event.before_p_sec else 20,
             after_p_sec=settings.event.after_p_sec if settings.event.after_p_sec else 160,
@@ -1107,7 +1114,6 @@ def run_event(settings: SeismoLoaderSettings):
         if new_arrivals:
             db_manager.bulk_insert_arrival_data(new_arrivals)
             print(" ~ %d new arrivals added to database" % len(new_arrivals))        
-
         # Remove any for data we already have (requires db be updated)
         pruned_requests= prune_requests(requests, db_manager)
 
@@ -1161,14 +1167,19 @@ def run_event(settings: SeismoLoaderSettings):
             except Exception as e:
                 print(str(e))
             
+            # Get P arrival time for this waveform
+            station_id = f"{query.network}.{query.station}"
+            p_arrival = p_arrivals.get(station_id)
+            
             time_series.append({
                 'Network': query.network,
                 'Station': query.station,
                 'Location': query.location,
                 'Channel': query.channel,
-                'Data': data
+                'Data': data,
+                'P_Arrival': p_arrival  # This will be None if not found in p_arrivals
             })
-            
+        
         return time_series
 
 
@@ -1178,7 +1189,7 @@ def run_main(settings: SeismoLoaderSettings = None, from_file=None):
         settings = SeismoLoaderSettings()
         settings = settings.from_cfg_file(cfg_path = from_file)
 
-    settings = setup_paths(settings)
+    settings, db_manager = setup_paths(settings)
 
     download_type = settings.download_type.value
     if not is_in_enum(download_type, DownloadType):
