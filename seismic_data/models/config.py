@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict, Optional, List, Union, Any
+from typing import IO, Dict, Optional, List, Union, Any
 from datetime import date, timedelta, datetime
 from enum import Enum
 import os
@@ -223,14 +223,21 @@ class SeismoLoaderSettings(BaseModel):
 
 
     @classmethod
-    def from_cfg_file(cls, cfg_path: str) -> "SeismoLoaderSettings":
+    def from_cfg_file(cls, cfg_source: Union[str, IO])  -> "SeismoLoaderSettings":
         config = configparser.ConfigParser()
-        cfg_path = os.path.abspath(cfg_path)
 
-        if not os.path.exists(cfg_path):
-            raise ValueError(f"File not found in following path: {cfg_path}")
 
-        config.read(cfg_path)
+        # If cfg_source is a string, assume it's a file path
+        if isinstance(cfg_source, str):
+            cfg_path = os.path.abspath(cfg_source)
+
+            if not os.path.exists(cfg_path):
+                raise ValueError(f"File not found in the following path: {cfg_path}")
+
+            config.read(cfg_path)
+        else:
+            config.read_file(cfg_source)
+
 
         # Parse values from the [SDS] section
         sds_path = config.get('SDS', 'sds_path')
@@ -518,7 +525,6 @@ class SeismoLoaderSettings(BaseModel):
         return config
 
     def add_to_config(self):
-        print (self.waveform.channel_pref)
         config_dict = {
             'sds_path': self.sds_path,
             'db_path': self.db_path,

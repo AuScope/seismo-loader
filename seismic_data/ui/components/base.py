@@ -47,8 +47,54 @@ def save_Filter(settings:  SeismoLoaderSettings):
     save_path = os.path.join(target_file, "config" + ".cfg")
     with open(save_path, "w") as f:
         f.write(config_str)
- 
+    
+    return save_path
 
+def import_export():
+    def reset_import_setting_processed():
+        st.session_state['import_setting_processed'] = False  
+
+    st.sidebar.markdown("### Import/Export Settings")
+    
+    with st.sidebar.expander("File Operations", expanded=False):
+        config_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../service/config.cfg')
+        config_file_path = os.path.abspath(config_file_path)
+        
+        st.markdown("#### ⬇️ Export Settings")
+
+        if os.path.exists(config_file_path):
+            with open(config_file_path, "r") as file:
+                file_data = file.read()
+
+            st.download_button(
+                label="Download file",
+                data=file_data,  
+                file_name="config.cfg",  
+                mime="application/octet-stream",  
+                help="Download the current settings.",
+                use_container_width=True,
+            )
+        else:
+            st.caption("No config file available for download.")
+
+        st.markdown("#### 📂 Import Settings")
+        uploaded_file = st.file_uploader(
+            "Import Settings",type=["cfg"], on_change=reset_import_setting_processed,
+            help="Upload a config file (.cfg) to update settings." , label_visibility="collapsed"
+        )
+
+        if uploaded_file and not st.session_state.get('import_setting_processed', False):
+            file_like_object = io.BytesIO(uploaded_file.getvalue())
+            text_file_object = io.TextIOWrapper(file_like_object, encoding='utf-8')
+            settings = SeismoLoaderSettings.from_cfg_file(text_file_object)
+            st.session_state['import_setting_processed'] = True
+            
+            st.success("Settings imported successfully!")
+            return settings
+        
+    st.sidebar.markdown("---")
+
+    return None
 
 class BaseComponentTexts:
     CLEAR_ALL_MAP_DATA = "Clear All"
@@ -826,6 +872,12 @@ class BaseComponent:
 
 
     def render(self):
+
+        importedSetting= import_export()
+        if(importedSetting is not None):
+            self.settings=importedSetting
+            self.clear_all_data()
+            self.refresh_map(reset_areas=True, clear_draw=True)
 
         if self.step_type == Steps.EVENT:
             c2_export = self.event_filter()
