@@ -49,67 +49,7 @@ def save_Filter(settings:  SeismoLoaderSettings):
         f.write(config_str)
  
 
-def event_filter(settings:  SeismoLoaderSettings):
-    event: EventConfig = settings.event
-    start_time = convert_to_date(event.date_config.start_time)
-    end_time = convert_to_date(event.date_config.end_time)
 
-    st.sidebar.header("Event Filters")
-    with st.sidebar:
-        selected_client = st.selectbox('Choose a client:', client_options, 
-                                        index=client_options.index(event.client.name), 
-                                        key="event-pg-client-event")
-        
-        event.client = SeismoClients[selected_client]
-
-        event.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-event")
-        event.date_config.end_time = st.date_input("End Date", end_time, key="event-pg-end-date-event")
-
-        if event.date_config.start_time > event.date_config.end_time:
-            st.error("Error: End Date must fall after Start Date.")
-
-        event.min_magnitude, event.max_magnitude = st.slider(
-            "Min Magnitude", 
-            min_value=-2.0, max_value=10.0, 
-            value=(event.min_magnitude, event.max_magnitude), 
-            step=0.1, key="event-pg-mag"
-        )
-
-        event.min_depth, event.max_depth = st.slider(
-            "Min Depth (km)", 
-            min_value=-5.0, max_value=800.0, 
-            value=(event.min_depth, event.max_depth), 
-            step=1.0, key=f"event-pg-depth"
-        )
-
-    save_Filter(settings)
-    return event
-
-def station_filter(settings:  SeismoLoaderSettings):
-    station: StationConfig = settings.station
-    start_time = convert_to_date(station.date_config.start_time)
-    end_time = convert_to_date(station.date_config.end_time)
-
-    st.sidebar.header("Station Filters")
-    with st.sidebar:
-        selected_client = st.selectbox('Choose a client:', client_options, 
-                                       index=client_options.index(station.client.name), 
-                                       key="event-pg-client-station")
-        station.client = SeismoClients[selected_client]
-
-        station.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-station")
-        station.date_config.end_time = st.date_input("End Date", end_time, key="event-pg-end-date-station")
-
-        if station.date_config.start_time > station.date_config.end_time:
-            st.error("Error: End Date must fall after Start Date.")
-
-        station.network = st.text_input("Enter Network", station.network, key="event-pg-net-txt-station")
-        station.station = st.text_input("Enter Station", station.station, key="event-pg-sta-txt-station")
-        station.location = st.text_input("Enter Location", station.location, key="event-pg-loc-txt-station")
-        station.channel = st.text_input("Enter Channel", station.channel, key="event-pg-cha-txt-station")
-
-    save_Filter(settings)
-    return station
 class BaseComponentTexts:
     CLEAR_ALL_MAP_DATA = "Clear All"
     DOWNLOAD_CONFIG = "Download Config"
@@ -229,6 +169,69 @@ class BaseComponent:
         if self.step_type == Steps.STATION:
             self.settings.station.geo_constraint = geo_constraint
 
+
+    # ====================
+    # FILTERS
+    # ====================
+    def event_filter(self):
+        start_time = convert_to_date(self.settings.event.date_config.start_time)
+        end_time = convert_to_date(self.settings.event.date_config.end_time)
+
+        # st.sidebar.header("Event Filters")
+        with st.sidebar:
+            st.write("### Filters")
+            selected_client = st.selectbox('Choose a client:', client_options, 
+                                            index=client_options.index(self.settings.event.client.name), 
+                                            key="event-pg-client-event")
+            
+            self.settings.event.client = SeismoClients[selected_client]
+
+            self.settings.event.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-event")
+            self.settings.event.date_config.end_time = st.date_input("End Date", end_time, key="event-pg-end-date-event")
+
+            if self.settings.event.date_config.start_time > self.settings.event.date_config.end_time:
+                st.error("Error: End Date must fall after Start Date.")
+
+            self.settings.event.min_magnitude, self.settings.event.max_magnitude = st.slider(
+                "Min Magnitude", 
+                min_value=-2.0, max_value=10.0, 
+                value=(self.settings.event.min_magnitude, self.settings.event.max_magnitude), 
+                step=0.1, key="event-pg-mag"
+            )
+
+            self.settings.event.min_depth, self.settings.event.max_depth = st.slider(
+                "Min Depth (km)", 
+                min_value=-5.0, max_value=800.0, 
+                value=(self.settings.event.min_depth, self.settings.event.max_depth), 
+                step=1.0, key=f"event-pg-depth"
+            )
+
+        save_Filter(self.settings)
+
+
+    def station_filter(self):
+        start_time = convert_to_date(self.settings.station.date_config.start_time)
+        end_time = convert_to_date(self.settings.station.date_config.end_time)
+
+        st.sidebar.header("Station Filters")
+        with st.sidebar:
+            selected_client = st.selectbox('Choose a client:', client_options, 
+                                        index=client_options.index(self.settings.station.client.name), 
+                                        key="event-pg-client-station")
+            self.settings.station.client = SeismoClients[selected_client]
+
+            self.settings.station.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-station")
+            self.settings.station.date_config.end_time = st.date_input("End Date", end_time, key="event-pg-end-date-station")
+
+            if self.settings.station.date_config.start_time > self.settings.station.date_config.end_time:
+                st.error("Error: End Date must fall after Start Date.")
+
+            self.settings.station.network = st.text_input("Enter Network",   self.settings.station.network, key="event-pg-net-txt-station")
+            self.settings.station.station = st.text_input("Enter Station",   self.settings.station.station, key="event-pg-sta-txt-station")
+            self.settings.station.location = st.text_input("Enter Location", self.settings.station.location, key="event-pg-loc-txt-station")
+            self.settings.station.channel = st.text_input("Enter Channel",   self.settings.station.channel, key="event-pg-cha-txt-station")
+
+        save_Filter(self.settings)
 
     # ====================
     # MAP
@@ -598,74 +601,7 @@ class BaseComponent:
     # RENDER
     # ===================
     def render_map_buttons(self):
-        # st.markdown(f"#### {self.TXT.GET_DATA_TITLE}")
-        if self.prev_step_type:
-            tab1, tab2, tab3 = st.tabs(["Export/Import", "Areas", f"Search Around {self.prev_step_type.title()}s"])
-        else:
-            tab1, tab2 = st.tabs(["Export/Import", "Areas"])
-
-        with tab1:
-            st.write(f"### Export/Import {self.TXT.STEP.title()}s")
-
-            c11, c22 = st.columns([1,1])
-            with c11:
-                # @NOTE: Download Selected had to be with the table.
-                # if (len(self.catalogs.events) > 0 or len(self.inventories.get_contents().get('stations')) > 0):
-                st.download_button(
-                    f"Download All", 
-                    key=self.get_key_element(f"Download All {self.TXT.STEP.title()}s"),
-                    data=self.export_xml_bytes(export_selected=False),
-                    file_name = f"{self.TXT.STEP}s.xml",
-                    mime="application/xml",
-                    disabled=(len(self.catalogs.events) == 0 and len(self.inventories.get_contents().get('stations')) == 0)
-                )
-
-            def reset_uploaded_file_processed():
-                st.session_state['uploaded_file_processed'] = False
-
-            uploaded_file = st.file_uploader(f"Import {self.TXT.STEP.title()}s from a File", type=["xml"], on_change=lambda:  reset_uploaded_file_processed())
-            if uploaded_file and not st.session_state['uploaded_file_processed']:
-                self.clear_all_data()
-                self.refresh_map(reset_areas=True, clear_draw=True)
-                self.handle_get_data(is_import=True, uploaded_file=uploaded_file)
-                st.session_state['uploaded_file_processed'] = True
-
-<<<<<<< HEAD
-=======
-
-            clear_prev_data_clicked = st.button(self.TXT.CLEAR_ALL_MAP_DATA, key=self.get_key_element(self.TXT.CLEAR_ALL_MAP_DATA))
-
-            if get_data_clicked:
-                self.refresh_map(reset_areas=False)
-
-            if clear_prev_data_clicked:
-                self.clear_all_data()
-                self.refresh_map(reset_areas=True, clear_draw=True, rerun=True)
-
->>>>>>> 67ca3f99021c52b693f9b0f63169c970d7103f75
-        # with st.expander(f"Update Selection Area", expanded = True):
-        with tab2:
-            self.update_rectangle_areas()
-            self.update_circle_areas()
-            
-            if len(self.get_geo_constraint()) == 0 and len(self.all_current_drawings) == 0:
-                st.info("There is no defined areas on map. Please first use the map tools to draw an area and get the data.")
-
-        if self.prev_step_type:
-            with tab3:
-                self.display_prev_step_selection_table()
-
-        return c22
-
-
-    def render_map(self):
-
-        c1, c2, c3 = st.columns([1,1,1])
-
-        with c3:
-            if st.button("Reload Map"):
-                self.refresh_map(get_data=False, rerun=True)
-
+        c1, c2 = st.columns([1,1])
         with c1:
             if st.button(self.TXT.BTN_GET_DATA, key=self.get_key_element(self.TXT.BTN_GET_DATA)):
                 self.refresh_map(reset_areas=False, clear_draw=False, rerun=False)
@@ -675,6 +611,77 @@ class BaseComponent:
                 self.clear_all_data()
                 self.refresh_map(reset_areas=True, clear_draw=True, rerun=True, get_data=False)
 
+        if st.button("Reload Map", help="Use this button if the map is collapsed or some data are not displayed properly."):
+            self.refresh_map(get_data=False, rerun=True)
+
+    def render_export_import(self):
+        st.write(f"#### Export/Import {self.TXT.STEP.title()}s")
+
+        c11, c22 = st.columns([1,1])
+        with c11:
+            # @NOTE: Download Selected had to be with the table.
+            # if (len(self.catalogs.events) > 0 or len(self.inventories.get_contents().get('stations')) > 0):
+            st.download_button(
+                f"Download All", 
+                key=self.get_key_element(f"Download All {self.TXT.STEP.title()}s"),
+                data=self.export_xml_bytes(export_selected=False),
+                file_name = f"{self.TXT.STEP}s.xml",
+                mime="application/xml",
+                disabled=(len(self.catalogs.events) == 0 and len(self.inventories.get_contents().get('stations')) == 0)
+            )
+
+        def reset_uploaded_file_processed():
+            st.session_state['uploaded_file_processed'] = False
+
+        uploaded_file = st.file_uploader(f"Import {self.TXT.STEP.title()}s from a File", type=["xml"], on_change=lambda:  reset_uploaded_file_processed())
+        if uploaded_file and not st.session_state['uploaded_file_processed']:
+            self.clear_all_data()
+            self.refresh_map(reset_areas=True, clear_draw=True)
+            self.handle_get_data(is_import=True, uploaded_file=uploaded_file)
+            st.session_state['uploaded_file_processed'] = True
+
+        return c22
+        
+    def render_actions_side_menu(self):        
+        st.write("### Actions")
+        # with st.expander(f"Actions", expanded = True):
+        tab1, tab2 = st.tabs(["Map", "Export/Import"])
+        with tab1:
+            self.render_map_buttons()
+        with tab2:
+            c2_export = self.render_export_import()
+
+        return c2_export
+
+    def render_map_right_menu(self):
+        # st.markdown(f"#### {self.TXT.GET_DATA_TITLE}")
+        if self.prev_step_type:
+            tab1, tab2, tab3, tab4 = st.tabs(["Get Data", "Export/Import", "Areas", f"Search Around {self.prev_step_type.title()}s"])
+        else:
+            tab1, tab2, tab3 = st.tabs(["Get Data", "Export/Import", "Areas"])
+
+        with tab1:
+            self.render_map_buttons()
+
+        with tab2:
+            c2_export = self.render_export_import()
+
+        # with st.expander(f"Update Selection Area", expanded = True):
+        with tab3:
+            self.update_rectangle_areas()
+            self.update_circle_areas()
+            
+            if len(self.get_geo_constraint()) == 0 and len(self.all_current_drawings) == 0:
+                st.info("There is no defined areas on map. Please first use the map tools to draw an area, then get the data.")
+
+        if self.prev_step_type:
+            with tab4:
+                self.display_prev_step_selection_table()
+
+
+        return c2_export
+
+    def render_map(self):
         
         if self.map_disp is not None:
             clear_map_layers(self.map_disp)
@@ -821,23 +828,18 @@ class BaseComponent:
     def render(self):
 
         if self.step_type == Steps.EVENT:
-            self.settings.event = event_filter(self.settings)
+            c2_export = self.event_filter()
 
         if self.step_type == Steps.STATION:
-            self.settings.station = station_filter(self.settings)
+            c2_export = self.station_filter()
 
 
         self.get_prev_step_df()
 
         c1_top, c2_top = st.columns([2,1])
 
-<<<<<<< HEAD
-            with c2_top:
-                c22_map = self.render_map_buttons()
-=======
         with c2_top:
-            self.render_map_buttons()
->>>>>>> 67ca3f99021c52b693f9b0f63169c970d7103f75
+            c2_export = self.render_map_right_menu()
 
         with c1_top:
             self.render_map()
@@ -845,13 +847,8 @@ class BaseComponent:
         with st.expander(self.TXT.SELECT_MARKER_TITLE, expanded = not self.df_markers.empty):
             self.render_marker_select()
 
-<<<<<<< HEAD
-            with st.expander(self.TXT.SELECT_DATA_TABLE_TITLE, expanded = not self.df_markers.empty):
-                self.render_data_table(c22_map)
-=======
         with st.expander(self.TXT.SELECT_DATA_TABLE_TITLE, expanded = not self.df_markers.empty):
-            self.render_data_table()
->>>>>>> 67ca3f99021c52b693f9b0f63169c970d7103f75
+            self.render_data_table(c2_export)
 
         
         # if not self.df_markers.empty:
