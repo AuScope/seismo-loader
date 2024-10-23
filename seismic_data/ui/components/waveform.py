@@ -12,6 +12,10 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
+from seismic_data.enums.stations import Channels , Locations
+
+channel_options = [f.name for f in Channels]
+location_options = [f.name for f in Locations]
 
 
 class WaveformFilterMenu:
@@ -76,22 +80,29 @@ class WaveformFilterMenu:
             value=self.settings.event.after_p_sec, 
             step=1
         )
-
+        
         # Channel Preferences
+        default_channel_pref = [ch.name for ch in self.settings.waveform.channel_pref]
         st.sidebar.subheader("Channel Preferences")
-        self.settings.waveform.channel_pref = st.sidebar.multiselect(
+        selected_channels = st.sidebar.multiselect(
             "Channel Preference",
-            options=["CH", "HH", "BH", "EH", "HN", "EN", "SH", "LH"],
-            default=self.settings.waveform.channel_pref,
+            options=channel_options,
+            default=default_channel_pref,
         )
+        # Convert the selected channels back to enum members
+        self.settings.waveform.channel_pref = [Channels[ch] for ch in selected_channels]
 
         # Location Preferences
+        default_location_pref = [loc.name for loc in self.settings.waveform.location_pref]
         st.sidebar.subheader("Location Preferences")
-        self.settings.waveform.location_pref = st.sidebar.multiselect(
+        selected_locations = st.sidebar.multiselect(
             "Location Preference",
-            options=["", "00", "10", "20", "30"],
-            default=self.settings.waveform.location_pref,
+            options=location_options,
+            default=default_location_pref,
         )
+        # Convert the selected locations back to enum members
+        self.settings.waveform.location_pref = [Locations[loc] for loc in selected_locations]
+
 class WaveformDisplay:
     settings: SeismoLoaderSettings
     waveforms: List[Dict] = []
