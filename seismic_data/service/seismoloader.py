@@ -900,6 +900,18 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
         if key not in event_client.services['event'].keys():
             del kwargs[key]
 
+    if len(settings.event.geo_constraint) == 0:
+        try:
+            cat = event_client.get_events(
+                **kwargs
+            )
+            print("Global Search of Events. Found %d events from %s" % (len(cat),settings.event.client.value))
+            catalog.extend(cat)
+        except:
+            print("No events found!") #TODO elaborate
+        
+        return catalog
+
     for geo in settings.event.geo_constraint:
         if geo.geo_type == GeoConstraintType.CIRCLE:
             try:

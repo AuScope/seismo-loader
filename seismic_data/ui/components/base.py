@@ -278,12 +278,13 @@ class BaseComponent:
         if self.step_type == Steps.STATION:
             self.settings.station.selected_invs = None
             is_init = False
-            for idx, row in self.df_markers[self.df_markers['is_selected']].iterrows():
-                if not is_init:
-                    self.settings.station.selected_invs = self.inventories.select(station=row["station"])
-                    is_init = True
-                else:
-                    self.settings.station.selected_invs += self.inventories.select(station=row["station"])
+            if not self.df_markers.empty and 'is_selected' in list(self.df_markers.columns):
+                for idx, row in self.df_markers[self.df_markers['is_selected']].iterrows():
+                    if not is_init:
+                        self.settings.station.selected_invs = self.inventories.select(station=row["station"])
+                        is_init = True
+                    else:
+                        self.settings.station.selected_invs += self.inventories.select(station=row["station"])
             return
 
 
@@ -297,27 +298,35 @@ class BaseComponent:
         else:
             self.warning = "No data found."
 
-    def refresh_map(self, reset_areas = False, selected_idx = None, clear_draw = False, rerun = False):
+    def refresh_map(self, reset_areas = False, selected_idx = None, clear_draw = False, rerun = False, get_data = True):
         geo_constraint = self.get_geo_constraint()
         
-        if clear_draw:
-            clear_map_draw(self.map_disp)
-            self.all_feature_drawings = geo_constraint
-            self.map_fg_area= add_area_overlays(areas=geo_constraint)
+        # if clear_draw:
+        #     clear_map_draw(self.map_disp)
+        #     self.all_feature_drawings = geo_constraint
+        #     self.map_fg_area= add_area_overlays(areas=geo_constraint)
+        # else:
+        if reset_areas:
+            geo_constraint = []
         else:
-            if reset_areas:
-                geo_constraint = []
-            else:
-                geo_constraint = self.all_current_drawings + self.all_feature_drawings
+            geo_constraint = self.all_current_drawings + self.all_feature_drawings
 
         self.set_geo_constraint(geo_constraint)
 
         if selected_idx != None:
             self.handle_update_data_points(selected_idx)
-        elif len(geo_constraint) > 0:
-            self.handle_get_data()
-
-        # self.display_prev_step_selection_marker()
+        else:
+            # @NOTE: Below is added to resolve triangle marker displays.
+            #        But it results in map blinking and hence a chance to
+            #        break the map.
+            clear_map_draw(self.map_disp)
+            self.all_feature_drawings = geo_constraint
+            self.map_fg_area= add_area_overlays(areas=geo_constraint)
+            if get_data:
+                self.handle_get_data()
+        
+        # elif len(geo_constraint) > 0:
+        #     self.handle_get_data()
 
         if rerun:
             st.rerun()
@@ -535,18 +544,24 @@ class BaseComponent:
     # FILES
     # ===================
     def export_xml_bytes(self, export_selected: bool = True):
-        if export_selected:
-            # self.sync_df_markers_with_df_edit()
-            self.update_selected_data()
         with BytesIO() as f:
-            if self.step_type == Steps.STATION:                
-                inv = self.settings.station.selected_invs if export_selected else self.inventories
-                inv.write(f, format='STATIONXML')
+            if not self.df_markers.empty and len(self.df_markers) > 0:
+                if export_selected:
+                # self.sync_df_markers_with_df_edit()
+                    self.update_selected_data()
+            
+                if self.step_type == Steps.STATION:                
+                    inv = self.settings.station.selected_invs if export_selected else self.inventories
+                    if inv:
+                        inv.write(f, format='STATIONXML')
 
-            if self.step_type == Steps.EVENT:
-                cat = self.settings.event.selected_catalogs if export_selected else self.catalogs
-                cat.write(f, format="QUAKEML")
-                
+                if self.step_type == Steps.EVENT:
+                    cat = self.settings.event.selected_catalogs if export_selected else self.catalogs
+                    if cat:
+                        cat.write(f, format="QUAKEML")
+
+            # if f.getbuffer().nbytes == 0:
+            #     f.write(b"No Data")     
 
             return f.getvalue()
         
@@ -570,13 +585,25 @@ class BaseComponent:
     def render_map_buttons(self):
         # st.markdown(f"#### {self.TXT.GET_DATA_TITLE}")
         if self.prev_step_type:
-            tab1, tab2, tab3 = st.tabs(["Get Data", "Areas", f"Search Around {self.prev_step_type.title()}s"])
+            tab1, tab2, tab3 = st.tabs(["Export/Import", "Areas", f"Search Around {self.prev_step_type.title()}s"])
         else:
-            tab1, tab2 = st.tabs(["Get Data", "Areas"])
+            tab1, tab2 = st.tabs(["Export/Import", "Areas"])
 
         with tab1:
-        # with st.expander(f"Manage Data", expanded = True):
-            get_data_clicked = st.button(self.TXT.BTN_GET_DATA, key=self.get_key_element(self.TXT.BTN_GET_DATA))               
+            st.write(f"### Export/Import {self.TXT.STEP.title()}s")
+
+            c11, c22 = st.columns([1,1])
+            with c11:
+                # @NOTE: Download Selected had to be with the table.
+                # if (len(self.catalogs.events) > 0 or len(self.inventories.get_contents().get('stations')) > 0):
+                st.download_button(
+                    f"Download All", 
+                    key=self.get_key_element(f"Download All {self.TXT.STEP.title()}s"),
+                    data=self.export_xml_bytes(export_selected=False),
+                    file_name = f"{self.TXT.STEP}s.xml",
+                    mime="application/xml",
+                    disabled=(len(self.catalogs.events) == 0 and len(self.inventories.get_contents().get('stations')) == 0)
+                )
 
             def reset_uploaded_file_processed():
                 st.session_state['uploaded_file_processed'] = False
@@ -587,15 +614,6 @@ class BaseComponent:
                 self.refresh_map(reset_areas=True, clear_draw=True)
                 self.handle_get_data(is_import=True, uploaded_file=uploaded_file)
                 st.session_state['uploaded_file_processed'] = True
-
-            clear_prev_data_clicked = st.button(self.TXT.CLEAR_ALL_MAP_DATA, key=self.get_key_element(self.TXT.CLEAR_ALL_MAP_DATA))
-
-            if get_data_clicked:
-                self.refresh_map(reset_areas=False)
-
-            if clear_prev_data_clicked:
-                self.clear_all_data()
-                self.refresh_map(reset_areas=True, clear_draw=True, rerun=True)
 
         # with st.expander(f"Update Selection Area", expanded = True):
         with tab2:
@@ -609,8 +627,26 @@ class BaseComponent:
             with tab3:
                 self.display_prev_step_selection_table()
 
+        return c22
+
 
     def render_map(self):
+
+        c1, c2, c3 = st.columns([1,1,1])
+
+        with c3:
+            if st.button("Reload Map"):
+                self.refresh_map(get_data=False, rerun=True)
+
+        with c1:
+            if st.button(self.TXT.BTN_GET_DATA, key=self.get_key_element(self.TXT.BTN_GET_DATA)):
+                self.refresh_map(reset_areas=False, clear_draw=False, rerun=False)
+        
+        with c2:
+            if st.button(self.TXT.CLEAR_ALL_MAP_DATA, key=self.get_key_element(self.TXT.CLEAR_ALL_MAP_DATA)):
+                self.clear_all_data()
+                self.refresh_map(reset_areas=True, clear_draw=True, rerun=True, get_data=False)
+
         
         if self.map_disp is not None:
             clear_map_layers(self.map_disp)
@@ -647,12 +683,12 @@ class BaseComponent:
             # if clicked_lat_lng in self.marker_info:
             #     self.clicked_marker_info = self.marker_info[clicked_lat_lng]
 
-
         if self.warning:
             st.warning(self.warning)
         
         if self.error:
             st.error(self.error)
+
 
     def render_marker_select(self):
         def handle_marker_select():
@@ -696,7 +732,7 @@ class BaseComponent:
             # create_card(None, False, map_tools_card)
 
 
-    def render_data_table(self):
+    def render_data_table(self, c5_map):
         if self.df_markers.empty:
             st.warning("No data available.")
         else:
@@ -728,30 +764,29 @@ class BaseComponent:
                     if st.button("Unselect All", key=self.get_key_element("Unselect All")):
                         self.df_markers['is_selected'] = False
 
-                with c5:
-                    if (len(self.catalogs.events) > 0 or len(self.inventories.get_contents().get('stations')) > 0):
-                        st.download_button(
-                            f"Download All {self.TXT.STEP.title()}s", 
-                            key=self.get_key_element(f"Download All {self.TXT.STEP.title()}s"),
-                            data=self.export_xml_bytes(export_selected=False),
-                            file_name = f"{self.TXT.STEP}s.xml",
-                            mime="application/xml"
-                        )
-
-                with c6:
-                    if (not self.df_markers.empty and len(self.df_markers[self.df_markers['is_selected']]) > 0):
-                        st.download_button(
-                            f"Download Selected {self.TXT.STEP.title()}s", 
-                            key=self.get_key_element(f"Download Selected {self.TXT.STEP.title()}s"),
-                            data=self.export_xml_bytes(export_selected=True),
-                            file_name = f"{self.TXT.STEP}s_selected.xml",
-                            mime="application/xml"
-                        )
-
 
                 self.df_data_edit = st.data_editor(self.df_markers, hide_index = True, column_config=config, column_order = ordered_col, key=self.get_key_element("Data Table"))           
             
             data_table_view()
+        with c5_map:
+            # if (not self.df_markers.empty and len(self.df_markers[self.df_markers['is_selected']]) > 0):
+            is_disabled = self.df_markers.empty
+            if not is_disabled:                
+                is_disabled = 'is_selected' not in self.df_markers.columns
+                if 'is_selected' in list(self.df_markers.columns):
+                    is_disabled = len(self.df_markers[self.df_markers['is_selected']]) == 0
+                else:
+                    is_disabled = True
+                    
+
+            st.download_button(
+                f"Download Selected", 
+                key=self.get_key_element(f"Download Selected {self.TXT.STEP.title()}s"),
+                data=self.export_xml_bytes(export_selected=True),
+                file_name = f"{self.TXT.STEP}s_selected.xml",
+                mime="application/xml",
+                disabled=is_disabled
+            )
         # create_card(self.TXT.SELECT_DATA_TABLE_TITLE, False, data_table_view)
 
 
@@ -824,7 +859,7 @@ class BaseComponent:
             c1_top, c2_top = st.columns([2,1])
 
             with c2_top:
-                self.render_map_buttons()
+                c22_map = self.render_map_buttons()
 
             with c1_top:
                 self.render_map()
@@ -833,7 +868,7 @@ class BaseComponent:
                 self.render_marker_select()
 
             with st.expander(self.TXT.SELECT_DATA_TABLE_TITLE, expanded = not self.df_markers.empty):
-                self.render_data_table()
+                self.render_data_table(c22_map)
 
         with tab2:
             self.render_config()

@@ -156,7 +156,7 @@ def add_data_points(df, cols_to_disp, step: Steps, selected_idx=[], col_color=No
         # Determine marker size
         size = 5
         if col_size is None:
-            size = 5
+            size = 6
         else:
             if col_size == "magnitude":
                 size = get_marker_size(row[col_size])
@@ -224,29 +224,29 @@ def add_marker_to_cluster(fg, latitude, longitude, color, edge_color, size, fill
     """
     Add a marker to a cluster with specific attributes.
     """
-    # if step == Steps.EVENT:
-    fg.add_child (folium.CircleMarker(
+    if step == Steps.EVENT:
+        fg.add_child (folium.CircleMarker(
+                location=[latitude, longitude],
+                radius=size,
+                popup=popup,
+                color=edge_color,
+                fill=True,
+                fill_color=color,
+                fill_opacity=fill_opacity,
+        ))
+
+    if step == Steps.STATION:
+        fg.add_child(folium.RegularPolygonMarker(
             location=[latitude, longitude],
+            number_of_sides=3,
+            rotation=-90,
             radius=size,
             popup=popup,
             color=edge_color,
             fill=True,
             fill_color=color,
             fill_opacity=fill_opacity,
-    ))
-
-    # if step == Steps.STATION:
-    #     fg.add_child(folium.RegularPolygonMarker(
-    #         location=[latitude, longitude],
-    #         number_of_sides=3,
-    #         rotation=-90,
-    #         radius=size,
-    #         popup=popup,
-    #         color=edge_color,
-    #         fill=True,
-    #         fill_color=color,
-    #         fill_opacity=fill_opacity,
-    #     ))
+        ))
 
     # if step == Steps.STATION:
     #     folium.RegularPolygonMarker(

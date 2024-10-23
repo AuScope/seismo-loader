@@ -19,6 +19,8 @@ https://github.com/Mohamed-512/Extra-Streamlit-Components
 ## Map Component - folium
 https://folium.streamlit.app/
 
+https://github.com/andfanilo/streamlit-light-leaflet/tree/master
+
 
 ## Desktop App with Streamlit
 https://github.com/whitphx/stlite
