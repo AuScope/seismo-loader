@@ -597,6 +597,9 @@ def prune_requests(requests, db_manager, min_request_window=3):
                         network, station, location, channel, 
                         current_time.isoformat(), end_time.isoformat()
                     ))
+
+    # Sort by start time, network, station
+    pruned_requests.sort(key=lambda x: (x[4], x[0], x[1]))
     
     return pruned_requests
 
