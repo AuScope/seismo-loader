@@ -33,8 +33,24 @@ import pickle
 
 client_options = [f.name for f in SeismoClients]
 
+def save_Filter(settings:  SeismoLoaderSettings):
+    current_directory = os.path.dirname(os.path.abspath(__file__))
+    target_file = os.path.join(current_directory, '../../service')
+    target_file = os.path.abspath(target_file)
+    
+    template_loader = jinja2.FileSystemLoader(searchpath=target_file)  
+    template_env = jinja2.Environment(loader=template_loader)
+    template = template_env.get_template("config_template.cfg")
+    config_dict = settings.add_to_config()
+    config_str = template.render(**config_dict)
+    
+    save_path = os.path.join(target_file, "config" + ".cfg")
+    with open(save_path, "w") as f:
+        f.write(config_str)
+ 
 
-def event_filter(event: EventConfig):
+def event_filter(settings:  SeismoLoaderSettings):
+    event: EventConfig = settings.event
     start_time = convert_to_date(event.date_config.start_time)
     end_time = convert_to_date(event.date_config.end_time)
 
@@ -66,10 +82,11 @@ def event_filter(event: EventConfig):
             step=1.0, key=f"event-pg-depth"
         )
 
+    save_Filter(settings)
     return event
 
-def station_filter(station: StationConfig):
-
+def station_filter(settings:  SeismoLoaderSettings):
+    station: StationConfig = settings.station
     start_time = convert_to_date(station.date_config.start_time)
     end_time = convert_to_date(station.date_config.end_time)
 
@@ -91,10 +108,8 @@ def station_filter(station: StationConfig):
         station.location = st.text_input("Enter Location", station.location, key="event-pg-loc-txt-station")
         station.channel = st.text_input("Enter Channel", station.channel, key="event-pg-cha-txt-station")
 
+    save_Filter(settings)
     return station
-
-
-
 class BaseComponentTexts:
     CLEAR_ALL_MAP_DATA = "Clear All"
     DOWNLOAD_CONFIG = "Download Config"
@@ -615,6 +630,19 @@ class BaseComponent:
                 self.handle_get_data(is_import=True, uploaded_file=uploaded_file)
                 st.session_state['uploaded_file_processed'] = True
 
+<<<<<<< HEAD
+=======
+
+            clear_prev_data_clicked = st.button(self.TXT.CLEAR_ALL_MAP_DATA, key=self.get_key_element(self.TXT.CLEAR_ALL_MAP_DATA))
+
+            if get_data_clicked:
+                self.refresh_map(reset_areas=False)
+
+            if clear_prev_data_clicked:
+                self.clear_all_data()
+                self.refresh_map(reset_areas=True, clear_draw=True, rerun=True)
+
+>>>>>>> 67ca3f99021c52b693f9b0f63169c970d7103f75
         # with st.expander(f"Update Selection Area", expanded = True):
         with tab2:
             self.update_rectangle_areas()
@@ -790,90 +818,41 @@ class BaseComponent:
         # create_card(self.TXT.SELECT_DATA_TABLE_TITLE, False, data_table_view)
 
 
-    def render_config(self):                
-
-        current_directory = os.path.dirname(os.path.abspath(__file__))
-        target_file = os.path.join(current_directory, '../../service')
-        target_file = os.path.abspath(target_file)
-        template_loader = jinja2.FileSystemLoader(searchpath=target_file)  
-        template_env = jinja2.Environment(loader=template_loader)
-        template = template_env.get_template(self.TXT.CONFIG_TEMPLATE_FILE)
-        config_str = template.render(vars(self.settings))
-        
-        fileName = "config"
-        if self.page_type == Steps.EVENT:
-            fileName = self.TXT.CONFIG_EVENT_FILE
-        else:
-            fileName = self.TXT.CONFIG_STATION_FILE
-
-        c11, c22, c33 = st.columns([1, 1, 1])
-        
-        with c11:
-            save_config_clicked = st.button(self.TXT.SAVE_CONFIG, key=self.get_key_element(self.TXT.SAVE_CONFIG))
-        
-        with c22:
-            st.download_button(
-                label="Download Settings as cfg",
-                data=config_str,  
-                file_name=fileName + ".cfg",  
-                mime="text/plain", 
-            )
-        
-        with c33:
-            pickle_data = pickle.dumps(self.settings)  
-            st.download_button(
-                label="Download Settings as Pickle",
-                data=pickle_data,  
-                file_name=fileName + ".pkl",  
-                mime="application/octet-stream",  
-            )
-
-        if save_config_clicked:
-            save_path = os.path.join(target_file, fileName + ".cfg")
-            with open(save_path, "w") as f:
-                f.write(config_str)
-
-            pickle_save_path = os.path.join(target_file, fileName + ".pkl")
-            self.settings.to_pickle(pickle_save_path)
-
-            st.success(f"Configuration saved.")
-        
-        st.code(config_str, language="python")
-
-
-
-
     def render(self):
 
         if self.step_type == Steps.EVENT:
-            self.settings.event = event_filter(self.settings.event)
+            self.settings.event = event_filter(self.settings)
 
         if self.step_type == Steps.STATION:
-            self.settings.station = station_filter(self.settings.station)
+            self.settings.station = station_filter(self.settings)
 
 
         self.get_prev_step_df()
 
-        tab1, tab2, tab3 = st.tabs(["🌍 Map", "📄 Config", "Code"])
-        with tab1:
-            c1_top, c2_top = st.columns([2,1])
+        c1_top, c2_top = st.columns([2,1])
 
+<<<<<<< HEAD
             with c2_top:
                 c22_map = self.render_map_buttons()
+=======
+        with c2_top:
+            self.render_map_buttons()
+>>>>>>> 67ca3f99021c52b693f9b0f63169c970d7103f75
 
-            with c1_top:
-                self.render_map()
+        with c1_top:
+            self.render_map()
 
-            with st.expander(self.TXT.SELECT_MARKER_TITLE, expanded = not self.df_markers.empty):
-                self.render_marker_select()
+        with st.expander(self.TXT.SELECT_MARKER_TITLE, expanded = not self.df_markers.empty):
+            self.render_marker_select()
 
+<<<<<<< HEAD
             with st.expander(self.TXT.SELECT_DATA_TABLE_TITLE, expanded = not self.df_markers.empty):
                 self.render_data_table(c22_map)
+=======
+        with st.expander(self.TXT.SELECT_DATA_TABLE_TITLE, expanded = not self.df_markers.empty):
+            self.render_data_table()
+>>>>>>> 67ca3f99021c52b693f9b0f63169c970d7103f75
 
-        with tab2:
-            self.render_config()
-        with tab3:
-            st.write("Placeholder for code")
         
         # if not self.df_markers.empty:
         #     st.header(self.TXT.SELECT_DATA_TITLE)
