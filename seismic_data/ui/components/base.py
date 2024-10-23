@@ -115,7 +115,7 @@ class BaseComponentTexts:
             self.SELECT_MARKER_TITLE = "#### Select Events from map"
             self.SELECT_MARKER_MSG   = "Select an event from map and Add to Selection."
             self.SELECT_DATA_TABLE_TITLE = "Select Events from table"
-            self.SELECT_DATA_TABLE_MSG = "Tick events from the table. Use Refresh Map to view your selected events on the map."
+            self.SELECT_DATA_TABLE_MSG = "Tick events from the table to view your selected events on the map."
 
             self.PREV_SELECT_NO  = "Total Number of Selected Events"
             self.SELECT_AREA_AROUND_MSG = "Define an area around the selected events."
@@ -130,7 +130,7 @@ class BaseComponentTexts:
             self.SELECT_MARKER_TITLE = "#### Select Stations from map"
             self.SELECT_MARKER_MSG   = "Select an station from map and Add to Selection."
             self.SELECT_DATA_TABLE_TITLE = "Select Stations from table"
-            self.SELECT_DATA_TABLE_MSG = "Tick stations from the table. Use Refresh Map to view your selected stations on the map."
+            self.SELECT_DATA_TABLE_MSG = "Tick stations from the table to view your selected stations on the map."
 
             self.PREV_SELECT_NO  = "Total Number of Selected Stations"
             self.SELECT_AREA_AROUND_MSG = "Define an area around the selected stations."
@@ -829,26 +829,38 @@ class BaseComponent:
             config['is_selected']  = st.column_config.CheckboxColumn(
                 'Select'
             )
+            
+            state_key = f'initial_df_markers_{self.stage}'
+
+            # Store the initial state in the session if not already stored
+            if  state_key not in st.session_state:
+                st.session_state[state_key] = self.df_markers.copy()
 
             def data_table_view():
                 c1, c2, c3, c4, c5, c6 = st.columns([1,1,1,1,1,1])
                 with c1:
                     st.write(f"Total Number of {self.TXT.STEP.title()}s: {len(self.df_markers)}")
                 with c2:
-                    if st.button("Refresh", key=self.get_key_element("Refresh Map")):
-                        self.sync_df_markers_with_df_edit()
-                        self.refresh_map_selection()
-                with c3:
                     if st.button("Select All", key=self.get_key_element("Select All")):
                         self.df_markers['is_selected'] = True
-                with c4:
+                with c3:
                     if st.button("Unselect All", key=self.get_key_element("Unselect All")):
                         self.df_markers['is_selected'] = False
 
 
                 self.df_data_edit = st.data_editor(self.df_markers, hide_index = True, column_config=config, column_order = ordered_col, key=self.get_key_element("Data Table"))           
+
+                if not self.df_data_edit.equals(st.session_state[state_key]):
+                    changed_rows = self.df_data_edit[
+                        self.df_data_edit['is_selected'] != st.session_state[state_key]['is_selected']
+                    ]
+                    if not changed_rows.empty:
+                        st.session_state[state_key] = self.df_data_edit.copy()
+                        self.sync_df_markers_with_df_edit()
+                        self.refresh_map_selection()
             
             data_table_view()
+           
         with c5_map:
             # if (not self.df_markers.empty and len(self.df_markers[self.df_markers['is_selected']]) > 0):
             is_disabled = self.df_markers.empty
