@@ -49,8 +49,54 @@ def save_Filter(settings:  SeismoLoaderSettings):
     save_path = os.path.join(target_file, "config" + ".cfg")
     with open(save_path, "w") as f:
         f.write(config_str)
- 
+    
+    return save_path
 
+def import_export():
+    def reset_import_setting_processed():
+        st.session_state['import_setting_processed'] = False  
+
+    st.sidebar.markdown("### Import/Export Settings")
+    
+    with st.sidebar.expander("File Operations", expanded=False):
+        config_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../service/config.cfg')
+        config_file_path = os.path.abspath(config_file_path)
+        
+        st.markdown("#### ⬇️ Export Settings")
+
+        if os.path.exists(config_file_path):
+            with open(config_file_path, "r") as file:
+                file_data = file.read()
+
+            st.download_button(
+                label="Download file",
+                data=file_data,  
+                file_name="config.cfg",  
+                mime="application/octet-stream",  
+                help="Download the current settings.",
+                use_container_width=True,
+            )
+        else:
+            st.caption("No config file available for download.")
+
+        st.markdown("#### 📂 Import Settings")
+        uploaded_file = st.file_uploader(
+            "Import Settings",type=["cfg"], on_change=reset_import_setting_processed,
+            help="Upload a config file (.cfg) to update settings." , label_visibility="collapsed"
+        )
+
+        if uploaded_file and not st.session_state.get('import_setting_processed', False):
+            file_like_object = io.BytesIO(uploaded_file.getvalue())
+            text_file_object = io.TextIOWrapper(file_like_object, encoding='utf-8')
+            settings = SeismoLoaderSettings.from_cfg_file(text_file_object)
+            st.session_state['import_setting_processed'] = True
+            
+            st.success("Settings imported successfully!")
+            return settings
+        
+    st.sidebar.markdown("---")
+
+    return None
 
 class BaseComponentTexts:
     CLEAR_ALL_MAP_DATA = "Clear All"
@@ -71,7 +117,7 @@ class BaseComponentTexts:
             self.SELECT_MARKER_TITLE = "#### Select Events from map"
             self.SELECT_MARKER_MSG   = "Select an event from map and Add to Selection."
             self.SELECT_DATA_TABLE_TITLE = "Select Events from table"
-            self.SELECT_DATA_TABLE_MSG = "Tick events from the table. Use Refresh Map to view your selected events on the map."
+            self.SELECT_DATA_TABLE_MSG = "Tick events from the table to view your selected events on the map."
 
             self.PREV_SELECT_NO  = "Total Number of Selected Events"
             self.SELECT_AREA_AROUND_MSG = "Define an area around the selected events."
@@ -86,7 +132,7 @@ class BaseComponentTexts:
             self.SELECT_MARKER_TITLE = "#### Select Stations from map"
             self.SELECT_MARKER_MSG   = "Select an station from map and Add to Selection."
             self.SELECT_DATA_TABLE_TITLE = "Select Stations from table"
-            self.SELECT_DATA_TABLE_MSG = "Tick stations from the table. Use Refresh Map to view your selected stations on the map."
+            self.SELECT_DATA_TABLE_MSG = "Tick stations from the table to view your selected stations on the map."
 
             self.PREV_SELECT_NO  = "Total Number of Selected Stations"
             self.SELECT_AREA_AROUND_MSG = "Define an area around the selected stations."
@@ -792,26 +838,38 @@ class BaseComponent:
             config['is_selected']  = st.column_config.CheckboxColumn(
                 'Select'
             )
+            
+            state_key = f'initial_df_markers_{self.stage}'
+
+            # Store the initial state in the session if not already stored
+            if  state_key not in st.session_state:
+                st.session_state[state_key] = self.df_markers.copy()
 
             def data_table_view():
                 c1, c2, c3, c4, c5, c6 = st.columns([1,1,1,1,1,1])
                 with c1:
                     st.write(f"Total Number of {self.TXT.STEP.title()}s: {len(self.df_markers)}")
                 with c2:
-                    if st.button("Refresh", key=self.get_key_element("Refresh Map")):
-                        self.sync_df_markers_with_df_edit()
-                        self.refresh_map_selection()
-                with c3:
                     if st.button("Select All", key=self.get_key_element("Select All")):
                         self.df_markers['is_selected'] = True
-                with c4:
+                with c3:
                     if st.button("Unselect All", key=self.get_key_element("Unselect All")):
                         self.df_markers['is_selected'] = False
 
 
                 self.df_data_edit = st.data_editor(self.df_markers, hide_index = True, column_config=config, column_order = ordered_col, key=self.get_key_element("Data Table"))           
+
+                if not self.df_data_edit.equals(st.session_state[state_key]):
+                    changed_rows = self.df_data_edit[
+                        self.df_data_edit['is_selected'] != st.session_state[state_key]['is_selected']
+                    ]
+                    if not changed_rows.empty:
+                        st.session_state[state_key] = self.df_data_edit.copy()
+                        self.sync_df_markers_with_df_edit()
+                        self.refresh_map_selection()
             
             data_table_view()
+           
         with c5_map:
             # if (not self.df_markers.empty and len(self.df_markers[self.df_markers['is_selected']]) > 0):
             is_disabled = self.df_markers.empty
@@ -836,6 +894,12 @@ class BaseComponent:
 
     def render(self):
        
+
+        importedSetting= import_export()
+        if(importedSetting is not None):
+            self.settings=importedSetting
+            self.clear_all_data()
+            self.refresh_map(reset_areas=True, clear_draw=True)
 
         if self.step_type == Steps.EVENT:
             c2_export = self.event_filter()
