@@ -36,12 +36,27 @@ def parse_time(time_str):
                 continue
     return None
     
+def safe_add_to_config(config, section, key, value):
+    """Helper function to safely add key-value pairs to config."""
+    try:
+        config[section][key] = convert_to_str(value)
+    except Exception as e:
+        print(f"Failed to add {key} to {section}: {e}")
+
 def convert_to_str(val):
-    if isinstance(val, Enum):
-        return str(val.value)
-    if val:
-        return str(val)
-    return ''
+    try:
+        if val is None:
+            return ''  # Convert None to empty string
+        if isinstance(val, Enum):
+            return str(val.value)  # Convert Enum values to string
+        if isinstance(val, (str, int, float, bool)):
+            return str(val)  # Convert valid types to string
+        if hasattr(val, '__str__'):
+            return str(val)  # Use __str__ for objects
+        return repr(val)  # Use repr for unsupported objects
+    except Exception as e:
+        print(f"Error converting value {val}: {e}")
+        return ''  # Return empty string if conversion fails
             
 class ProcessingConfig(BaseModel):
     num_processes: Optional    [  int         ] = 4
@@ -273,7 +288,7 @@ class SeismoLoaderSettings(BaseModel):
                 exclude_stations.append(SeismoQuery(cmb_str_n_s=cmb_n_s))
 
         # MAP SEAARCH            
-        geo_constraint_station = None
+        geo_constraint_station = []
         if config.get('STATION', 'geo_constraint', fallback=None) == GeoConstraintType.BOUNDING:
             geo_constraint_station = GeometryConstraint(
                 coords=RectangleArea(
@@ -294,6 +309,7 @@ class SeismoLoaderSettings(BaseModel):
                 )
             )
 
+
         station_config = StationConfig(
             client=SeismoClients[station_client.upper()] if station_client else None,
             local_inventory=config.get("STATION","local_inventory", fallback=None),
@@ -311,7 +327,7 @@ class SeismoLoaderSettings(BaseModel):
             station =config.get('STATION', 'station' , fallback=None),
             location=config.get('STATION', 'location', fallback=None),
             channel =config.get('STATION', 'channel' , fallback=None),
-            geo_constraint=[geo_constraint_station],
+            geo_constraint=[geo_constraint_station] if geo_constraint_station else [],
             include_restricted=config.get('STATION', 'includerestricted' , fallback=False),
             level = config.get('STATION', 'level' , fallback=None)
         )
@@ -327,7 +343,7 @@ class SeismoLoaderSettings(BaseModel):
             model        = config.get('EVENT', 'model' , fallback='iasp91')
 
             # MAP SEARCH
-            geo_constraint_event = None
+            geo_constraint_event = []
             if config.get('EVENT', 'geo_constraint', fallback=None) == GeoConstraintType.BOUNDING:
                 geo_constraint_event = GeometryConstraint(
                     coords=RectangleArea(
@@ -363,7 +379,7 @@ class SeismoLoaderSettings(BaseModel):
                 max_radius             = config.getfloat('EVENT', 'maxradius', fallback=None),
                 before_p_sec           = config.get('STATION', 'before_p_sec' , fallback=False),
                 after_p_sec            = config.get('STATION', 'after_p_sec' , fallback=False),
-                geo_constraint         = [geo_constraint_event],
+                geo_constraint=[geo_constraint_event] if geo_constraint_event else [],
                 include_all_origins    = config.get('STATION', 'includeallorigins' , fallback=False),
                 include_all_magnitudes = config.get('STATION', 'includeallmagnitudes' , fallback=False),
                 include_arrivals       = config.get('STATION', 'includearrivals' , fallback=False),
@@ -393,118 +409,173 @@ class SeismoLoaderSettings(BaseModel):
         config = ConfigParser()
 
         # Populate the [SDS] section
-        config['SDS'] = {
-            'sds_path': self.sds_path
-        }
+        config['SDS'] = {}
+        safe_add_to_config(config, 'SDS', 'sds_path', self.sds_path)
 
         # Populate the [DATABASE] section
-        config['DATABASE'] = {
-            'db_path': convert_to_str(self.db_path)
-        }
+        config['DATABASE'] = {}
+        safe_add_to_config(config, 'DATABASE', 'db_path', self.db_path)
 
         # Populate the [PROCESSING] section
-        config['PROCESSING'] = {
-            'num_processes': convert_to_str(self.proccess.num_processes),
-            'gap_tolerance': convert_to_str(self.proccess.gap_tolerance),
-            'download_type': convert_to_str(self.download_type.value)
-        }
+        config['PROCESSING'] = {}
+        safe_add_to_config(config, 'PROCESSING', 'num_processes', self.proccess.num_processes)
+        safe_add_to_config(config, 'PROCESSING', 'gap_tolerance', self.proccess.gap_tolerance)
+        safe_add_to_config(config, 'PROCESSING', 'download_type', self.download_type.value)
 
         # Populate the [AUTH] section
         config['AUTH'] = {}
         if self.auths:
             for auth in self.auths:
-                config['AUTH'][auth.nslc_code] = f"{auth.username}:{auth.password}"
+                safe_add_to_config(config, 'AUTH', auth.nslc_code, f"{auth.username}:{auth.password}")
+
 
         # Populate the [WAVEFORM] section
-        config['WAVEFORM'] = {
-            'client': convert_to_str(self.waveform.client.value),
-            'channel_pref': ','.join([channel.value for channel in self.waveform.channel_pref]),
-            'location_pref': ','.join([loc.value for loc in self.waveform.location_pref]),
-            'days_per_request': convert_to_str(self.waveform.days_per_request)
-        }
+        config['WAVEFORM'] = {}
+        safe_add_to_config(config, 'WAVEFORM', 'client', self.waveform.client.value)
+        safe_add_to_config(config, 'WAVEFORM', 'channel_pref', ','.join([convert_to_str(channel.value) for channel in self.waveform.channel_pref]))
+        safe_add_to_config(config, 'WAVEFORM', 'location_pref', ','.join([convert_to_str(loc.value) for loc in self.waveform.location_pref]))
+        safe_add_to_config(config, 'WAVEFORM', 'days_per_request', self.waveform.days_per_request)
 
-
+        # Populate the [STATION] section
         if self.station:
-            config['STATION'] = {
-                'client': convert_to_str(self.station.client),
-                'local_inventory': convert_to_str(self.station.local_inventory),
-                'force_stations': ','.join([station.cmb_str for station in self.station.force_stations]),
-                'exclude_stations': ','.join([station.cmb_str for station in self.station.exclude_stations]),
-                'starttime': convert_to_str(self.station.date_config.start_time),
-                'endtime': convert_to_str(self.station.date_config.end_time),
-                'startbefore': convert_to_str(self.station.date_config.start_before),
-                'startafter': convert_to_str(self.station.date_config.start_after),
-                'endbefore': convert_to_str(self.station.date_config.end_before),
-                'endafter': convert_to_str(self.station.date_config.end_after),
-                'network': convert_to_str(self.station.network),
-                'station': convert_to_str(self.station.station),
-                'location': convert_to_str(self.station.location),
-                'channel': convert_to_str(self.station.channel),
-                'geo_constraint': convert_to_str(self.station.geo_constraint[0].geo_type),
-            }
+            config['STATION'] = {}
+            safe_add_to_config(config, 'STATION', 'client', self.station.client)
+            safe_add_to_config(config, 'STATION', 'local_inventory', self.station.local_inventory)
+            safe_add_to_config(config, 'STATION', 'force_stations', ','.join([convert_to_str(station.cmb_str) for station in self.station.force_stations if station.cmb_str is not None]))
+            safe_add_to_config(config, 'STATION', 'exclude_stations', ','.join([convert_to_str(station.cmb_str) for station in self.station.exclude_stations if station.cmb_str is not None]))
+            safe_add_to_config(config, 'STATION', 'starttime', self.station.date_config.start_time)
+            safe_add_to_config(config, 'STATION', 'endtime', self.station.date_config.end_time)
+            safe_add_to_config(config, 'STATION', 'network', self.station.network)
+            safe_add_to_config(config, 'STATION', 'station', self.station.station)
+            safe_add_to_config(config, 'STATION', 'location', self.station.location)
+            safe_add_to_config(config, 'STATION', 'channel', self.station.channel)
+            safe_add_to_config(config, 'STATION', 'station', self.station.station)
+            safe_add_to_config(config, 'STATION', 'location', self.station.location)  # Ensure location is added
+            safe_add_to_config(config, 'STATION', 'channel', self.station.channel)    # Ensure channel is added
+
 
             # FIXME: The settings are updated such that they support multiple geometries.
             # But config file only accepts one geometry at a time. For now we just get
             # the first item.
+            if self.station.geo_constraint and hasattr(self.station.geo_constraint[0], 'geo_type'):
+                safe_add_to_config(config, 'STATION', 'geo_constraint', self.station.geo_constraint[0].geo_type)
+                
+                if self.station.geo_constraint[0].geo_type == GeoConstraintType.CIRCLE:
+                    safe_add_to_config(config, 'STATION', 'latitude', self.station.geo_constraint[0].coords.lat)
+                    safe_add_to_config(config, 'STATION', 'longitude', self.station.geo_constraint[0].coords.lng)
+                    safe_add_to_config(config, 'STATION', 'minradius', self.station.geo_constraint[0].coords.min_radius)
+                    safe_add_to_config(config, 'STATION', 'maxradius', self.station.geo_constraint[0].coords.max_radius)
 
-            if self.station.geo_constraint[0].geo_type == GeoConstraintType.CIRCLE:
-                config['STATION']['latitude']  = convert_to_str(self.station.geo_constraint[0].coords.lat)
-                config['STATION']['longitude'] = convert_to_str(self.station.geo_constraint[0].coords.lng)
-                config['STATION']['minradius'] = convert_to_str(self.station.geo_constraint[0].coords.min_radius)
-                config['STATION']['maxradius'] = convert_to_str(self.station.geo_constraint[0].coords.max_radius)
+                if self.station.geo_constraint[0].geo_type == GeoConstraintType.BOUNDING:
+                    safe_add_to_config(config, 'STATION', 'minlatitude', self.station.geo_constraint[0].coords.min_lat)
+                    safe_add_to_config(config, 'STATION', 'maxlatitude', self.station.geo_constraint[0].coords.max_lat)
+                    safe_add_to_config(config, 'STATION', 'minlongitude', self.station.geo_constraint[0].coords.min_lng)
+                    safe_add_to_config(config, 'STATION', 'maxlongitude', self.station.geo_constraint[0].coords.max_lng)
 
-            if self.station.geo_constraint[0].geo_type == GeoConstraintType.BOUNDING:
-                config['STATION']['minlatitude']  = convert_to_str(self.station.geo_constraint[0].coords.min_lat)
-                config['STATION']['maxlatitude']  = convert_to_str(self.station.geo_constraint[0].coords.max_lat)
-                config['STATION']['minlongitude'] = convert_to_str(self.station.geo_constraint[0].coords.min_lng)
-                config['STATION']['maxlongitude'] = convert_to_str(self.station.geo_constraint[0].coords.max_lng)
-
-            config['STATION']['includerestricted'] = convert_to_str(self.station.include_restricted)
-            config['STATION']['level']             = convert_to_str(self.station.level.value)
+            safe_add_to_config(config, 'STATION', 'includerestricted', self.station.include_restricted)
+            safe_add_to_config(config, 'STATION', 'level', self.station.level.value)
 
         # Check if the main section is EventConfig or StationConfig and populate accordingly
         if self.event:
-            config['EVENT'] = {
-                'client'               : convert_to_str(self.event.client                       ) ,
-                'model'                : convert_to_str(self.event.model                        ) ,
-                'min_depth'            : convert_to_str(self.event.min_depth                    ) ,
-                'max_depth'            : convert_to_str(self.event.max_depth                    ) ,
-                'minmagnitude'         : convert_to_str(self.event.min_magnitude                ) ,
-                'maxmagnitude'         : convert_to_str(self.event.max_magnitude                ) ,
-                'minradius'            : convert_to_str(self.event.min_radius                   ) ,
-                'maxradius'            : convert_to_str(self.event.max_radius                   ) ,
-                'after_p_sec'          : convert_to_str(self.event.after_p_sec                  ) ,
-                'before_p_sec'         : convert_to_str(self.event.before_p_sec                 ) ,
-                'includeallorigins'    : convert_to_str(self.event.include_all_origins          ) ,
-                'includeallmagnitudes' : convert_to_str(self.event.include_all_magnitudes       ) ,
-                'includearrivals'      : convert_to_str(self.event.include_arrivals             ) ,
-                'limit'                : convert_to_str(self.event.limit                        ) ,
-                'offset'               : convert_to_str(self.event.offset                       ) ,
-                'local_catalog'        : convert_to_str(self.event.local_catalog                ) ,
-                'contributor'          : convert_to_str(self.event.contributor                  ) ,
-                'updatedafter'         : convert_to_str(self.event.updated_after                ) ,
-            }
+            config['EVENT'] = {}
+            safe_add_to_config(config, 'EVENT', 'client', self.event.client)
+            safe_add_to_config(config, 'EVENT', 'min_depth', self.event.min_depth)
+            safe_add_to_config(config, 'EVENT', 'max_depth', self.event.max_depth)
+            safe_add_to_config(config, 'EVENT', 'minmagnitude', self.event.min_magnitude)
+            safe_add_to_config(config, 'EVENT', 'maxmagnitude', self.event.max_magnitude)
+            safe_add_to_config(config, 'EVENT', 'minradius', self.event.min_radius)
+            safe_add_to_config(config, 'EVENT', 'maxradius', self.event.max_radius)
+            safe_add_to_config(config, 'EVENT', 'after_p_sec', self.event.after_p_sec)
+            safe_add_to_config(config, 'EVENT', 'before_p_sec', self.event.before_p_sec)
+            safe_add_to_config(config, 'EVENT', 'includeallorigins', self.event.include_all_origins)
+            safe_add_to_config(config, 'EVENT', 'includeallmagnitudes', self.event.include_all_magnitudes)
+            safe_add_to_config(config, 'EVENT', 'includearrivals', self.event.include_arrivals)
+            safe_add_to_config(config, 'EVENT', 'limit', self.event.limit)
+            safe_add_to_config(config, 'EVENT', 'offset', self.event.offset)
+            safe_add_to_config(config, 'EVENT', 'local_catalog', self.event.local_catalog)
+            safe_add_to_config(config, 'EVENT', 'contributor', self.event.contributor)
+            safe_add_to_config(config, 'EVENT', 'updatedafter', self.event.updated_after)
 
             # FIXME: The settings are updated such that they support multiple geometries.
             # But config file only accepts one geometry at a time.For now we just get
             # the first item.
-            
-            if self.event.geo_constraint[0].geo_type == GeoConstraintType.CIRCLE:
-                config['EVENT']['geo_constraint']     = GeoConstraintType.CIRCLE.value
-                config['EVENT']['latitude']        = convert_to_str(self.event.geo_constraint[0].coords.lat)
-                config['EVENT']['longitude']       = convert_to_str(self.event.geo_constraint[0].coords.lng)
-                config['EVENT']['minsearchradius'] = convert_to_str(self.event.geo_constraint[0].coords.min_radius)
-                config['EVENT']['maxsearchradius'] = convert_to_str(self.event.geo_constraint[0].coords.max_radius)
+         
+            if self.event.geo_constraint and hasattr(self.event.geo_constraint[0], 'geo_type'):
+                safe_add_to_config(config, 'EVENT', 'geo_constraint', self.event.geo_constraint[0].geo_type)
 
-            if self.event.geo_constraint[0].geo_type == GeoConstraintType.BOUNDING:
-                config['EVENT']['geo_constraint']  = GeoConstraintType.BOUNDING.value
-                config['EVENT']['minlatitude']  = convert_to_str(self.event.geo_constraint[0].coords.min_lat)
-                config['EVENT']['maxlatitude']  = convert_to_str(self.event.geo_constraint[0].coords.max_lat)
-                config['EVENT']['minlongitude'] = convert_to_str(self.event.geo_constraint[0].coords.min_lng)
-                config['EVENT']['maxlongitude'] = convert_to_str(self.event.geo_constraint[0].coords.max_lng)
+                if self.event.geo_constraint[0].geo_type == GeoConstraintType.CIRCLE:
+                    safe_add_to_config(config, 'EVENT', 'latitude', self.event.geo_constraint[0].coords.lat)
+                    safe_add_to_config(config, 'EVENT', 'longitude', self.event.geo_constraint[0].coords.lng)
+                    safe_add_to_config(config, 'EVENT', 'minsearchradius', self.event.geo_constraint[0].coords.min_radius)
+                    safe_add_to_config(config, 'EVENT', 'maxsearchradius', self.event.geo_constraint[0].coords.max_radius)
+
+                if self.event.geo_constraint[0].geo_type == GeoConstraintType.BOUNDING:
+                    safe_add_to_config(config, 'EVENT', 'minlatitude', self.event.geo_constraint[0].coords.min_lat)
+                    safe_add_to_config(config, 'EVENT', 'maxlatitude', self.event.geo_constraint[0].coords.max_lat)
+                    safe_add_to_config(config, 'EVENT', 'minlongitude', self.event.geo_constraint[0].coords.min_lng)
+                    safe_add_to_config(config, 'EVENT', 'maxlongitude', self.event.geo_constraint[0].coords.max_lng)
 
         return config
-    
+
+    def add_to_config(self):
+        config_dict = {
+            'sds_path': self.sds_path,
+            'db_path': self.db_path,
+            'num_processes': self.proccess.num_processes,
+            'gap_tolerance': self.proccess.gap_tolerance,
+            'download_type': self.download_type.value,
+            'auths': self.auths,
+            'waveform': {
+                'client': self.waveform.client.value,
+                'channel_pref': [channel.value for channel in self.waveform.channel_pref],
+                'location_pref': [loc.value for loc in self.waveform.location_pref],
+                'days_per_request': self.waveform.days_per_request
+            },
+            'station': {
+                'client': self.station.client.value,
+                'local_inventory': self.station.local_inventory,
+                'force_stations': [station.cmb_str for station in self.station.force_stations],
+                'exclude_stations': [station.cmb_str for station in self.station.exclude_stations],
+                'starttime': self.station.date_config.start_time,
+                'endtime': self.station.date_config.end_time,
+                'startbefore': self.station.date_config.start_before,
+                'startafter': self.station.date_config.start_after,
+                'endbefore': self.station.date_config.end_before,
+                'endafter': self.station.date_config.end_after,
+                'network': self.station.network,
+                'station': self.station.station,
+                'location': self.station.location,
+                'channel': self.station.channel,
+                'geo_constraint': self.station.geo_constraint,
+                'includerestricted': self.station.include_restricted,
+                'level': self.station.level.value,
+            },
+            'event': {
+                'client': self.event.client.value,
+                'model': self.event.model.value,
+                'before_p_sec': self.event.before_p_sec,
+                'after_p_sec': self.event.after_p_sec,
+                'starttime': self.event.date_config.start_time,
+                'endtime': self.event.date_config.end_time,
+                'min_depth': self.event.min_depth,
+                'max_depth': self.event.max_depth,
+                'minmagnitude': self.event.min_magnitude,
+                'maxmagnitude': self.event.max_magnitude,
+                'minradius': self.event.min_radius,
+                'maxradius': self.event.max_radius,
+                'local_catalog': self.event.local_catalog,
+                'geo_constraint': self.event.geo_constraint,
+                'includeallorigins': self.event.include_all_origins,
+                'includeallmagnitudes': self.event.include_all_magnitudes,
+                'includearrivals': self.event.include_arrivals,
+                'limit': self.event.limit,
+                'offset': self.event.offset,
+                'contributor': self.event.contributor,
+                'updatedafter': self.event.updated_after,
+            }
+        }
+        return config_dict
+
     def add_prediction(self, event_id: str, station_id: str, p_arrival: datetime, s_arrival: datetime):
         key = f"{event_id}|{station_id}"
         self.predictions[key] = PredictionData(
