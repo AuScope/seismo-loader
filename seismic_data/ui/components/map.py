@@ -137,8 +137,8 @@ def add_data_points(df, cols_to_disp, step: Steps, selected_idx=[], col_color=No
     if col_color is not None:
         if pd.api.types.is_numeric_dtype(df[col_color]):
             # norm = mcolors.Normalize(vmin=df[col_color].min(), vmax=df[col_color].max())
-            norm = mcolors.Normalize(vmin=-5, vmax=100)
-            colormap = cm.get_cmap('YlOrRd')
+            norm = mcolors.Normalize(vmin=-5, vmax=500)
+            colormap = cm.get_cmap('inferno_r')
         else:
             unique_categories = df[col_color].unique()
             colors = cm.get_cmap('tab10', len(unique_categories))
@@ -286,18 +286,11 @@ def clear_map_layers(map_object):
         
 
 def get_marker_size(magnitude):
-    if magnitude < 1.8:
-        return 2.0
-    elif 1.8 <= magnitude < 2.4:
-        return 3.0
-    elif 2.4 <= magnitude < 5:
-        return 5.0
-    elif 5 <= magnitude < 7:
-        return 7.0
-    elif 7 <= magnitude < 8.5:
-        return 10.0
-    else:
-        return 15.0
+    import math
+    base_size = 2.0
+    scaling_factor = 2.5
+    size = base_size + scaling_factor * math.log(magnitude + 1)
+    return min(13.0, max(base_size, size))
 
 
 
