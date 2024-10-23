@@ -311,8 +311,8 @@ class SeismoLoaderSettings(BaseModel):
                 coords=CircleArea(
                     lat=config.getfloat('STATION', 'latitude', fallback=None),
                     lng=config.getfloat('STATION', 'longitude', fallback=None),
-                    min_radius=config.getfloat('STATION', 'minradius', fallback=None),
-                    max_radius=config.getfloat('STATION', 'maxradius', fallback=None)
+                    min_radius=config.getfloat('STATION', 'minsearchradius', fallback=None),
+                    max_radius=config.getfloat('STATION', 'maxsearchradius', fallback=None)
                 )
             )
 
