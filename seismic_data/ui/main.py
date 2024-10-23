@@ -2,8 +2,21 @@ import streamlit as st
 from seismic_data.ui.pages.helpers.common import init_settings
 from seismic_data.ui.components.workflows_combined import CombinedBasedWorkflow
 
-# init_settings()
-# st.set_page_config(layout="wide")
+# st.markdown(
+#     """
+#     <style>
+#         section[data-testid="stSidebar"] {
+#             width: 800px; # Set the width to your desired value
+#         }
+#         section[data-testid="stMain"] {
+#             width: 100% !important; # Set the width to your desired value
+#             padding: 0;
+#         }
+#     </style>
+#     """,
+#     unsafe_allow_html=True,
+# )
+
 
 st.set_page_config(
     page_title="Seed Vault",

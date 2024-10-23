@@ -33,6 +33,8 @@ import pickle
 
 client_options = [f.name for f in SeismoClients]
 
+
+
 def save_Filter(settings:  SeismoLoaderSettings):
     current_directory = os.path.dirname(os.path.abspath(__file__))
     target_file = os.path.join(current_directory, '../../service')
@@ -179,59 +181,64 @@ class BaseComponent:
 
         # st.sidebar.header("Event Filters")
         with st.sidebar:
-            st.write("### Filters")
-            selected_client = st.selectbox('Choose a client:', client_options, 
-                                            index=client_options.index(self.settings.event.client.name), 
-                                            key="event-pg-client-event")
-            
-            self.settings.event.client = SeismoClients[selected_client]
+            c2_export = self.render_map_right_menu()
+            with st.expander("### Filters", expanded=True):
+                selected_client = st.selectbox('Choose a client:', client_options, 
+                                                index=client_options.index(self.settings.event.client.name), 
+                                                key="event-pg-client-event")
+                
+                self.settings.event.client = SeismoClients[selected_client]
 
-            self.settings.event.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-event")
-            self.settings.event.date_config.end_time = st.date_input("End Date", end_time, key="event-pg-end-date-event")
+                self.settings.event.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-event")
+                self.settings.event.date_config.end_time = st.date_input("End Date", end_time, key="event-pg-end-date-event")
 
-            if self.settings.event.date_config.start_time > self.settings.event.date_config.end_time:
-                st.error("Error: End Date must fall after Start Date.")
+                if self.settings.event.date_config.start_time > self.settings.event.date_config.end_time:
+                    st.error("Error: End Date must fall after Start Date.")
 
-            self.settings.event.min_magnitude, self.settings.event.max_magnitude = st.slider(
-                "Min Magnitude", 
-                min_value=-2.0, max_value=10.0, 
-                value=(self.settings.event.min_magnitude, self.settings.event.max_magnitude), 
-                step=0.1, key="event-pg-mag"
-            )
+                self.settings.event.min_magnitude, self.settings.event.max_magnitude = st.slider(
+                    "Min Magnitude", 
+                    min_value=-2.0, max_value=10.0, 
+                    value=(self.settings.event.min_magnitude, self.settings.event.max_magnitude), 
+                    step=0.1, key="event-pg-mag"
+                )
 
-            self.settings.event.min_depth, self.settings.event.max_depth = st.slider(
-                "Min Depth (km)", 
-                min_value=-5.0, max_value=800.0, 
-                value=(self.settings.event.min_depth, self.settings.event.max_depth), 
-                step=1.0, key=f"event-pg-depth"
-            )
+                self.settings.event.min_depth, self.settings.event.max_depth = st.slider(
+                    "Min Depth (km)", 
+                    min_value=-5.0, max_value=800.0, 
+                    value=(self.settings.event.min_depth, self.settings.event.max_depth), 
+                    step=1.0, key=f"event-pg-depth"
+                )
 
         save_Filter(self.settings)
-
+        return c2_export
 
     def station_filter(self):
         start_time = convert_to_date(self.settings.station.date_config.start_time)
         end_time = convert_to_date(self.settings.station.date_config.end_time)
 
-        st.sidebar.header("Station Filters")
         with st.sidebar:
-            selected_client = st.selectbox('Choose a client:', client_options, 
-                                        index=client_options.index(self.settings.station.client.name), 
-                                        key="event-pg-client-station")
-            self.settings.station.client = SeismoClients[selected_client]
+            c2_export = self.render_map_right_menu()
+                
+            with st.expander("### Filters", expanded=True):
+                selected_client = st.selectbox('Choose a client:', client_options, 
+                                            index=client_options.index(self.settings.station.client.name), 
+                                            key="event-pg-client-station")
+                self.settings.station.client = SeismoClients[selected_client]
 
-            self.settings.station.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-station")
-            self.settings.station.date_config.end_time = st.date_input("End Date", end_time, key="event-pg-end-date-station")
+                self.settings.station.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-station")
+                self.settings.station.date_config.end_time = st.date_input("End Date", end_time, key="event-pg-end-date-station")
 
-            if self.settings.station.date_config.start_time > self.settings.station.date_config.end_time:
-                st.error("Error: End Date must fall after Start Date.")
+                if self.settings.station.date_config.start_time > self.settings.station.date_config.end_time:
+                    st.error("Error: End Date must fall after Start Date.")
 
-            self.settings.station.network = st.text_input("Enter Network",   self.settings.station.network, key="event-pg-net-txt-station")
-            self.settings.station.station = st.text_input("Enter Station",   self.settings.station.station, key="event-pg-sta-txt-station")
-            self.settings.station.location = st.text_input("Enter Location", self.settings.station.location, key="event-pg-loc-txt-station")
-            self.settings.station.channel = st.text_input("Enter Channel",   self.settings.station.channel, key="event-pg-cha-txt-station")
+                self.settings.station.network = st.text_input("Enter Network",   self.settings.station.network, key="event-pg-net-txt-station")
+                self.settings.station.station = st.text_input("Enter Station",   self.settings.station.station, key="event-pg-sta-txt-station")
+                self.settings.station.location = st.text_input("Enter Location", self.settings.station.location, key="event-pg-loc-txt-station")
+                self.settings.station.channel = st.text_input("Enter Channel",   self.settings.station.channel, key="event-pg-cha-txt-station")
 
         save_Filter(self.settings)
+
+        return c2_export
 
     # ====================
     # MAP
@@ -319,15 +326,15 @@ class BaseComponent:
     def refresh_map(self, reset_areas = False, selected_idx = None, clear_draw = False, rerun = False, get_data = True):
         geo_constraint = self.get_geo_constraint()
         
-        # if clear_draw:
-        #     clear_map_draw(self.map_disp)
-        #     self.all_feature_drawings = geo_constraint
-        #     self.map_fg_area= add_area_overlays(areas=geo_constraint)
-        # else:
-        if reset_areas:
-            geo_constraint = []
+        if clear_draw:
+            clear_map_draw(self.map_disp)
+            self.all_feature_drawings = geo_constraint
+            self.map_fg_area= add_area_overlays(areas=geo_constraint)
         else:
-            geo_constraint = self.all_current_drawings + self.all_feature_drawings
+            if reset_areas:
+                geo_constraint = []
+            else:
+                geo_constraint = self.all_current_drawings + self.all_feature_drawings
 
         self.set_geo_constraint(geo_constraint)
 
@@ -337,9 +344,10 @@ class BaseComponent:
             # @NOTE: Below is added to resolve triangle marker displays.
             #        But it results in map blinking and hence a chance to
             #        break the map.
-            clear_map_draw(self.map_disp)
-            self.all_feature_drawings = geo_constraint
-            self.map_fg_area= add_area_overlays(areas=geo_constraint)
+            if not clear_draw:
+                clear_map_draw(self.map_disp)
+                self.all_feature_drawings = geo_constraint
+                self.map_fg_area= add_area_overlays(areas=geo_constraint)
             if get_data:
                 self.handle_get_data()
         
@@ -611,8 +619,9 @@ class BaseComponent:
                 self.clear_all_data()
                 self.refresh_map(reset_areas=True, clear_draw=True, rerun=True, get_data=False)
 
-        if st.button("Reload Map", help="Use this button if the map is collapsed or some data are not displayed properly."):
+        if st.button("Reload Map", help="Reloads the map"):
             self.refresh_map(get_data=False, rerun=True)
+        st.info("Use **Reload Map** button if the map is collapsed or some data are not displayed properly.")
 
     def render_export_import(self):
         st.write(f"#### Export/Import {self.TXT.STEP.title()}s")
@@ -654,35 +663,35 @@ class BaseComponent:
         return c2_export
 
     def render_map_right_menu(self):
+        with st.expander("Actions", expanded=True):
         # st.markdown(f"#### {self.TXT.GET_DATA_TITLE}")
-        if self.prev_step_type:
-            tab1, tab2, tab3, tab4 = st.tabs(["Get Data", "Export/Import", "Areas", f"Search Around {self.prev_step_type.title()}s"])
-        else:
-            tab1, tab2, tab3 = st.tabs(["Get Data", "Export/Import", "Areas"])
+            if self.prev_step_type:
+                tab1, tab2, tab3, tab4 = st.tabs(["Get Data", "Export/Import", "Areas", f"Search Around {self.prev_step_type.title()}s"])
+            else:
+                tab1, tab2, tab3 = st.tabs(["Get Data", "Export/Import", "Areas"])
 
-        with tab1:
-            self.render_map_buttons()
+            with tab1:
+                self.render_map_buttons()
 
-        with tab2:
-            c2_export = self.render_export_import()
+            with tab2:
+                c2_export = self.render_export_import()
 
-        # with st.expander(f"Update Selection Area", expanded = True):
-        with tab3:
-            self.update_rectangle_areas()
-            self.update_circle_areas()
-            
-            if len(self.get_geo_constraint()) == 0 and len(self.all_current_drawings) == 0:
-                st.info("There is no defined areas on map. Please first use the map tools to draw an area, then get the data.")
+            # with st.expander(f"Update Selection Area", expanded = True):
+            with tab3:
+                self.update_rectangle_areas()
+                self.update_circle_areas()
+                
+                if len(self.get_geo_constraint()) == 0 and len(self.all_current_drawings) == 0:
+                    st.warning("There is no defined areas on map. Please first use the map tools to draw an area, then get the data.")
 
-        if self.prev_step_type:
-            with tab4:
-                self.display_prev_step_selection_table()
+            if self.prev_step_type:
+                with tab4:
+                    self.display_prev_step_selection_table()
 
 
         return c2_export
 
     def render_map(self):
-        
         if self.map_disp is not None:
             clear_map_layers(self.map_disp)
         
@@ -826,6 +835,7 @@ class BaseComponent:
 
 
     def render(self):
+       
 
         if self.step_type == Steps.EVENT:
             c2_export = self.event_filter()
@@ -836,19 +846,26 @@ class BaseComponent:
 
         self.get_prev_step_df()
 
-        c1_top, c2_top = st.columns([2,1])
+        self.render_map()
 
-        with c2_top:
-            c2_export = self.render_map_right_menu()
+        # c1_top, c2_top = st.columns([2,1])
 
-        with c1_top:
-            self.render_map()
+        # with c2_top:
+        #     c2_export = self.render_map_right_menu()
 
-        with st.expander(self.TXT.SELECT_MARKER_TITLE, expanded = not self.df_markers.empty):
-            self.render_marker_select()
+        # with c1_top:
+        #     self.render_map()
 
-        with st.expander(self.TXT.SELECT_DATA_TABLE_TITLE, expanded = not self.df_markers.empty):
-            self.render_data_table(c2_export)
+        if not self.df_markers.empty:
+            c1_bot, c2_bot = st.columns([1,3])
+
+            with c1_bot:
+                with st.expander(self.TXT.SELECT_MARKER_TITLE, expanded = not self.df_markers.empty):
+                    self.render_marker_select()
+
+            with c2_bot:
+                with st.expander(self.TXT.SELECT_DATA_TABLE_TITLE, expanded = not self.df_markers.empty):
+                    self.render_data_table(c2_export)
 
         
         # if not self.df_markers.empty:
