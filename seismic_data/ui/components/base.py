@@ -33,7 +33,24 @@ import pickle
 
 client_options = [f.name for f in SeismoClients]
 
-def event_filter(event: EventConfig ):
+def save_Filter(settings:  SeismoLoaderSettings):
+    current_directory = os.path.dirname(os.path.abspath(__file__))
+    target_file = os.path.join(current_directory, '../../service')
+    target_file = os.path.abspath(target_file)
+    
+    template_loader = jinja2.FileSystemLoader(searchpath=target_file)  
+    template_env = jinja2.Environment(loader=template_loader)
+    template = template_env.get_template("config_template.cfg")
+    config_dict = settings.add_to_config()
+    config_str = template.render(**config_dict)
+    
+    save_path = os.path.join(target_file, "config" + ".cfg")
+    with open(save_path, "w") as f:
+        f.write(config_str)
+ 
+
+def event_filter(settings:  SeismoLoaderSettings):
+    event: EventConfig = settings.event
     start_time = convert_to_date(event.date_config.start_time)
     end_time = convert_to_date(event.date_config.end_time)
 
@@ -65,9 +82,11 @@ def event_filter(event: EventConfig ):
             step=1.0, key=f"event-pg-depth"
         )
 
+    save_Filter(settings)
     return event
 
-def station_filter(station: StationConfig):
+def station_filter(settings:  SeismoLoaderSettings):
+    station: StationConfig = settings.station
     start_time = convert_to_date(station.date_config.start_time)
     end_time = convert_to_date(station.date_config.end_time)
 
@@ -89,8 +108,8 @@ def station_filter(station: StationConfig):
         station.location = st.text_input("Enter Location", station.location, key="event-pg-loc-txt-station")
         station.channel = st.text_input("Enter Channel", station.channel, key="event-pg-cha-txt-station")
 
+    save_Filter(settings)
     return station
-
 class BaseComponentTexts:
     CLEAR_ALL_MAP_DATA = "Clear All"
     DOWNLOAD_CONFIG = "Download Config"
@@ -807,10 +826,10 @@ class BaseComponent:
     def render(self):
 
         if self.step_type == Steps.EVENT:
-            self.settings.event = event_filter(self.settings.event)
+            self.settings.event = event_filter(self.settings)
 
         if self.step_type == Steps.STATION:
-            self.settings.station = station_filter(self.settings.station)
+            self.settings.station = station_filter(self.settings)
 
 
         self.get_prev_step_df()
