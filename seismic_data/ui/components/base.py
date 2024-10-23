@@ -52,52 +52,6 @@ def save_Filter(settings:  SeismoLoaderSettings):
     
     return save_path
 
-def import_export():
-    def reset_import_setting_processed():
-        st.session_state['import_setting_processed'] = False  
-
-    st.sidebar.markdown("### Import/Export Settings")
-    
-    with st.sidebar.expander("File Operations", expanded=False):
-        config_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../service/config.cfg')
-        config_file_path = os.path.abspath(config_file_path)
-        
-        st.markdown("#### ⬇️ Export Settings")
-
-        if os.path.exists(config_file_path):
-            with open(config_file_path, "r") as file:
-                file_data = file.read()
-
-            st.download_button(
-                label="Download file",
-                data=file_data,  
-                file_name="config.cfg",  
-                mime="application/octet-stream",  
-                help="Download the current settings.",
-                use_container_width=True,
-            )
-        else:
-            st.caption("No config file available for download.")
-
-        st.markdown("#### 📂 Import Settings")
-        uploaded_file = st.file_uploader(
-            "Import Settings",type=["cfg"], on_change=reset_import_setting_processed,
-            help="Upload a config file (.cfg) to update settings." , label_visibility="collapsed"
-        )
-
-        if uploaded_file and not st.session_state.get('import_setting_processed', False):
-            file_like_object = io.BytesIO(uploaded_file.getvalue())
-            text_file_object = io.TextIOWrapper(file_like_object, encoding='utf-8')
-            settings = SeismoLoaderSettings.from_cfg_file(text_file_object)
-            st.session_state['import_setting_processed'] = True
-            
-            st.success("Settings imported successfully!")
-            return settings
-        
-    st.sidebar.markdown("---")
-
-    return None
-
 class BaseComponentTexts:
     CLEAR_ALL_MAP_DATA = "Clear All"
     DOWNLOAD_CONFIG = "Download Config"
@@ -221,13 +175,64 @@ class BaseComponent:
     # ====================
     # FILTERS
     # ====================
+    def import_export(self):
+        def reset_import_setting_processed():
+            st.session_state['import_setting_processed'] = False  
+
+        # st.sidebar.markdown("### Import/Export Settings")
+        
+        with st.expander("Import & Export", expanded=False):
+            tab1, tab2 = st.tabs(["Settings", f"{self.TXT.STEP.title()}s"])
+            with tab1:
+                config_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../service/config.cfg')
+                config_file_path = os.path.abspath(config_file_path)
+                
+                st.markdown("#### ⬇️ Export Settings")
+
+                if os.path.exists(config_file_path):
+                    with open(config_file_path, "r") as file:
+                        file_data = file.read()
+
+                    st.download_button(
+                        label="Download file",
+                        data=file_data,  
+                        file_name="config.cfg",  
+                        mime="application/octet-stream",  
+                        help="Download the current settings.",
+                        use_container_width=True,
+                    )
+                else:
+                    st.caption("No config file available for download.")
+
+                st.markdown("#### 📂 Import Settings")
+                uploaded_file = st.file_uploader(
+                    "Import Settings",type=["cfg"], on_change=reset_import_setting_processed,
+                    help="Upload a config file (.cfg) to update settings." , label_visibility="collapsed"
+                )
+
+                if uploaded_file and not st.session_state.get('import_setting_processed', False):
+                    file_like_object = io.BytesIO(uploaded_file.getvalue())
+                    text_file_object = io.TextIOWrapper(file_like_object, encoding='utf-8')
+                    self.settings = SeismoLoaderSettings.from_cfg_file(text_file_object)
+                    st.session_state['import_setting_processed'] = True
+                    
+                    st.success("Settings imported successfully!")   
+
+                    self.clear_all_data()
+                    self.refresh_map(reset_areas=True, clear_draw=True)
+
+            with tab2:
+                c2_export = self.render_export_import()
+
+            return c2_export
+
     def event_filter(self):
         start_time = convert_to_date(self.settings.event.date_config.start_time)
         end_time = convert_to_date(self.settings.event.date_config.end_time)
 
         # st.sidebar.header("Event Filters")
         with st.sidebar:
-            c2_export = self.render_map_right_menu()
+            self.render_map_right_menu()
             with st.expander("### Filters", expanded=True):
                 selected_client = st.selectbox('Choose a client:', client_options, 
                                                 index=client_options.index(self.settings.event.client.name), 
@@ -254,6 +259,8 @@ class BaseComponent:
                     value=(self.settings.event.min_depth, self.settings.event.max_depth), 
                     step=1.0, key=f"event-pg-depth"
                 )
+                
+            c2_export = self.import_export()
 
         save_Filter(self.settings)
         return c2_export
@@ -263,7 +270,7 @@ class BaseComponent:
         end_time = convert_to_date(self.settings.station.date_config.end_time)
 
         with st.sidebar:
-            c2_export = self.render_map_right_menu()
+            self.render_map_right_menu()
                 
             with st.expander("### Filters", expanded=True):
                 selected_client = st.selectbox('Choose a client:', client_options, 
@@ -281,6 +288,8 @@ class BaseComponent:
                 self.settings.station.station = st.text_input("Enter Station",   self.settings.station.station, key="event-pg-sta-txt-station")
                 self.settings.station.location = st.text_input("Enter Location", self.settings.station.location, key="event-pg-loc-txt-station")
                 self.settings.station.channel = st.text_input("Enter Channel",   self.settings.station.channel, key="event-pg-cha-txt-station")
+
+            c2_export = self.import_export()
 
         save_Filter(self.settings)
 
@@ -709,21 +718,21 @@ class BaseComponent:
         return c2_export
 
     def render_map_right_menu(self):
-        with st.expander("Actions", expanded=True):
+        with st.expander("Map", expanded=True):
         # st.markdown(f"#### {self.TXT.GET_DATA_TITLE}")
             if self.prev_step_type:
-                tab1, tab2, tab3, tab4 = st.tabs(["Get Data", "Export/Import", "Areas", f"Search Around {self.prev_step_type.title()}s"])
+                tab1, tab2, tab3 = st.tabs(["Get Data", "Areas", f"Search Around {self.prev_step_type.title()}s"])
             else:
-                tab1, tab2, tab3 = st.tabs(["Get Data", "Export/Import", "Areas"])
+                tab1, tab2 = st.tabs(["Get Data", "Areas"])
 
             with tab1:
                 self.render_map_buttons()
 
-            with tab2:
-                c2_export = self.render_export_import()
+            # with tab2:
+            #     c2_export = self.render_export_import()
 
             # with st.expander(f"Update Selection Area", expanded = True):
-            with tab3:
+            with tab2:
                 self.update_rectangle_areas()
                 self.update_circle_areas()
                 
@@ -731,11 +740,11 @@ class BaseComponent:
                     st.warning("There is no defined areas on map. Please first use the map tools to draw an area, then get the data.")
 
             if self.prev_step_type:
-                with tab4:
+                with tab3:
                     self.display_prev_step_selection_table()
 
 
-        return c2_export
+        # return c2_export
 
     def render_map(self):
         if self.map_disp is not None:
@@ -893,13 +902,6 @@ class BaseComponent:
 
 
     def render(self):
-       
-
-        importedSetting= import_export()
-        if(importedSetting is not None):
-            self.settings=importedSetting
-            self.clear_all_data()
-            self.refresh_map(reset_areas=True, clear_draw=True)
 
         if self.step_type == Steps.EVENT:
             c2_export = self.event_filter()
