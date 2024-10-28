@@ -18,6 +18,9 @@ st.markdown(
             width: 100% !important; # Set the width to your desired value
             padding: 0;
         }
+        iframe[data-testid="stCustomComponentV1"] {
+            height: 500px !important;
+        }
         # div[data-testid="stHorizontalBlock"] {
         #     display: flex;
         #     align-items: end;

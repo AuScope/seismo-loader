@@ -1,5 +1,6 @@
 from typing import List, Any, Optional, Union
 import streamlit as st
+import streamlit.components.v1 as components
 from streamlit_folium import st_folium
 import pandas as pd
 from datetime import datetime, timedelta,date
@@ -528,7 +529,8 @@ class BaseComponent:
             if not self.df_markers_prev.empty:
                 cols = self.df_markers_prev.columns
                 cols_to_disp = {c:c.capitalize() for c in cols if c not in self.cols_to_exclude}
-                self.map_fg_prev_selected_marker, _ = add_data_points( self.df_markers_prev, cols_to_disp, step=self.prev_step_type,selected_idx=[], col_color=col_color, col_size=col_size)
+                selected_idx = self.df_markers_prev.index.tolist()
+                self.map_fg_prev_selected_marker, _ = add_data_points( self.df_markers_prev, cols_to_disp, step=self.prev_step_type,selected_idx=selected_idx, col_color=col_color, col_size=col_size)
 
         
     def display_prev_step_selection_table(self):
@@ -756,8 +758,29 @@ class BaseComponent:
             key=f"map_{self.map_id}",
             feature_group_to_add=feature_groups, 
             use_container_width=True, 
-            height=self.map_height
+            # height=self.map_height
         )
+
+        # components.html(
+        #     """
+        #     <script>
+        #         function ensureIframeHeight() {
+        #             // Get all iframes in the document
+        #             const iframes = document.getElementsByTagName("iframe");
+        #             for (let i = 0; i < iframes.length; i++) {
+        #                 // If the iframe is related to streamlit-folium and height is zero, adjust it
+        #                 if (iframes[i].title.includes("streamlit_folium") && iframes[i].style.height === "0px") {
+        #                     iframes[i].style.height = "500px"; // Set it to your desired default height
+        #                 }
+        #             }
+        #         }
+        #         // Run the function every second to check and fix iframe height if needed
+        #         setInterval(ensureIframeHeight, 1000);
+        #     </script>
+        #     """,
+        #     height=0,
+        #     width=0,
+        # )
 
         self.all_current_drawings = get_selected_areas(self.map_output)
         if self.map_output and self.map_output.get('last_object_clicked') is not None:
