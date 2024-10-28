@@ -233,14 +233,15 @@ class BaseComponent:
         start_time = convert_to_date(self.settings.event.date_config.start_time)
         end_time = convert_to_date(self.settings.event.date_config.end_time)
 
-        # st.sidebar.header("Event Filters")
+        if 'initial_event_settings' not in st.session_state:
+            st.session_state['initial_event_settings'] = self.settings.event.dict()
+
         with st.sidebar:
             self.render_map_right_menu()
             with st.expander("### Filters", expanded=True):
                 selected_client = st.selectbox('Choose a client:', client_options, 
-                                                index=client_options.index(self.settings.event.client.name), 
-                                                key="event-pg-client-event")
-                
+                                            index=client_options.index(self.settings.event.client.name), 
+                                            key="event-pg-client-event")
                 self.settings.event.client = SeismoClients[selected_client]
 
                 self.settings.event.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-event")
@@ -260,13 +261,21 @@ class BaseComponent:
                     "Min Depth (km)", 
                     min_value=-5.0, max_value=800.0, 
                     value=(self.settings.event.min_depth, self.settings.event.max_depth), 
-                    step=1.0, key=f"event-pg-depth"
+                    step=1.0, key="event-pg-depth"
                 )
                 
             c2_export = self.import_export()
 
+        new_event_settings = self.settings.event.dict() 
+        if new_event_settings != st.session_state['initial_event_settings']:
+            save_Filter(self.settings)
+            # self.refresh_map()
+            st.session_state['initial_event_settings'] = new_event_settings 
+        
         save_Filter(self.settings)
+
         return c2_export
+
 
     def station_filter(self):
         start_time = convert_to_date(self.settings.station.date_config.start_time)
@@ -890,16 +899,23 @@ class BaseComponent:
 
 
                 self.df_data_edit = st.data_editor(self.df_markers, hide_index = True, column_config=config, column_order = ordered_col, key=self.get_key_element("Data Table"))           
+                
 
-                if not self.df_data_edit.equals(st.session_state[state_key]):
-                    changed_rows = self.df_data_edit[
-                        self.df_data_edit['is_selected'] != st.session_state[state_key]['is_selected']
-                    ]
-                    if not changed_rows.empty:
-                        st.session_state[state_key] = self.df_data_edit.copy()
-                        self.sync_df_markers_with_df_edit()
-                        self.refresh_map_selection()
-            
+                if len(self.df_data_edit) != len(st.session_state[state_key]):
+                    has_changed = True
+                else:
+                    has_changed = not self.df_data_edit.equals(st.session_state[state_key])
+                    
+                    if has_changed:
+                        df_sorted_new = self.df_data_edit.sort_values(by=self.df_data_edit.columns.tolist()).reset_index(drop=True)
+                        df_sorted_old = st.session_state[state_key].sort_values(by=st.session_state[state_key].columns.tolist()).reset_index(drop=True)
+                        has_changed = not df_sorted_new.equals(df_sorted_old)
+
+                if has_changed:
+                    st.session_state[state_key] = self.df_data_edit.copy()  # Save the unsorted version to preserve user sorting
+                    self.sync_df_markers_with_df_edit()
+                    self.refresh_map_selection()
+
             data_table_view()
            
         with c5_map:
