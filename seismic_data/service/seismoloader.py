@@ -268,15 +268,16 @@ def collect_requests(inv, time0, time1, days_per_request=3):
 
 # Requests for shorter, event-based data
 def get_p_s_times(eq, dist_deg, ttmodel):
-    eq_lat = eq.origins[0].latitude
-    eq_lon = eq.origins[0].longitude
+    #eq_lat = eq.origins[0].latitude
+    #eq_lon = eq.origins[0].longitude
+    eq_time = eq.origins[0].time
     eq_depth = eq.origins[0].depth / 1000  # depths are in meters for QuakeML
 
     try:
         phasearrivals = ttmodel.get_travel_times(
             source_depth_in_km=eq_depth,
             distance_in_degree=dist_deg,
-            phase_list=['P', 'S']  # Explicitly request P and S phases // needs review.. local events may not have direct S arrivals so 'ttbasic' is more robust
+            phase_list=['ttbasic'] #can't just look for "P" and "S" as they may not be found depending on distance
         )
     except Exception as e:
         print(f"Error calculating travel times: {str(e)}")
@@ -285,19 +286,22 @@ def get_p_s_times(eq, dist_deg, ttmodel):
     p_arrival_time = None
     s_arrival_time = None
 
+    # "P" is Whatever the first arrival is.. not necessarily literally uppercase P
+    if phasearrivals[0]:
+        p_arrival_time = eq_time + phasearrivals[0].time
+
+    # Now get S... (or s for local)... (or nothing if > 100deg)
     for arrival in phasearrivals:
-        if arrival.name == 'P' and p_arrival_time is None:  # TODO make more robust for non-standard first arrivals. for teleseisms P and S are fine though
-            p_arrival_time = eq.origins[0].time + arrival.time
-        elif arrival.name == 'S' and s_arrival_time is None:
-            s_arrival_time = eq.origins[0].time + arrival.time
+        if arrival.name.upper() == 'S' and s_arrival_time is None:
+            s_arrival_time = eq_time + arrival.time
 
         if p_arrival_time and s_arrival_time:
             break
 
     if p_arrival_time is None:
-        print(f"No P-wave arrival found for distance {dist_deg} degrees")
+        print(f"No direct P-wave arrival found for distance {dist_deg} degrees")
     if s_arrival_time is None:
-        print(f"No S-wave arrival found for distance {dist_deg} degrees")
+        print(f"No direct S-wave arrival found for distance {dist_deg} degrees")
 
     return p_arrival_time, s_arrival_time
 
