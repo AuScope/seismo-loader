@@ -1,22 +1,4 @@
 import streamlit as st
-from seismic_data.ui.pages.helpers.common import init_settings
-from seismic_data.ui.components.workflows_combined import CombinedBasedWorkflow
-
-# st.markdown(
-#     """
-#     <style>
-#         section[data-testid="stSidebar"] {
-#             width: 800px; # Set the width to your desired value
-#         }
-#         section[data-testid="stMain"] {
-#             width: 100% !important; # Set the width to your desired value
-#             padding: 0;
-#         }
-#     </style>
-#     """,
-#     unsafe_allow_html=True,
-# )
-
 
 st.set_page_config(
     page_title="Seed Vault",
@@ -24,6 +6,34 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+
+st.markdown(
+    """
+    <style>
+        section[data-testid="stSidebar"] {
+            width: 800px; # Set the width to your desired value
+        }
+        section[data-testid="stMain"] {
+            width: 100% !important; # Set the width to your desired value
+            padding: 0;
+        }
+        # div[data-testid="stHorizontalBlock"] {
+        #     display: flex;
+        #     align-items: end;
+        # }
+        .vertical-align-bottom {
+            display: flex;
+            align-items: flex-end !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+from seismic_data.ui.pages.helpers.common import init_settings
+from seismic_data.ui.components.workflows_combined import CombinedBasedWorkflow
 
 
 if "combined_based_workflow" not in st.session_state:

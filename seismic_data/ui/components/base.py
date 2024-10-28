@@ -123,6 +123,8 @@ class BaseComponent:
     col_size                    = None
     df_markers_prev             = pd.DataFrame()
 
+    cols_to_exclude             = ['detail', 'is_selected']
+
     @property
     def page_type(self) -> str:
         if self.prev_step_type is not None and self.prev_step_type != Steps.NONE:
@@ -370,11 +372,9 @@ class BaseComponent:
 
     def handle_update_data_points(self, selected_idx):
         if not self.df_markers.empty:
-            cols = self.df_markers.columns                
-            cols_to_disp = {c:c.capitalize() for c in cols }
-            if 'detail' in cols_to_disp:
-                cols_to_disp.pop("detail")
-            self.map_fg_marker, self.marker_info = add_data_points( self.df_markers, cols_to_disp, step=self.step_type.value, selected_idx = selected_idx, col_color=self.col_color, col_size=self.col_size)
+            cols = self.df_markers.columns
+            cols_to_disp = {c:c.capitalize() for c in cols if c not in self.cols_to_exclude}
+            self.map_fg_marker, self.marker_info = add_data_points( self.df_markers, cols_to_disp, step=self.step_type, selected_idx = selected_idx, col_color=self.col_color, col_size=self.col_size)
         else:
             self.warning = "No data found."
 
@@ -440,10 +440,8 @@ class BaseComponent:
                 
             if not self.df_markers.empty:
                 cols = self.df_markers.columns                
-                cols_to_disp = {c:c.capitalize() for c in cols }
-                if 'detail' in cols_to_disp:
-                    cols_to_disp.pop("detail")
-                self.map_fg_marker, self.marker_info = add_data_points( self.df_markers, cols_to_disp, step=self.step_type.value, col_color=self.col_color, col_size=self.col_size)
+                cols_to_disp = {c:c.capitalize() for c in cols if c not in self.cols_to_exclude}
+                self.map_fg_marker, self.marker_info = add_data_points( self.df_markers, cols_to_disp, step=self.step_type, col_color=self.col_color, col_size=self.col_size)
 
             else:
                 self.warning = "No data available."
@@ -529,10 +527,8 @@ class BaseComponent:
 
             if not self.df_markers_prev.empty:
                 cols = self.df_markers_prev.columns
-                cols_to_disp = {c:c.capitalize() for c in cols }
-                if "detail" in cols_to_disp:
-                    cols_to_disp.pop("detail")
-                self.map_fg_prev_selected_marker, _ = add_data_points( self.df_markers_prev, cols_to_disp, step=self.prev_step_type.value,selected_idx=[], col_color=col_color, col_size=col_size)
+                cols_to_disp = {c:c.capitalize() for c in cols if c not in self.cols_to_exclude}
+                self.map_fg_prev_selected_marker, _ = add_data_points( self.df_markers_prev, cols_to_disp, step=self.prev_step_type,selected_idx=[], col_color=col_color, col_size=col_size)
 
         
     def display_prev_step_selection_table(self):
@@ -770,7 +766,10 @@ class BaseComponent:
 
             if isinstance(last_clicked, str):
                 idx = int(last_clicked.splitlines()[0].split()[1])
-                self.clicked_marker_info = self.marker_info[idx]
+                step = last_clicked.splitlines()[-1].split()[1].lower()
+                if step == self.step_type:
+                    self.clicked_marker_info = self.marker_info[idx]
+                
             # if isinstance(last_clicked, dict):
             #     clicked_lat_lng = (last_clicked.get('lat'), last_clicked.get('lng'))
             # elif isinstance(last_clicked, list):
@@ -801,11 +800,12 @@ class BaseComponent:
             else:
                 st.warning(selected_data)
 
-            if st.button("Add to Selection", key=self.get_key_element("Add to Selection")):
-                self.sync_df_markers_with_df_edit()
-                self.df_markers.loc[self.clicked_marker_info['id'] - 1, 'is_selected'] = True
-                self.refresh_map_selection()
-                return
+            if self.clicked_marker_info['step'] == self.step_type:
+                if st.button("Add to Selection", key=self.get_key_element("Add to Selection")):                    
+                    self.sync_df_markers_with_df_edit()
+                    self.df_markers.loc[self.clicked_marker_info['id'] - 1, 'is_selected'] = True
+                    self.refresh_map_selection()
+                    return
             
 
             if self.df_markers.loc[self.clicked_marker_info['id'] - 1, 'is_selected']:

@@ -61,7 +61,7 @@ def add_draw_controls(map_object):
             'marker': False,
             'circlemarker': False,
         },
-        edit_options={'edit': True},
+        edit_options={'edit': False},
         export=False
     ).add_to(map_object)
 
@@ -129,7 +129,7 @@ def add_circle_area(feature_group, coords):
 
 
 def add_data_points(df, cols_to_disp, step: Steps, selected_idx=[], col_color=None, col_size=None):
-    fg = folium.FeatureGroup(name="Marker " + step)
+    fg = folium.FeatureGroup(name="Marker " + step.value)
 
     marker_info = {}
 
@@ -173,7 +173,7 @@ def add_data_points(df, cols_to_disp, step: Steps, selected_idx=[], col_color=No
         fill_opacity = 1.0 if index in selected_idx else 0.2
 
         # Create popup content
-        popup_content = create_popup(index, row, cols_to_disp)
+        popup_content = create_popup(index, row, cols_to_disp, step)
         popup = folium.Popup(html=popup_content, max_width=2650, min_width=200)
 
         # Add marker to the cluster
@@ -185,6 +185,8 @@ def add_data_points(df, cols_to_disp, step: Steps, selected_idx=[], col_color=No
         marker_key = int(index + 1)
         if marker_key not in marker_info:
             marker_info[marker_key] = {"id": int(index + 1)}
+
+        marker_info[marker_key]['step'] = step.value
 
         for k, v in cols_to_disp.items():
             marker_info[marker_key][v] = row[k]
@@ -320,11 +322,11 @@ def get_color_map(df, c, offset=0.0, cmap='viridis'):
     return norm, colormap
     
 
-def create_popup(index, row, cols_to_disp):
+def create_popup(index, row, cols_to_disp, step: Steps = None):
     html_disp = f"<h4>No: {index + 1}</h4>"
     for k,v in cols_to_disp.items():
         html_disp += f"<h6>{v}: {row[k]}</h6>"
-
+    html_disp += f"<h6>Type: {step.value.title()}</h6>" if step else ""
     return f"""
     <div>
         {html_disp}
