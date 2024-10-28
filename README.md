@@ -19,7 +19,13 @@ For a quick start follow these steps:
 1. Setup environment:  `source setup.sh`
 2. Run app: `source run.sh`
 
-**Note:** For Win OS, you would need to convert the shell scripts to PowerShell. Or simply follow the steps in the shell scripts to set up the app. 
+**Note:** 
+1. For Win OS, you would need to convert the shell scripts to PowerShell. Or simply follow the steps in the shell scripts to set up the app.
+2. Requires python3 venv software package e.g. For python v10 on Ubuntu you may need to:
+   ```
+   sudo apt update
+   sudo apt install python3.10-venv
+   ``` 
 
 
 ## Setting up with Poetry
