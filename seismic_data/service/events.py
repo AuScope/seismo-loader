@@ -12,6 +12,9 @@ import pandas as pd
 import streamlit as st
 import requests
 
+
+from obspy.core.event import Catalog
+
 from seismic_data.models.config import SeismoLoaderSettings
 from seismic_data.service.seismoloader import get_events
 
@@ -23,9 +26,21 @@ from seismic_data.service.seismoloader import get_events
 #     return get_events(settings)
 
 
+def remove_duplicate_events(events):
+    unique_event_ids = set()
+    unique_events = Catalog()
+
+    for event in events:
+        event_id = event.resource_id.id
+        if event_id not in unique_event_ids:
+            unique_event_ids.add(event_id)
+            unique_events.append(event)
+
+    return unique_events
+
 # @st.cache_data
 def get_event_data(settings: SeismoLoaderSettings):
-    return get_events(settings)
+    return remove_duplicate_events(get_events(settings))
 
 
 def event_response_to_df(data):

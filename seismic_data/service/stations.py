@@ -11,6 +11,7 @@ We should also be able to support multi-select areas.
 import pandas as pd
 import streamlit as st
 import requests
+from obspy.core.inventory import Inventory, Network
 
 from seismic_data.models.config import SeismoLoaderSettings
 from seismic_data.service.seismoloader import get_stations
@@ -23,10 +24,46 @@ from seismic_data.service.seismoloader import get_stations
 #     settings = SeismoLoaderSettings.model_validate_json(settings_json_str)
 #     return get_stations(settings)
 
+def remove_duplicate_inventories(inventories):
+    # Define a set to track unique network-station pairs
+    unique_network_station_pairs = set()
+
+    # Create lists to store the filtered networks and stations
+    filtered_networks = []
+
+    for network in inventories:
+        unique_stations = []
+        
+        for station in network:
+            # Create a tuple representing the network-station pair
+            network_station_pair = (network.code, station.code)
+
+            # If this network-station pair is unique, add it to the set and the list
+            if network_station_pair not in unique_network_station_pairs:
+                unique_network_station_pairs.add(network_station_pair)
+                unique_stations.append(station)
+        
+        # If there are unique stations for this network, add a new network with filtered stations
+        if unique_stations:
+            filtered_network = Network(
+                code=network.code,
+                stations=unique_stations,
+                description=network.description,
+                start_date=network.start_date,
+                end_date=network.end_date,
+                total_number_of_stations=len(unique_stations),
+            )
+            filtered_networks.append(filtered_network)
+
+    # Create a new Inventory object with the filtered networks
+    return Inventory(
+        networks=filtered_networks,
+        source=inventories.source
+    )
 
 # @st.cache_data
 def get_station_data(settings: SeismoLoaderSettings):
-    return get_stations(settings)
+    return remove_duplicate_inventories(get_stations(settings))
 
 
 def station_response_to_df(inventory):

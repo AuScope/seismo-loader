@@ -542,8 +542,8 @@ class BaseComponent:
             else:
                 # with st.expander(f"Search around {self.TXT.PREV_STEP}", expanded = True):
                 self.area_around_prev_step_selections()
-                st.write(f"Total Number of Selected {self.TXT.PREV_STEP.title()}s: {len(self.df_markers_prev)}")
-                st.dataframe(self.df_markers_prev, use_container_width=True)
+                # st.write(f"Total Number of Selected {self.TXT.PREV_STEP.title()}s: {len(self.df_markers_prev)}")
+                # st.dataframe(self.df_markers_prev, use_container_width=True)
 
     
     def area_around_prev_step_selections(self):
@@ -560,7 +560,7 @@ class BaseComponent:
         )
 
         st.write(f"Define an area around the selected {self.TXT.STEP}s.")
-        c1, c2, c3 = st.columns([1, 1, 1])
+        c1, c2 = st.columns([1, 1])
 
         with c1:
             min_radius_str = st.text_input("Minimum radius (degree)", value="0")
@@ -582,13 +582,13 @@ class BaseComponent:
             self.prev_min_radius = None
             self.prev_max_radius = None
 
-        with c3:
-            if st.button("Draw Area", key=self.get_key_element("Draw Area")):
-                if self.prev_min_radius is None or self.prev_max_radius is None or min_radius != self.prev_min_radius or max_radius != self.prev_max_radius:
-                    self.update_area_around_prev_step_selections(min_radius, max_radius)
-                    self.prev_min_radius = min_radius
-                    self.prev_max_radius = max_radius
-                    st.rerun()
+        # with c3:
+        if st.button("Draw Area", key=self.get_key_element("Draw Area")):
+            if self.prev_min_radius is None or self.prev_max_radius is None or min_radius != self.prev_min_radius or max_radius != self.prev_max_radius:
+                self.update_area_around_prev_step_selections(min_radius, max_radius)
+                self.prev_min_radius = min_radius
+                self.prev_max_radius = max_radius
+                st.rerun()
 
     def update_area_around_prev_step_selections(self, min_radius, max_radius):
         min_radius_value = float(min_radius) # * 1000
