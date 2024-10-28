@@ -292,7 +292,7 @@ def get_p_s_times(eq, dist_deg, ttmodel):
 
     # Now get S... (or s for local)... (or nothing if > 100deg)
     for arrival in phasearrivals:
-        arrival.name.upper() == 'S' and s_arrival_time is None:
+        if arrival.name.upper() == 'S' and s_arrival_time is None:
             s_arrival_time = eq_time + arrival.time
 
         if p_arrival_time and s_arrival_time:
