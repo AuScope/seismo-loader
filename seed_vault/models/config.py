@@ -113,11 +113,21 @@ class DateConfig(BaseModel):
 
 
 class WaveformConfig(BaseModel):
-    client           : Optional     [SeismoClients]   = SeismoClients.AUSPASS
-    channel_pref     : Optional     [List[Channels]]  = []
-    location_pref    : Optional     [List[Locations]] = []
-    days_per_request : Optional     [int]             = 3
+    client           : Optional     [SeismoClients]   = SeismoClients.IRIS
+    channel_pref     : Optional     [List[Channels]]  = [
+        Channels.CH, Channels.HH, Channels.BH, Channels.EH,
+        Channels.HN, Channels.EN, Channels.SH, Channels.LH
+    ]
+    location_pref    : Optional     [List[Locations]] = [
+        Locations("10"), Locations("00"), Locations("20"), Locations("30")
+    ]
+    days_per_request : Optional     [int]             = 1
 
+    def set_default(self):
+        """Resets all fields to their default values."""
+        self.__fields_set__.clear()
+        for field_name, field in self.__fields__.items():
+            setattr(self, field_name, field.get_default())
 
 class GeometryConstraint(BaseModel):
     geo_type: Optional[GeoConstraintType] = GeoConstraintType.NONE
@@ -134,10 +144,13 @@ class GeometryConstraint(BaseModel):
 
 
 class StationConfig(BaseModel):
-    client             : Optional   [ SeismoClients] = SeismoClients.AUSPASS
+    client             : Optional   [ SeismoClients] = SeismoClients.IRIS
     force_stations     : Optional   [ List          [SeismoQuery]] = []
     exclude_stations   : Optional   [ List          [SeismoQuery]] = []
-    date_config        : DateConfig = DateConfig    ()
+    date_config        : DateConfig                                = DateConfig(
+        start_time=datetime(2024, 8, 20),
+        end_time=datetime(2024, 9, 20)
+    )
     local_inventory    : Optional   [ str           ] = None
     network            : Optional   [ str           ] = None
     station            : Optional   [ str           ] = None
@@ -153,6 +166,13 @@ class StationConfig(BaseModel):
             Any: lambda v: None  
         }
         exclude = {"selected_invs"}
+
+    def set_default(self):
+        """Resets all fields to their default values."""
+        self.__fields_set__.clear()
+        for field_name, field in self.__fields__.items():
+            setattr(self, field_name, field.get_default())
+
     # TODO: check if it makes sense to use SeismoLocation instead of separate
     # props.
     # seismo_location: List[SeismoLocation] = None
@@ -162,35 +182,44 @@ class StationConfig(BaseModel):
     # channel = CH,HH,BH,EH
 
 class EventConfig(BaseModel):
-    client       : Optional   [SeismoClients] = SeismoClients.AUSPASS
-    date_config  : DateConfig  = DateConfig()
-    model        : EventModels = EventModels.IASP91
-    min_depth    : float
-    max_depth    : float
-    min_magnitude: float
-    max_magnitude: float
-    # These are relative to the individual stations
-    min_radius            : float         = 30
-    max_radius            : float         = 90
-    before_p_sec          : int           = 10
-    after_p_sec           : int           = 10
-    include_all_origins   : bool          = False
-    include_all_magnitudes: bool          = False
-    include_arrivals      : bool          = False
-    limit                 : Optional[str] = None
-    offset                : Optional[str] = None
-    local_catalog         : Optional[str] = None
-    contributor           : Optional[str] = None
-    updated_after         : Optional[str] = None
+    client              : Optional   [SeismoClients] = SeismoClients.IRIS
+    date_config         : DateConfig                 = DateConfig(
+        start_time=datetime(2024, 8, 20),
+        end_time=datetime(2024, 9, 20)
+    )
+    model               : EventModels = EventModels.IASP91
+    min_depth           : float = 0.0
+    max_depth           : float = 6800.0
+    min_magnitude       : float = 5.0
+    max_magnitude       : float = 10.0
+    min_radius          : float = 30.0
+    max_radius          : float = 90.0
+    before_p_sec        : int = 10
+    after_p_sec         : int = 130
+    include_all_origins : bool = False
+    include_all_magnitudes: bool = False
+    include_arrivals    : bool = False
+    limit               : Optional[str] = None
+    offset              : Optional[str] = None
+    local_catalog       : Optional[str] = None
+    contributor         : Optional[str] = None
+    updated_after       : Optional[str] = None
 
-    selected_catalogs     : Optional[Any] = None
+    selected_catalogs   : Optional[Any] = None
 
-    geo_constraint: Optional[List[GeometryConstraint]] = None
+    geo_constraint      : Optional[List[GeometryConstraint]] = None
+
     class Config:
         json_encoders = {
             Any: lambda v: None  
         }
         exclude = {"selected_catalogs"}
+
+    def set_default(self):
+        """Resets all fields to their default values."""
+        self.__fields_set__.clear()
+        for field_name, field in self.__fields__.items():
+            setattr(self, field_name, field.get_default())      
 
 class PredictionData(BaseModel):
     event_id: str
@@ -345,7 +374,10 @@ class SeismoLoaderSettings(BaseModel):
 
         # Parse the EVENT section
         event_config = None
-        if download_type == DownloadType.EVENT:
+        if not config.has_section("EVENT"):
+            event_config = EventConfig()
+            event_config.set_default()  
+        else:    
             event_client = config.get('EVENT', 'client', fallback=None    )
             model        = config.get('EVENT', 'model' , fallback='iasp91')
 
