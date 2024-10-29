@@ -11,7 +11,7 @@ This readme outlines the steps to create executables for macOS, Linux, and Windo
 Before starting, it's good to clean up any previous builds:
 ```bash
 rm -rf dist build *.spec
-sudo rm -rf /mnt/c/MyFiles/050-FDSN/seismo-loader/.venv
+sudo rm -rf /mnt/c/MyFiles/050-FDSN/seed-vault/.venv
 ```
 
 ### 2. Install Python, Poetry, and PyInstaller
@@ -75,7 +75,7 @@ datas = copy_metadata('streamlit')
 ### For Linux
 Use the following command to compile the app on Linux:
 ```bash
-pyinstaller --name seismo-loader \
+pyinstaller --name seed-vault \
             --onefile \
             --additional-hooks-dir=./hooks \
             --collect-all streamlit \
@@ -90,7 +90,7 @@ pyinstaller --name seismo-loader \
 ### For Windows
 For Windows, use PowerShell and the following command:
 ```bash
-pyinstaller --name seismo-loader `
+pyinstaller --name seed-vault `
             --onefile `
             --additional-hooks-dir=.\hooks `
             --collect-all streamlit `
@@ -105,7 +105,7 @@ pyinstaller --name seismo-loader `
 ### For macOS
 For macOS, the command is similar to Linux:
 ```bash
-pyinstaller --name seismo-loader \
+pyinstaller --name seed-vault \
             --onefile \
             --additional-hooks-dir=./hooks \
             --collect-all streamlit \

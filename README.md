@@ -1,15 +1,15 @@
-# Seismo-Loader
+# seed-vault
 
 *Add a brief intro here*
 
 ## Clone Repository
 
 ```bash
-git clone https://github.com/AuScope/seismo-loader.git
+git clone https://github.com/AuScope/seed-vault.git
 ```
 or
 ```bash
-git clone git@github.com:AuScope/seismo-loader.git
+git clone git@github.com:AuScope/seed-vault.git
 ```
 
 ## Quick Start
@@ -17,8 +17,8 @@ git clone git@github.com:AuScope/seismo-loader.git
 For a quick start follow these steps:
 
 ```
-git clone https://github.com/AuScope/seismo-loader.git
-cd seismo-loader
+git clone https://github.com/AuScope/seed-vault.git
+cd seed-vault
 sudo apt update
 sudo apt install python3.12-venv 
 source setup.sh
@@ -133,7 +133,7 @@ streamlit run seed_vault/ui/main.py
 Alternatively, command line is configured for this project. You can also run the app, simply by:
 
 ```
-seismo-loader start
+seed-vault start
 ```
 
 ## Build Project
@@ -158,7 +158,7 @@ To develop and run the application using Docker, follow these steps:
 
 1. Navigate to the project root directory:
 ```bash
-cd seismo-loader
+cd seed-vault
 ```
 
 2. Build and run the Docker container:
@@ -171,7 +171,7 @@ The application should now be running and accessible at `http://localhost:8501`.
 
 ## Project Folder structure
 ```
-seismo-loader/
+seed-vault/
 │
 ├── seed_vault/      # Python package containing application code
 │   ├── models/        # Python modules for data models
