@@ -685,7 +685,11 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
         os.makedirs(full_sds_path, exist_ok=True)
         
         if os.path.exists(full_path):
-            existing_st = obspy.read(full_path)
+            try:
+                existing_st = obspy.read(full_path)
+            except Exception as e:
+                print(f"! Could not read {full_path}: {e}")
+                continue
             existing_st += day_stream
             existing_st.merge(method=-1, fill_value=None)
             existing_st._cleanup()
@@ -699,13 +703,16 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
         existing_st = obspy.Stream([tr for tr in existing_st if len(tr.data) > 0])
 
         if existing_st:
-            existing_st.write(full_path, format="MSEED", encoding='STEIM2') #STEIM2 is default?
-            to_insert_db.append(stream_to_db_element(existing_st))
+            try:
+                existing_st.write(full_path, format="MSEED", encoding='STEIM2') #MSEED/STEIM2 are normal but users may want to change these... someday
+                to_insert_db.append(stream_to_db_element(existing_st))
+            except Exception as e:
+                print(f"! Could not write {full_path}: {e}")
     # Update database
     try:
         num_inserted = db_manager.bulk_insert_archive_data(to_insert_db)
     except Exception as e:
-        print("Error with bulk_insert_archive_data: ", e)
+        print("! Error with bulk_insert_archive_data: ", e)
 
 
 
