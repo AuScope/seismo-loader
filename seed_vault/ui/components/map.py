@@ -10,15 +10,15 @@ import pandas as pd
 
 from typing import List, Union
 
-from seismic_data.models.common import RectangleArea, CircleArea 
-from seismic_data.enums.ui import Steps
-from seismic_data.utils.constants import AREA_COLOR
-from seismic_data.service.seismoloader import convert_degrees_to_radius_meter
+from seed_vault.models.common import RectangleArea, CircleArea 
+from seed_vault.enums.ui import Steps
+from seed_vault.utils.constants import AREA_COLOR
+from seed_vault.service.seismoloader import convert_degrees_to_radius_meter
 # from shapely.geometry import Point
 # from shapely.geometry.polygon import Polygon
 # import geopandas as gpd
 import streamlit as st
-from seismic_data.models.config import GeometryConstraint
+from seed_vault.models.config import GeometryConstraint
 from folium.plugins import Draw
 
 

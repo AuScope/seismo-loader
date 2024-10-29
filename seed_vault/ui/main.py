@@ -35,8 +35,8 @@ st.markdown(
 )
 
 
-from seismic_data.ui.pages.helpers.common import init_settings
-from seismic_data.ui.components.workflows_combined import CombinedBasedWorkflow
+from seed_vault.ui.pages.helpers.common import init_settings
+from seed_vault.ui.components.workflows_combined import CombinedBasedWorkflow
 
 
 if "combined_based_workflow" not in st.session_state:

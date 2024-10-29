@@ -1,8 +1,8 @@
 import re
 from typing import List, Dict
 from obspy import UTCDateTime
-from seismic_data.models.config import SeismoLoaderSettings
-from seismic_data.service.seismoloader import run_event
+from seed_vault.models.config import SeismoLoaderSettings
+from seed_vault.service.seismoloader import run_event
 from obspy.clients.fdsn import Client
 from obspy.taup import TauPyModel
 import streamlit as st

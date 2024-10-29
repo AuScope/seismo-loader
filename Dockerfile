@@ -23,4 +23,4 @@ EXPOSE 8501 8888
 ENV PYTHONPATH=/app
 
 # Run the Streamlit app
-CMD ["sh", "-c", "poetry run streamlit run seismic_data/ui/main.py & jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root"]
+CMD ["sh", "-c", "poetry run streamlit run seed_vault/ui/main.py & jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root"]

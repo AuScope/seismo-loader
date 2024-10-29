@@ -1,13 +1,13 @@
-from seismic_data.ui.components.waveform import WaveformComponents
+from seed_vault.ui.components.waveform import WaveformComponents
 import streamlit as st
 import plotly.express as px
 import pandas as pd
 
-from seismic_data.enums.ui import Steps
-from seismic_data.models.config import SeismoLoaderSettings, DownloadType, WorkflowType
+from seed_vault.enums.ui import Steps
+from seed_vault.models.config import SeismoLoaderSettings, DownloadType, WorkflowType
 
-from seismic_data.ui.components.base import BaseComponent
-from seismic_data.ui.pages.helpers.common import init_settings_new
+from seed_vault.ui.components.base import BaseComponent
+from seed_vault.ui.pages.helpers.common import init_settings_new
 
 download_options = [f.name.title() for f in DownloadType]
 

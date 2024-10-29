@@ -1,5 +1,5 @@
 {
-  "name": "seismic-data-desktop",
+  "name": "seed-vault-desktop",
   "version": "0.1.0",
   "main": "./build/electron/main.js",
   "scripts": {
@@ -26,17 +26,17 @@
   "stlite": {
     "desktop": {
       "files": [
-        "seismic_data/models/*",
-        "seismic_data/service/*",
-        "seismic_data/ui/components/*",
-        "seismic_data/ui/pages/*",
-        "seismic_data/ui/__init__.py",
-        "seismic_data/ui/main.py",
-        "seismic_data/utils/*",
-        "seismic_data/__init__.py",
-        "seismic_data/cli.py"
+        "seed_vault/models/*",
+        "seed_vault/service/*",
+        "seed_vault/ui/components/*",
+        "seed_vault/ui/pages/*",
+        "seed_vault/ui/__init__.py",
+        "seed_vault/ui/main.py",
+        "seed_vault/utils/*",
+        "seed_vault/__init__.py",
+        "seed_vault/cli.py"
       ],
-      "entrypoint": "seismic_data/ui/main.py",
+      "entrypoint": "seed_vault/ui/main.py",
       "requirementsTxtFiles": [
         "requirements.txt"
       ]

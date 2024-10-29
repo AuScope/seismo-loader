@@ -4,9 +4,9 @@ import obspy
 from obspy import UTCDateTime
 from obspy.clients.filesystem.sds import Client as LocalClient
 
-from seismic_data.models.config import SeismoLoaderSettings, SeismoQuery
-from seismic_data.service.db import safe_db_connection
-from seismic_data.models.exception import NotFoundError
+from seed_vault.models.config import SeismoLoaderSettings, SeismoQuery
+from seed_vault.service.db import safe_db_connection
+from seed_vault.models.exception import NotFoundError
 
 def stream_to_dataframe(stream):
     df = pd.DataFrame()

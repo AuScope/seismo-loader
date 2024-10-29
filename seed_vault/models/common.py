@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from seismic_data.utils.constants import AREA_COLOR
+from seed_vault.utils.constants import AREA_COLOR
 
 class RectangleArea(BaseModel):
     min_lat: float

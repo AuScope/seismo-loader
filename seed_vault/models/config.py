@@ -12,12 +12,12 @@ from obspy.core.inventory import Inventory
 from obspy.core.event import Catalog
 
 from .common import RectangleArea, CircleArea
-from seismic_data.enums.config import DownloadType, WorkflowType, SeismoClients, GeoConstraintType, Levels, EventModels
+from seed_vault.enums.config import DownloadType, WorkflowType, SeismoClients, GeoConstraintType, Levels, EventModels
 
 # TODO: Not sure if these values are controlled values
 # check to see if should we use controlled values or
 # rely on free inputs from users.
-from seismic_data.enums.stations import Channels, Stations, Locations, Networks
+from seed_vault.enums.stations import Channels, Stations, Locations, Networks
 
 # Convert start and end times to datetime
 def parse_time(time_str):

@@ -5,10 +5,10 @@ import streamlit as st
 import os
 from pprint import pprint
 
-from seismic_data.models.common import RectangleArea, CircleArea
-from seismic_data.enums.common import GeometryType
-from seismic_data.models.config import SeismoLoaderSettings, GeometryConstraint
-from seismic_data.service.seismoloader import convert_radius_to_degrees
+from seed_vault.models.common import RectangleArea, CircleArea
+from seed_vault.enums.common import GeometryType
+from seed_vault.models.config import SeismoLoaderSettings, GeometryConstraint
+from seed_vault.service.seismoloader import convert_radius_to_degrees
 
 
 current_directory = os.path.dirname(os.path.abspath(__file__))

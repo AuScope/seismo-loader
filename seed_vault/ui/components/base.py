@@ -11,21 +11,21 @@ from io import BytesIO
 
 
 
-from seismic_data.ui.components.card import create_card
-from seismic_data.ui.components.map import create_map, add_area_overlays, add_data_points, clear_map_layers, clear_map_draw,add_map_draw
-from seismic_data.ui.pages.helpers.common import get_selected_areas
+from seed_vault.ui.components.card import create_card
+from seed_vault.ui.components.map import create_map, add_area_overlays, add_data_points, clear_map_layers, clear_map_draw,add_map_draw
+from seed_vault.ui.pages.helpers.common import get_selected_areas
 
-from seismic_data.service.events import get_event_data, event_response_to_df
-from seismic_data.service.stations import get_station_data, station_response_to_df
-from seismic_data.service.seismoloader import convert_radius_to_degrees, convert_degrees_to_radius_meter
+from seed_vault.service.events import get_event_data, event_response_to_df
+from seed_vault.service.stations import get_station_data, station_response_to_df
+from seed_vault.service.seismoloader import convert_radius_to_degrees, convert_degrees_to_radius_meter
 
-from seismic_data.models.config import SeismoLoaderSettings, GeometryConstraint, EventConfig, StationConfig
-from seismic_data.models.common import CircleArea, RectangleArea
+from seed_vault.models.config import SeismoLoaderSettings, GeometryConstraint, EventConfig, StationConfig
+from seed_vault.models.common import CircleArea, RectangleArea
 
-from seismic_data.enums.config import GeoConstraintType, SeismoClients
-from seismic_data.enums.ui import Steps
+from seed_vault.enums.config import GeoConstraintType, SeismoClients
+from seed_vault.enums.ui import Steps
 
-from seismic_data.service.utils import convert_to_date
+from seed_vault.service.utils import convert_to_date
 import json
 import io
 import jinja2

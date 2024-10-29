@@ -46,7 +46,7 @@ Create a file called `run_app.py` with the following content:
 from streamlit.web import cli
 
 if __name__ == '__main__':
-    cli._main_run_clExplicit('seismic_data/ui/main.py', is_hello=False)
+    cli._main_run_clExplicit('seed_vault/ui/main.py', is_hello=False)
 ```
 
 #### Modify Streamlit's CLI
@@ -138,7 +138,7 @@ Add this file either to the project root or the `dist` output folder after build
 After building, copy configuration and source files to the `dist` folder:
 ```bash
 xcopy /s /e ".\.streamlit" "dist\.streamlit"
-Copy-Item -Path "seismic_data" -Destination "dist\seismic_data" -Recurse
+Copy-Item -Path "seed_vault" -Destination "dist\seed_vault" -Recurse
 ```
 
 ---
@@ -154,7 +154,7 @@ datas = datas + [
     (".venv/lib/python3.12/site-packages/streamlit/runtime", "./streamlit/runtime"),
     (".venv/lib/python3.12/site-packages/streamlit_folium", "streamlit_folium"),
     ('.venv/lib/python3.12/site-packages/obspy/RELEASE-VERSION', 'obspy/'),
-    ("seismic_data", "seismic_data"), 
+    ("seed_vault", "seed_vault"), 
     ("data", "data"), 
     (".streamlit/config.toml", ".streamlit/config.toml"),
 ]
@@ -171,7 +171,7 @@ datas = datas + [
     (".venv\Lib\site-packages\streamlit\runtime", "./streamlit/runtime"),
     (".venv\Lib\site-packages\streamlit_folium", "streamlit_folium"),
     ('.venv\Lib\site-packages\obspy\RELEASE-VERSION', 'obspy/'),
-    ("seismic_data", "seismic_data"), 
+    ("seed_vault", "seed_vault"), 
     ("data", "data"), 
     (".streamlit\config.toml", ".streamlit/config.toml"),
 ]
@@ -188,7 +188,7 @@ datas = datas + [
     (".venv/lib/python3.12/site-packages/streamlit/runtime", "./streamlit/runtime"),
     (".venv/lib/python3.12/site-packages/streamlit_folium", "streamlit_folium"),
     ('.venv/lib/python3.12/site-packages/obspy/RELEASE-VERSION', 'obspy/'),
-    ("seismic_data", "seismic_data"), 
+    ("seed_vault", "seed_vault"), 
     ("data", "data"), 
     (".streamlit/config.toml", ".streamlit/config.toml"),
 ]

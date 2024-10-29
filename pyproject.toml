@@ -1,15 +1,15 @@
 [tool.poetry]
-name = "seismic_data"
+name = "seed_vault"
 version = "0.1.0"
 description = ""
 package-mode = true
 authors = ["Ben Motevalli <mot032@csiro.au>"]
 readme = "README.md"
-packages = [{ include = "seismic_data" }]
+packages = [{ include = "seed_vault" }]
 
 
 [tool.poetry.scripts]
-seismo-loader = "seismic_data.cli:cli"
+seed-vault = "seed_vault.cli:cli"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.12"

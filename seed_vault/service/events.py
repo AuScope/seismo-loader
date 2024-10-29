@@ -15,8 +15,8 @@ import requests
 
 from obspy.core.event import Catalog
 
-from seismic_data.models.config import SeismoLoaderSettings
-from seismic_data.service.seismoloader import get_events
+from seed_vault.models.config import SeismoLoaderSettings
+from seed_vault.service.seismoloader import get_events
 
 
 # @st.cache_data

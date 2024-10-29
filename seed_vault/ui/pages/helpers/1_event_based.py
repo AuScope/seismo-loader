@@ -1,7 +1,7 @@
 import streamlit as st
 
-from seismic_data.ui.pages.helpers.common import init_settings
-from seismic_data.ui.components.workflows import EventBasedWorkflow
+from seed_vault.ui.pages.helpers.common import init_settings
+from seed_vault.ui.components.workflows import EventBasedWorkflow
 
 init_settings()
 st.set_page_config(layout="wide")

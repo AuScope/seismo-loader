@@ -9,7 +9,7 @@ from obspy.geodetics.base import locations2degrees
 from obspy.taup import TauPyModel
 
 
-from seismic_data.service.seismoloader import (
+from seed_vault.service.seismoloader import (
     setup_database,
     collect_requests,
     prune_requests,

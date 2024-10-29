@@ -13,8 +13,8 @@ import streamlit as st
 import requests
 from obspy.core.inventory import Inventory, Network
 
-from seismic_data.models.config import SeismoLoaderSettings
-from seismic_data.service.seismoloader import get_stations
+from seed_vault.models.config import SeismoLoaderSettings
+from seed_vault.service.seismoloader import get_stations
 
 
 

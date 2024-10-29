@@ -11,4 +11,4 @@ services:
       - STREAMLIT_SERVER_PORT=8501
       - STREAMLIT_SERVER_HEADLESS=true
       - PYTHONPATH=/app
-    command: sh -c "poetry run streamlit run seismic_data/ui/main.py & jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root"
+    command: sh -c "poetry run streamlit run seed_vault/ui/main.py & jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root"

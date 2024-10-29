@@ -22,12 +22,12 @@ from obspy.core.inventory import Inventory
 from obspy.core.event import Catalog
 from obspy.geodetics.base import locations2degrees,gps2dist_azimuth
 
-from seismic_data.models.config import SeismoLoaderSettings, SeismoQuery
-from seismic_data.enums.config import DownloadType, GeoConstraintType
-from seismic_data.service.utils import is_in_enum
-from seismic_data.service.db import DatabaseManager
-#from seismic_data.service.db import setup_database, safe_db_connection # legacy imports, can soon remove
-from seismic_data.service.waveform import get_local_waveform, stream_to_dataframe
+from seed_vault.models.config import SeismoLoaderSettings, SeismoQuery
+from seed_vault.enums.config import DownloadType, GeoConstraintType
+from seed_vault.service.utils import is_in_enum
+from seed_vault.service.db import DatabaseManager
+#from seed_vault.service.db import setup_database, safe_db_connection # legacy imports, can soon remove
+from seed_vault.service.waveform import get_local_waveform, stream_to_dataframe
 
 ### request status codes (TBD more:
 # 204 = no data

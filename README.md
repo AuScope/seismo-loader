@@ -127,7 +127,7 @@ poetry shell
 To run the app:
 
 ```
-streamlit run seismic_data/ui/main.py
+streamlit run seed_vault/ui/main.py
 ```
 
 Alternatively, command line is configured for this project. You can also run the app, simply by:
@@ -173,7 +173,7 @@ The application should now be running and accessible at `http://localhost:8501`.
 ```
 seismo-loader/
 │
-├── seismic_data/      # Python package containing application code
+├── seed_vault/      # Python package containing application code
 │   ├── models/        # Python modules for data models
 │   ├── service/       # Services for logic and backend processing
 │   ├── ui/            # UI components (Streamlit files)
