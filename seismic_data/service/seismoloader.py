@@ -268,16 +268,15 @@ def collect_requests(inv, time0, time1, days_per_request=3):
 
 # Requests for shorter, event-based data
 def get_p_s_times(eq, dist_deg, ttmodel):
-    #eq_lat = eq.origins[0].latitude
-    #eq_lon = eq.origins[0].longitude
-    eq_time = eq.origins[0].time
-    eq_depth = eq.origins[0].depth / 1000  # depths are in meters for QuakeML
-
+    eq_lat = eq.origins[0].latitude
+    eq_lon = eq.origins[0].longitude
+    eq_depth = eq.origins[0].depth / 1000  # Convert depth from meters to kilometers
     try:
         phasearrivals = ttmodel.get_travel_times(
             source_depth_in_km=eq_depth,
             distance_in_degree=dist_deg,
-            phase_list=['ttbasic'] #can't just look for "P" and "S" as they may not be found depending on distance
+            # Include both cases
+            phase_list=['p', 'P', 's', 'S'] 
         )
     except Exception as e:
         print(f"Error calculating travel times: {str(e)}")
@@ -292,8 +291,12 @@ def get_p_s_times(eq, dist_deg, ttmodel):
 
     # Now get S... (or s for local)... (or nothing if > 100deg)
     for arrival in phasearrivals:
-        if arrival.name.upper() == 'S' and s_arrival_time is None:
-            s_arrival_time = eq_time + arrival.time
+        # this is why the arrival times are not always correct. 
+        # TauPy is returning lowercase 'p' and 's' but we're looking for uppercase 'P' and 'S'
+        if arrival.name.upper() == 'P' and p_arrival_time is None:
+            p_arrival_time = eq.origins[0].time + arrival.time
+        elif arrival.name.upper() == 'S' and s_arrival_time is None:
+            s_arrival_time = eq.origins[0].time + arrival.time
 
         if p_arrival_time and s_arrival_time:
             break
@@ -444,7 +447,8 @@ def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=2
     origin = eq.origins[0] # default to the primary I suppose (possible TODO but don't see why anyone would want anything else)
     ot = origin.time
     sub_inv = inv.select(time = ot) # Loose filter to select only stations that were running during the earthquake start
-
+    before_p_sec = settings.event.before_p_sec
+    after_p_sec = settings.event.after_p_sec
     # Failsafe to ensure a model is loaded
     if not model:
         model = TauPyModel('IASP91')
@@ -470,6 +474,8 @@ def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=2
                 p_time,s_time = fetched_arrivals # timestamps
                 t_start = p_time - abs(before_p_sec)
                 t_end = s_time + abs(after_p_sec)
+                # add the already-fetched arrivals to our dictionary
+                p_arrivals[f"{net.code}.{sta.code}"] = p_time
             else:
                 dist_deg = locations2degrees(origin.latitude,origin.longitude,\
                                              sta.latitude,sta.longitude)
@@ -503,8 +509,9 @@ def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=2
                     sta.code,
                     cha.location_code,
                     cha.code,
-                    datetime.datetime.fromtimestamp(t_start).isoformat() + "Z",
-                    datetime.datetime.fromtimestamp(t_end).isoformat() + "Z" ))
+                    # fix the time difference, it will always have 8 hours difference. 
+                    datetime.datetime.fromtimestamp(t_start, tz=datetime.timezone.utc).isoformat(),
+                    datetime.datetime.fromtimestamp(t_end, tz=datetime.timezone.utc).isoformat() ))
 
     return requests_per_eq, arrivals_per_eq, p_arrivals
 
@@ -626,7 +633,6 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
             'starttime':UTCDateTime(request[4]),
             'endtime':UTCDateTime(request[5])
         }
-        
         # issue here if any of these array values are too long (probably station list)
         # if so, break them apart
         if len(request[1]) > 24:  # Assuming station is the field that might be too long
@@ -1137,8 +1143,6 @@ def run_event(settings: SeismoLoaderSettings):
         # Collect requests
         requests,new_arrivals,p_arrivals = collect_requests_event(
             eq, settings.station.selected_invs,
-            before_p_sec=settings.event.before_p_sec if settings.event.before_p_sec else 20,
-            after_p_sec=settings.event.after_p_sec if settings.event.after_p_sec else 160,
             model=ttmodel,
             settings=settings
         )
@@ -1203,14 +1207,13 @@ def run_event(settings: SeismoLoaderSettings):
             # Get P arrival time for this waveform
             station_id = f"{query.network}.{query.station}"
             p_arrival = p_arrivals.get(station_id)
-            
             time_series.append({
                 'Network': query.network,
                 'Station': query.station,
                 'Location': query.location,
                 'Channel': query.channel,
                 'Data': data,
-                'P_Arrival': p_arrival  # This will be None if not found in p_arrivals
+                'P_Arrival': p_arrival
             })
         
         return time_series
