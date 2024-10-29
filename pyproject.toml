@@ -13,11 +13,11 @@ seed-vault = "seed_vault.cli:cli"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.12"
-streamlit = "^1.35.0"
+streamlit = "^1.39.0"
 pandas = "^2.2.2"
 folium = "^0.16.0"
 requests = "^2.32.3"
-streamlit-folium = "^0.20.0"
+streamlit-folium = "^0.23.0"
 click = "^8.1.7"
 tqdm = "^4.66.5"
 obspy = "^1.4.1"
