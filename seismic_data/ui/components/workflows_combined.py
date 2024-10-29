@@ -90,7 +90,12 @@ class CombinedBasedWorkflow:
                 if self.settings.selected_workflow == WorkflowType.STATION_BASED:
                     self.station_components = BaseComponent(self.settings, step_type=Steps.STATION, prev_step_type=None, stage=1)   
                     self.event_components = BaseComponent(self.settings, step_type=Steps.EVENT, prev_step_type=Steps.STATION, stage=2)  
-                    self.waveform_components = WaveformComponents(self.settings) 
+                    self.waveform_components = WaveformComponents(self.settings)
+
+                if self.settings.selected_workflow == WorkflowType.CONTINUOUS:
+                    self.station_components = BaseComponent(self.settings, step_type=Steps.STATION, prev_step_type=None, stage=1)
+                    self.waveform_components = WaveformComponents(self.settings)
+
                 self.next_stage()
 
         st.info(self.settings.selected_workflow.description)
