@@ -127,7 +127,7 @@ def populate_database_from_sds(sds_path, db_path,
     """Utility function to populate the archive_table in our database """
 
     # Set to possibly the maximum number of CPUs!
-    if num_processes is None:
+    if num_processes is None or num_processes == 0:
         num_processes = multiprocessing.cpu_count()
     
     # Convert newer_than (means to filter only new files) to timestamp
@@ -286,8 +286,8 @@ def get_p_s_times(eq, dist_deg, ttmodel):
     s_arrival_time = None
 
     # "P" is Whatever the first arrival is.. not necessarily literally uppercase P
-    if phasearrivals[0]:
-        p_arrival_time = eq_time + phasearrivals[0].time
+    # if phasearrivals[0]:
+    #     p_arrival_time = eq_time + phasearrivals[0].time
 
     # Now get S... (or s for local)... (or nothing if > 100deg)
     for arrival in phasearrivals:

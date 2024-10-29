@@ -13,7 +13,7 @@ from io import BytesIO
 
 from seed_vault.ui.components.card import create_card
 from seed_vault.ui.components.map import create_map, add_area_overlays, add_data_points, clear_map_layers, clear_map_draw,add_map_draw
-from seed_vault.ui.pages.helpers.common import get_selected_areas
+from seed_vault.ui.pages.helpers.common import get_selected_areas, save_filter
 
 from seed_vault.service.events import get_event_data, event_response_to_df
 from seed_vault.service.stations import get_station_data, station_response_to_df
@@ -26,32 +26,12 @@ from seed_vault.enums.config import GeoConstraintType, SeismoClients
 from seed_vault.enums.ui import Steps
 
 from seed_vault.service.utils import convert_to_date
-import json
 import io
-import jinja2
 import os
-import pickle
 
 client_options = [f.name for f in SeismoClients]
 
 
-
-def save_Filter(settings:  SeismoLoaderSettings):
-    current_directory = os.path.dirname(os.path.abspath(__file__))
-    target_file = os.path.join(current_directory, '../../service')
-    target_file = os.path.abspath(target_file)
-    
-    template_loader = jinja2.FileSystemLoader(searchpath=target_file)  
-    template_env = jinja2.Environment(loader=template_loader)
-    template = template_env.get_template("config_template.cfg")
-    config_dict = settings.add_to_config()
-    config_str = template.render(**config_dict)
-    
-    save_path = os.path.join(target_file, "config" + ".cfg")
-    with open(save_path, "w") as f:
-        f.write(config_str)
-    
-    return save_path
 
 class BaseComponentTexts:
     CLEAR_ALL_MAP_DATA = "Clear All"
@@ -268,11 +248,11 @@ class BaseComponent:
 
         new_event_settings = self.settings.event.dict() 
         if new_event_settings != st.session_state['initial_event_settings']:
-            save_Filter(self.settings)
+            save_filter(self.settings)
             # self.refresh_map()
             st.session_state['initial_event_settings'] = new_event_settings 
         
-        save_Filter(self.settings)
+        save_filter(self.settings)
 
         return c2_export
 
@@ -303,7 +283,7 @@ class BaseComponent:
 
             c2_export = self.import_export()
 
-        save_Filter(self.settings)
+        save_filter(self.settings)
 
         return c2_export
 

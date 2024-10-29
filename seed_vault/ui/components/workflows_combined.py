@@ -7,7 +7,7 @@ from seed_vault.enums.ui import Steps
 from seed_vault.models.config import SeismoLoaderSettings, DownloadType, WorkflowType
 
 from seed_vault.ui.components.base import BaseComponent
-from seed_vault.ui.pages.helpers.common import init_settings_new
+from seed_vault.ui.pages.helpers.common import get_app_settings
 
 download_options = [f.name.title() for f in DownloadType]
 
@@ -23,7 +23,7 @@ class CombinedBasedWorkflow:
     waveform_components: WaveformComponents
 
     def __init__(self):
-        self.settings = init_settings_new()
+        self.settings = get_app_settings()
         self.event_components = BaseComponent(self.settings, step_type=Steps.EVENT, prev_step_type=None, stage=1)    
         self.station_components = BaseComponent(self.settings, step_type=Steps.STATION, prev_step_type=Steps.EVENT, stage=2)    
         self.waveform_components = WaveformComponents(self.settings)
@@ -47,7 +47,7 @@ class CombinedBasedWorkflow:
         # ):
         #     return False        
         
-        self.settings = init_settings_new()
+        self.settings = get_app_settings()
         st.session_state.selected_flow_type = selected_flow_type
         # return True
         
