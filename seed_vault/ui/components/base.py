@@ -247,6 +247,9 @@ class BaseComponent:
                     value=(self.settings.event.min_depth, self.settings.event.max_depth), 
                     step=1.0, key="event-pg-depth"
                 )
+
+                if st.button(f"Update {self.TXT.STEP.title()}s", key=self.get_key_element(f"Update {self.TXT.STEP}s")):
+                    self.refresh_map(reset_areas=False, clear_draw=False, rerun=False)
                 
             c2_export = self.import_export()
 
@@ -301,7 +304,10 @@ class BaseComponent:
                     key="event-pg-include-restricted-station"
                 )
 
-                self.settings.station.level = Levels.STATION  
+                self.settings.station.level = Levels.STATION
+
+                if st.button(f"Update {self.TXT.STEP.title()}s", key=self.get_key_element(f"Update {self.TXT.STEP}s")):
+                    self.refresh_map(reset_areas=False, clear_draw=False, rerun=False)
 
             c2_export = self.import_export()
 
@@ -389,6 +395,13 @@ class BaseComponent:
             self.map_fg_marker, self.marker_info, self.fig_color_bar = add_data_points( self.df_markers, cols_to_disp, step=self.step_type, selected_idx = selected_idx, col_color=self.col_color, col_size=self.col_size)
         else:
             self.warning = "No data found."
+
+
+    def get_data_globally(self):
+        self.clear_all_data()
+        clear_map_draw(self.map_disp)
+        self.handle_get_data()
+        st.rerun()
 
 
     def refresh_map(self, reset_areas = False, selected_idx = None, clear_draw = False, rerun = False, get_data = True):
@@ -486,6 +499,9 @@ class BaseComponent:
         if self.step_type == Steps.STATION:
             self.inventories = Inventory()
             self.settings.station.geo_constraint = []
+
+        self.update_rectangle_areas()
+        self.update_circle_areas()
 
 
     def get_selected_marker_info(self):
@@ -693,17 +709,18 @@ class BaseComponent:
     def render_map_buttons(self):
         c1, c2 = st.columns([1,1])
         with c1:
-            if st.button(self.TXT.BTN_GET_DATA, key=self.get_key_element(self.TXT.BTN_GET_DATA)):
-                self.refresh_map(reset_areas=False, clear_draw=False, rerun=False)
-        
+            if st.button(f"Global {self.TXT.STEP.title()}s", key=self.get_key_element(f"Global {self.TXT.STEP}s")):
+                self.clear_all_data()
+                self.refresh_map(reset_areas=True, clear_draw=True, rerun=True, get_data=True)
         with c2:
             if st.button(self.TXT.CLEAR_ALL_MAP_DATA, key=self.get_key_element(self.TXT.CLEAR_ALL_MAP_DATA)):
                 self.clear_all_data()
                 self.refresh_map(reset_areas=True, clear_draw=True, rerun=True, get_data=False)
 
-        if st.button("Reload Map", help="Reloads the map"):
+        if st.button("Reload", help="Reloads the map"):
             self.refresh_map(get_data=False, rerun=True)
-        st.info("Use **Reload Map** button if the map is collapsed or some data are not displayed properly.")
+        st.info("Use **Reload** button if the map is collapsed or some layers are missing.")
+        st.info(f"Use **map tools** to search **{self.TXT.STEP}s** in confined areas.")
 
     def render_export_import(self):
         st.write(f"#### Export/Import {self.TXT.STEP.title()}s")
@@ -745,31 +762,21 @@ class BaseComponent:
         return c2_export
 
     def render_map_right_menu(self):
+        def handle_layers():
+            self.render_map_buttons()
+            self.update_rectangle_areas()
+            self.update_circle_areas()
+
         with st.expander("Map", expanded=True):
         # st.markdown(f"#### {self.TXT.GET_DATA_TITLE}")
             if self.prev_step_type:
-                tab1, tab2, tab3 = st.tabs(["Get Data", "Areas", f"Search Around {self.prev_step_type.title()}s"])
-            else:
-                tab1, tab2 = st.tabs(["Get Data", "Areas"])
-
-            with tab1:
-                self.render_map_buttons()
-
-            # with tab2:
-            #     c2_export = self.render_export_import()
-
-            # with st.expander(f"Update Selection Area", expanded = True):
-            with tab2:
-                self.update_rectangle_areas()
-                self.update_circle_areas()
-                
-                if len(self.get_geo_constraint()) == 0 and len(self.all_current_drawings) == 0:
-                    st.warning(f"You can use this tab to adjust areas drawn on the map. Please first use the map tools to draw an area.")
-
-            if self.prev_step_type:
-                with tab3:
+                tab1, tab2 = st.tabs(["Data", f"Search Around {self.prev_step_type.title()}s"])
+                with tab1:
+                    handle_layers()
+                with tab2:
                     self.display_prev_step_selection_table()
-
+            else:
+                handle_layers()       
 
         # return c2_export
 
