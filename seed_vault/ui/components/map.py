@@ -134,15 +134,29 @@ def add_data_points(df, cols_to_disp, step: Steps, selected_idx=[], col_color=No
     marker_info = {}
 
     # Handling the color map
+    fig = None
     if col_color is not None:
         if pd.api.types.is_numeric_dtype(df[col_color]):
+            fig, ax = plt.subplots(figsize=(1, 22))
             # norm = mcolors.Normalize(vmin=df[col_color].min(), vmax=df[col_color].max())
             norm = mcolors.Normalize(vmin=-5, vmax=500)
             colormap = cm.get_cmap('inferno_r')
+
+            fig.subplots_adjust(bottom=0.5)
+            colorbar = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=colormap), cax=ax, orientation='vertical')
+            colorbar.set_label(f'Color range for {col_color}', fontsize=16)
+            colorbar.ax.tick_params(labelsize=14)
+
         else:
             unique_categories = df[col_color].unique()
             colors = cm.get_cmap('tab10', len(unique_categories))
             category_color_map = {category: mcolors.rgb2hex(colors(i)[:3]) for i, category in enumerate(unique_categories)}
+
+            fig, ax = plt.subplots(figsize=(2, len(unique_categories) * 0.5))
+            ax.axis('off')  # Hide the axis for categories
+            legend_labels = [plt.Line2D([0], [0], color=color, lw=4) for color in category_color_map.values()]
+            legend = ax.legend(legend_labels, category_color_map.keys(), loc='center', ncol=1, fontsize=24)
+
 
     for index, row in df.iterrows():
         # Determine color
@@ -191,7 +205,7 @@ def add_data_points(df, cols_to_disp, step: Steps, selected_idx=[], col_color=No
         for k, v in cols_to_disp.items():
             marker_info[marker_key][v] = row[k]
 
-    return fg, marker_info
+    return fg, marker_info, fig
 
 # def add_data_points(df, cols_to_disp, step: Steps, selected_idx=[], col_color=None, col_size = None):
 
