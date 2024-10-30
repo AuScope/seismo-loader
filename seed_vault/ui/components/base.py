@@ -22,7 +22,7 @@ from seed_vault.service.seismoloader import convert_radius_to_degrees, convert_d
 from seed_vault.models.config import SeismoLoaderSettings, GeometryConstraint, EventConfig, StationConfig
 from seed_vault.models.common import CircleArea, RectangleArea
 
-from seed_vault.enums.config import GeoConstraintType, SeismoClients
+from seed_vault.enums.config import GeoConstraintType, SeismoClients , Levels
 from seed_vault.enums.ui import Steps
 
 from seed_vault.service.utils import convert_to_date
@@ -280,6 +280,20 @@ class BaseComponent:
                 self.settings.station.station = st.text_input("Enter Station",   self.settings.station.station, key="event-pg-sta-txt-station")
                 self.settings.station.location = st.text_input("Enter Location", self.settings.station.location, key="event-pg-loc-txt-station")
                 self.settings.station.channel = st.text_input("Enter Channel",   self.settings.station.channel, key="event-pg-cha-txt-station")
+
+                self.settings.station.include_restricted = st.checkbox(
+                    "Include Restricted Data", 
+                    value=False,  # Default to unchecked
+                    key="event-pg-include-restricted-station"
+                )
+
+                level_options = [f.name for f in Levels]
+                selected_level = st.selectbox(
+                    "Select Data Level", level_options, 
+                    index=level_options.index(self.settings.station.level.name), 
+                    key="event-pg-level-station"
+                )
+                self.settings.station.level = Levels[selected_level]  
 
             c2_export = self.import_export()
 
