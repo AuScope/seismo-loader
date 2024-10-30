@@ -315,7 +315,7 @@ class BaseComponent:
         if lst_circ:
             st.write(f"Circle Areas (Degree)")
             original_df_circ = pd.DataFrame(lst_circ, columns=CircleArea.model_fields)
-            self.df_circ = st.data_editor(original_df_circ, key=f"circ_area")
+            self.df_circ = st.data_editor(original_df_circ, key=f"circ_area", hide_index=True)
 
             circ_changed = not original_df_circ.equals(self.df_circ)
 
@@ -331,7 +331,7 @@ class BaseComponent:
         if lst_rect:
             st.write(f"Rectangle Areas")
             original_df_rect = pd.DataFrame(lst_rect, columns=RectangleArea.model_fields)
-            self.df_rect = st.data_editor(original_df_rect, key=f"rect_area")
+            self.df_rect = st.data_editor(original_df_rect, key=f"rect_area", hide_index=True)
 
             rect_changed = not original_df_rect.equals(self.df_rect)
 
@@ -408,7 +408,6 @@ class BaseComponent:
     def handle_get_data(self, is_import: bool = False, uploaded_file = None):
         self.warning = None
         self.error   = None
-        
         try:
             if self.step_type == Steps.EVENT:
                 # self.catalogs = get_event_data(self.settings.model_dump_json())
@@ -416,6 +415,7 @@ class BaseComponent:
                     self.import_xml(uploaded_file)
                 else:
                     self.catalogs = get_event_data(self.settings)
+
                 if self.catalogs:
                     self.df_markers = event_response_to_df(self.catalogs)
 
@@ -440,7 +440,7 @@ class BaseComponent:
             print(f"An unexpected error occurred: {str(e)}")
             self.error = f"An unexpected error occurred: {str(e)}"
 
-    
+
     def clear_all_data(self):
         self.map_fg_marker= None
         self.map_fg_area= None
@@ -504,8 +504,6 @@ class BaseComponent:
 
     def display_prev_step_selection_marker(self):
         if self.stage > 1:
-            self.warning = None
-            self.error   = None
             col_color = None
             col_size  = None
             if self.prev_step_type == Steps.EVENT:
@@ -571,7 +569,7 @@ class BaseComponent:
 
         # with c3:
         if st.button("Draw Area", key=self.get_key_element("Draw Area")):
-            if self.prev_min_radius is None or self.prev_max_radius is None or min_radius != self.prev_min_radius or max_radius != self.prev_max_radius:
+            if min_radius is not None and max_radius is not None and  min_radius < max_radius:           
                 self.update_area_around_prev_step_selections(min_radius, max_radius)
                 self.prev_min_radius = min_radius
                 self.prev_max_radius = max_radius

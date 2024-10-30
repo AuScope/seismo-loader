@@ -149,7 +149,7 @@ class CombinedBasedWorkflow:
                 if st.button("Next"):
                     self.station_components.sync_df_markers_with_df_edit()
                     self.station_components.update_selected_data()
-                    if len(self.station_components.settings.station.selected_invs)>0 :                    
+                    if self.station_components.settings.station.selected_invs is not None and len(self.station_components.settings.station.selected_invs) > 0:                                       
                         self.next_stage()   
                     else :
                         st.error("Please select a station to proceed to the next step.")
