@@ -88,6 +88,9 @@ def handle_circle(geo) -> GeometryConstraint:
     # max_radius = geo.get("properties").get("max_radius")
     radius = geo.get("properties").get("radius")
 
+    if radius is None:
+        raise ValueError("Radius is missing in the geo properties")    
+
     return GeometryConstraint(
             coords = CircleArea(
             lat = coords[1],
