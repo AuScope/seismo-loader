@@ -315,7 +315,7 @@ class BaseComponent:
         if lst_circ:
             st.write(f"Circle Areas (Degree)")
             original_df_circ = pd.DataFrame(lst_circ, columns=CircleArea.model_fields)
-            self.df_circ = st.data_editor(original_df_circ, key=f"circ_area")
+            self.df_circ = st.data_editor(original_df_circ, key=f"circ_area", hide_index=True)
 
             circ_changed = not original_df_circ.equals(self.df_circ)
 
@@ -331,7 +331,7 @@ class BaseComponent:
         if lst_rect:
             st.write(f"Rectangle Areas")
             original_df_rect = pd.DataFrame(lst_rect, columns=RectangleArea.model_fields)
-            self.df_rect = st.data_editor(original_df_rect, key=f"rect_area")
+            self.df_rect = st.data_editor(original_df_rect, key=f"rect_area", hide_index=True)
 
             rect_changed = not original_df_rect.equals(self.df_rect)
 
