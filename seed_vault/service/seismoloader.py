@@ -13,6 +13,7 @@ from tabulate import tabulate # non-standard. this is just to display the db con
 import random
 from typing import List
 from collections import defaultdict
+import fnmatch
 
 import obspy
 from obspy.clients.fdsn import Client
@@ -126,6 +127,8 @@ def populate_database_from_sds(sds_path, db_path,
 
     """Utility function to populate the archive_table in our database """
 
+    db_manager = DatabaseManager(db_path)
+
     # Set to possibly the maximum number of CPUs!
     if num_processes is None or num_processes == 0:
         num_processes = multiprocessing.cpu_count()
@@ -140,6 +143,7 @@ def populate_database_from_sds(sds_path, db_path,
     for root, dirs, files in os.walk(sds_path,followlinks=True):
         for f in files:
             if any(fnmatch.fnmatch(f, pattern) for pattern in search_patterns):
+                file_path = os.path.join(root,f)
                 if newer_than is None or os.path.getmtime(file_path) > newer_than:
                     file_paths.append(os.path.join(root, f))
     
