@@ -130,7 +130,7 @@ def populate_database_from_sds(sds_path, db_path,
     db_manager = DatabaseManager(db_path)
 
     # Set to possibly the maximum number of CPUs!
-    if num_processes is None or num_processes == 0:
+    if num_processes is None:
         num_processes = multiprocessing.cpu_count()
     
     # Convert newer_than (means to filter only new files) to timestamp
@@ -272,46 +272,35 @@ def collect_requests(inv, time0, time1, days_per_request=3):
 
 # Requests for shorter, event-based data
 def get_p_s_times(eq, dist_deg, ttmodel):
-    eq_lat = eq.origins[0].latitude
-    eq_lon = eq.origins[0].longitude
-    eq_depth = eq.origins[0].depth / 1000  # Convert depth from meters to kilometers
+    #eq_lat = eq.origins[0].latitude
+    #eq_lon = eq.origins[0].longitude
+    eq_time = eq.origins[0].time
+    eq_depth = eq.origins[0].depth / 1000  # depths are in meters for QuakeML
     try:
         phasearrivals = ttmodel.get_travel_times(
             source_depth_in_km=eq_depth,
             distance_in_degree=dist_deg,
-            # Include both cases
-            phase_list=['p', 'P', 's', 'S'] 
+            phase_list=['ttbasic'] #can't just look for "P" and "S" as they may not be found depending on distance
         )
     except Exception as e:
         print(f"Error calculating travel times: {str(e)}")
         return None, None
-
     p_arrival_time = None
     s_arrival_time = None
-
     # "P" is Whatever the first arrival is.. not necessarily literally uppercase P
-    # if phasearrivals[0]:
-    #     p_arrival_time = eq_time + phasearrivals[0].time
-
+    if phasearrivals[0]:
+        p_arrival_time = eq_time + phasearrivals[0].time
     # Now get S... (or s for local)... (or nothing if > 100deg)
     for arrival in phasearrivals:
-        # this is why the arrival times are not always correct. 
-        # TauPy is returning lowercase 'p' and 's' but we're looking for uppercase 'P' and 'S'
-        if arrival.name.upper() == 'P' and p_arrival_time is None:
-            p_arrival_time = eq.origins[0].time + arrival.time
-        elif arrival.name.upper() == 'S' and s_arrival_time is None:
-            s_arrival_time = eq.origins[0].time + arrival.time
-
+        if arrival.name.upper() == 'S' and s_arrival_time is None:
+            s_arrival_time = eq_time + arrival.time
         if p_arrival_time and s_arrival_time:
             break
-
     if p_arrival_time is None:
         print(f"No direct P-wave arrival found for distance {dist_deg} degrees")
     if s_arrival_time is None:
         print(f"No direct S-wave arrival found for distance {dist_deg} degrees")
-
     return p_arrival_time, s_arrival_time
-
 
 def select_highest_samplerate(inv, time=None, minSR=10):
     """
