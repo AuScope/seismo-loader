@@ -130,7 +130,7 @@ def populate_database_from_sds(sds_path, db_path,
     db_manager = DatabaseManager(db_path)
 
     # Set to possibly the maximum number of CPUs!
-    if num_processes is None:
+    if num_processes is None or num_processes == 0:
         num_processes = multiprocessing.cpu_count()
     
     # Convert newer_than (means to filter only new files) to timestamp
