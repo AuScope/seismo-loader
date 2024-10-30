@@ -440,7 +440,7 @@ class BaseComponent:
             print(f"An unexpected error occurred: {str(e)}")
             self.error = f"An unexpected error occurred: {str(e)}"
 
-    
+
     def clear_all_data(self):
         self.map_fg_marker= None
         self.map_fg_area= None
@@ -504,8 +504,6 @@ class BaseComponent:
 
     def display_prev_step_selection_marker(self):
         if self.stage > 1:
-            self.warning = None
-            self.error   = None
             col_color = None
             col_size  = None
             if self.prev_step_type == Steps.EVENT:
