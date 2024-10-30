@@ -237,6 +237,7 @@ class SeismoLoaderSettings(BaseModel):
     station           : StationConfig                         = None
     event             : EventConfig                           = None
     predictions       : Dict            [str, PredictionData] = {}
+    
 
     # main: Union[EventConfig, StationConfig] = None
 

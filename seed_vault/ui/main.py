@@ -35,7 +35,7 @@ st.markdown(
 )
 
 
-from seed_vault.ui.pages.helpers.common import init_settings
+from seed_vault.ui.pages.helpers.common import get_app_settings
 from seed_vault.ui.components.workflows_combined import CombinedBasedWorkflow
 
 
@@ -44,7 +44,7 @@ if "combined_based_workflow" not in st.session_state:
     st.session_state.combined_based_workflow = combined_based_workflow
 else:
     combined_based_workflow                  = st.session_state.combined_based_workflow
-
+    
 combined_based_workflow.render()
 
 

@@ -3875,13 +3875,13 @@ streamlit-extras = "*"
 
 [[package]]
 name = "streamlit-folium"
-version = "0.20.1"
+version = "0.23.1"
 description = "Render Folium objects in Streamlit"
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.9"
 files = [
-    {file = "streamlit_folium-0.20.1-py3-none-any.whl", hash = "sha256:f72b13e413f242daf38e9d07fb962637b571d5f0635ae7c49611775651355e55"},
-    {file = "streamlit_folium-0.20.1.tar.gz", hash = "sha256:c3404015b063ba661b5545de18399e7677b3b69b94f9d49c9879694b47f3dda7"},
+    {file = "streamlit_folium-0.23.1-py3-none-any.whl", hash = "sha256:bc60a62655a0c63c01eef69c1c2aa0048508daedee37115ea543787b64d4af65"},
+    {file = "streamlit_folium-0.23.1.tar.gz", hash = "sha256:7eb5ee4a989baa28becdc91410d3db03b46de82a51d1b3d0429b10fea069c5e1"},
 ]
 
 [package.dependencies]
@@ -4291,4 +4291,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.12"
-content-hash = "29f49f8858d6bd6e8ea10333f44df8fe713c4706a101e8fa6b65b004868c40eb"
+content-hash = "db79560593cf199bd3bdb56e3d985604ac86619c7ce553cf657ee76ce2e27f21"

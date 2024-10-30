@@ -3,7 +3,9 @@ from typing import List
 import numpy as np
 import streamlit as st
 import os
-from pprint import pprint
+
+import jinja2
+import os
 
 from seed_vault.models.common import RectangleArea, CircleArea
 from seed_vault.enums.common import GeometryType
@@ -16,7 +18,7 @@ target_file = os.path.join(current_directory, '../../../service/config.cfg')
 target_file = os.path.abspath(target_file)
 
 
-def read_general_settings(settings: SeismoLoaderSettings):
+def empty_settings_geo_constraints(settings: SeismoLoaderSettings):
     """
     TODO: a function that reads the latest app settings
     """
@@ -24,35 +26,46 @@ def read_general_settings(settings: SeismoLoaderSettings):
     settings.station.geo_constraint = []
     return settings
 
-def save_general_settings(settings: SeismoLoaderSettings):
-    """
-    TODO: a function that saves the app settings
-    """
-    return settings
+
+def get_app_settings(create_new: bool = True, empty_geo: bool = True):
+    if "app_settings" not in st.session_state:
+        settings = SeismoLoaderSettings.from_cfg_file(target_file)
+        st.session_state.app_settings = settings
+    else:
+        if create_new:
+            settings = SeismoLoaderSettings.from_cfg_file(target_file)
+            st.session_state.app_settings = settings
+    
+    if empty_geo:
+        st.session_state.app_settings = empty_settings_geo_constraints(st.session_state.app_settings)
+
+    return st.session_state.app_settings
 
 
-def init_settings_new():
-    settings = SeismoLoaderSettings.from_cfg_file(target_file)          
-    settings = read_general_settings(settings)
-    return settings
+def set_app_settings(settings: SeismoLoaderSettings):
+    st.session_state.app_settings = settings
 
 
-def init_settings():
-    if 'uploaded_file_processed' not in st.session_state:
-        st.session_state['uploaded_file_processed'] = False
 
-    if 'combined_page_settings' not in st.session_state:
-        st.session_state.combined_page_settings = SeismoLoaderSettings()
+def save_filter(settings:  SeismoLoaderSettings):
+    set_app_settings(settings)
+    current_directory = os.path.dirname(os.path.abspath(__file__))
+    target_file = os.path.join(current_directory, '../../../service')
+    target_file = os.path.abspath(target_file)
+    
+    template_loader = jinja2.FileSystemLoader(searchpath=target_file)  
+    template_env = jinja2.Environment(loader=template_loader)
+    template = template_env.get_template("config_template.cfg")
+    config_dict = get_app_settings(create_new=False, empty_geo=False).add_to_config() # settings.add_to_config()
+    config_str = template.render(**config_dict)
+    
+    save_path = os.path.join(target_file, "config" + ".cfg")
+    with open(save_path, "w") as f:
+        f.write(config_str)
+    
+    return save_path
 
-    if 'event_page' not in st.session_state:
-        st.session_state.event_page = SeismoLoaderSettings()
-        st.session_state.event_page = st.session_state.event_page.from_cfg_file(target_file)          
-        st.session_state.event_page = read_general_settings(st.session_state.event_page)
 
-    if 'station_page' not in st.session_state:
-        st.session_state.station_page = SeismoLoaderSettings()
-        st.session_state.station_page = st.session_state.event_page.from_cfg_file(target_file)        
-        st.session_state.station_page = read_general_settings(st.session_state.station_page)
         
 def handle_polygon(geo) -> GeometryConstraint:
     coords_arr = np.array(geo.get("geometry").get("coordinates")[0])
