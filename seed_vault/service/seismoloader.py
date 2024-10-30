@@ -958,6 +958,7 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
                 catalog.extend(cat)
             except:
                 print("No events found!") #TODO elaborate
+                return catalog
         else:
             # FIXME: Once concluded on Geo Type, fix below terms: radial and box
             raise ValueError("Event search type: %s is invalid. Must be 'radial' or 'box'" % geo.geo_type.value)

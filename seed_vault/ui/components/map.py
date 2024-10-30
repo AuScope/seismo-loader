@@ -348,39 +348,6 @@ def create_popup(index, row, cols_to_disp, step: Steps = None):
     """
 
 
-def remove_duplicate_areas(areas):
-    """
-    Remove duplicate areas from the list.
-    Areas are considered duplicate if they have the same type and identical attributes.
-    """
-    unique_areas = []
-    seen = set()
-
-    for area in areas:
-        # If the area is a GeometryConstraint, access its coords attribute
-        if isinstance(area, GeometryConstraint):
-            if isinstance(area.coords, RectangleArea):
-                area_id = (area.coords.min_lat, area.coords.min_lng, area.coords.max_lat, area.coords.max_lng, area.coords.color)
-            elif isinstance(area.coords, CircleArea):
-                area_id = (area.coords.lat, area.coords.lng, area.coords.min_radius, area.coords.max_radius, area.coords.color)
-            else:
-                # Skip if no valid coords are present
-                continue
-        # If the area is directly a RectangleArea or CircleArea
-        elif isinstance(area, RectangleArea):
-            area_id = (area.min_lat, area.min_lng, area.max_lat, area.max_lng, area.color)
-        elif isinstance(area, CircleArea):
-            area_id = (area.lat, area.lng, area.min_radius, area.max_radius, area.color)
-        else:
-            raise ValueError(f"Unsupported area type: {type(area)}")
-
-        # Only add unique areas
-        if area_id not in seen:
-            seen.add(area_id)
-            unique_areas.append(area)
-
-    return unique_areas
-
 def clear_map_draw(map_object):
     # ClearMapDraw().add_to(map_object)
     map_object.add_child(ClearMapDraw())

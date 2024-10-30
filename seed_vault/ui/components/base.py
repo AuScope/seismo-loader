@@ -124,8 +124,7 @@ class BaseComponent:
         self.TXT            = BaseComponentTexts(step_type)
 
         self.all_feature_drawings = self.get_geo_constraint()
-        self.map_fg_area= add_area_overlays(areas=self.get_geo_constraint())    
-        print(self.catalogs)    
+        self.map_fg_area= add_area_overlays(areas=self.get_geo_constraint()) 
         if self.catalogs:
             self.df_markers = event_response_to_df(self.catalogs)
 
@@ -383,6 +382,7 @@ class BaseComponent:
         else:
             self.warning = "No data found."
 
+
     def refresh_map(self, reset_areas = False, selected_idx = None, clear_draw = False, rerun = False, get_data = True):
         geo_constraint = self.get_geo_constraint()
         
@@ -416,15 +416,20 @@ class BaseComponent:
 
         if rerun:
             st.rerun()
-        
+    
+    def reset_markers(self):
+        self.map_fg_marker = None
+        self.df_markers    = pd.DataFrame()
     # ====================
     # GET DATA
     # ====================
+
     def handle_get_data(self, is_import: bool = False, uploaded_file = None):
         self.warning = None
         self.error   = None
         try:
             if self.step_type == Steps.EVENT:
+                self.catalogs = Catalog()
                 # self.catalogs = get_event_data(self.settings.model_dump_json())
                 if is_import:
                     self.import_xml(uploaded_file)
@@ -433,8 +438,11 @@ class BaseComponent:
 
                 if self.catalogs:
                     self.df_markers = event_response_to_df(self.catalogs)
+                else:
+                    self.reset_markers()
 
             if self.step_type == Steps.STATION:
+                self.inventories = Inventory()
                 # self.inventories = get_station_data(self.settings.model_dump_json())
                 if is_import:
                     self.import_xml(uploaded_file)
@@ -442,6 +450,8 @@ class BaseComponent:
                     self.inventories = get_station_data(self.settings)
                 if self.inventories:
                     self.df_markers = station_response_to_df(self.inventories)
+                else:
+                    self.reset_markers()
                 
             if not self.df_markers.empty:
                 cols = self.df_markers.columns                
@@ -453,7 +463,7 @@ class BaseComponent:
 
         except Exception as e:
             print(f"An unexpected error occurred: {str(e)}")
-            self.error = f"An unexpected error occurred: {str(e)}"
+            self.error = f"Error: {str(e)}"
 
 
     def clear_all_data(self):
@@ -660,6 +670,14 @@ class BaseComponent:
                 self.catalogs.extend(cat)
                 
 
+    # ===================
+    # WATCHER
+    # ===================
+    def watch_all_drawings(self, all_drawings):
+        if self.all_current_drawings != all_drawings:
+            self.all_current_drawings = all_drawings
+            self.refresh_map(rerun=True, get_data=True)
+
 
     # ===================
     # RENDER
@@ -738,7 +756,7 @@ class BaseComponent:
                 self.update_circle_areas()
                 
                 if len(self.get_geo_constraint()) == 0 and len(self.all_current_drawings) == 0:
-                    st.warning("There is no defined areas on map. Please first use the map tools to draw an area, then get the data.")
+                    st.warning(f"You can use this tab to adjust areas drawn on the map. Please first use the map tools to draw an area.")
 
             if self.prev_step_type:
                 with tab3:
@@ -774,7 +792,8 @@ class BaseComponent:
             if self.fig_color_bar:
                 st.pyplot(self.fig_color_bar)
 
-        self.all_current_drawings = get_selected_areas(self.map_output)
+        self.watch_all_drawings(get_selected_areas(self.map_output))
+        # self.all_current_drawings = get_selected_areas(self.map_output)
         if self.map_output and self.map_output.get('last_object_clicked') is not None:
             # last_clicked = self.map_output['last_object_clicked']
             last_clicked = self.map_output['last_object_clicked_popup']
