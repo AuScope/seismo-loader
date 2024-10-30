@@ -3,6 +3,7 @@ import contextlib
 import time
 import random
 import datetime
+from pathlib import Path
 from obspy import UTCDateTime
 
 def to_timestamp(time_obj):
@@ -19,6 +20,8 @@ def to_timestamp(time_obj):
 class DatabaseManager:
     def __init__(self, db_path):
         self.db_path = db_path
+        parent_dir = Path(db_path).parent
+        parent_dir.mkdir(parents=True, exist_ok=True)
         self.setup_database()
     @contextlib.contextmanager
     def connection(self, max_retries=3, initial_delay=1):
