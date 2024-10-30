@@ -569,11 +569,13 @@ class BaseComponent:
 
         # with c3:
         if st.button("Draw Area", key=self.get_key_element("Draw Area")):
-            if min_radius is not None and max_radius is not None and  min_radius < max_radius:           
+            if self.prev_min_radius is None or self.prev_max_radius is None or min_radius != self.prev_min_radius or max_radius != self.prev_max_radius:                
                 self.update_area_around_prev_step_selections(min_radius, max_radius)
                 self.prev_min_radius = min_radius
                 self.prev_max_radius = max_radius
-                st.rerun()
+
+            self.refresh_map(reset_areas=False, clear_draw=True)
+            st.rerun()
 
     def update_area_around_prev_step_selections(self, min_radius, max_radius):
         min_radius_value = float(min_radius) # * 1000
@@ -604,7 +606,6 @@ class BaseComponent:
                 updated_constraints.append(geo)
 
         self.set_geo_constraint(updated_constraints)
-        self.refresh_map(reset_areas=False, clear_draw=True)
 
     # ===================
     # FILES
