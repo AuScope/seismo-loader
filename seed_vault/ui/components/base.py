@@ -428,7 +428,6 @@ class BaseComponent:
     def handle_get_data(self, is_import: bool = False, uploaded_file = None):
         self.warning = None
         self.error   = None
-        
         try:
             if self.step_type == Steps.EVENT:
                 # self.catalogs = get_event_data(self.settings.model_dump_json())
@@ -436,6 +435,7 @@ class BaseComponent:
                     self.import_xml(uploaded_file)
                 else:
                     self.catalogs = get_event_data(self.settings)
+
                 if self.catalogs:
                     self.df_markers = event_response_to_df(self.catalogs)
 
@@ -591,7 +591,7 @@ class BaseComponent:
 
         # with c3:
         if st.button("Draw Area", key=self.get_key_element("Draw Area")):
-            if self.prev_min_radius is None or self.prev_max_radius is None or min_radius != self.prev_min_radius or max_radius != self.prev_max_radius:
+            if min_radius is not None and max_radius is not None and  min_radius < max_radius:           
                 self.update_area_around_prev_step_selections(min_radius, max_radius)
                 self.prev_min_radius = min_radius
                 self.prev_max_radius = max_radius
