@@ -5,6 +5,7 @@ import pandas as pd
 
 from seed_vault.enums.ui import Steps
 from seed_vault.models.config import SeismoLoaderSettings, DownloadType, WorkflowType
+from seed_vault.service.seismoloader import get_selected_stations_at_channel_level
 
 from seed_vault.ui.components.base import BaseComponent
 from seed_vault.ui.pages.helpers.common import get_app_settings
@@ -135,6 +136,8 @@ class CombinedBasedWorkflow:
                     self.station_components.sync_df_markers_with_df_edit()
                     self.station_components.update_selected_data()
                     if self.station_components.settings.station.selected_invs and len(self.station_components.settings.station.selected_invs)>0 :               
+                        if self.settings.selected_workflow == WorkflowType.CONTINUOUS:
+                            self.settings = get_selected_stations_at_channel_level(self.settings)
                         self.next_stage()   
                     else:
                         st.error("Please select a station to proceed to the next step.")
@@ -147,9 +150,11 @@ class CombinedBasedWorkflow:
         if self.settings.selected_workflow == WorkflowType.EVENT_BASED: 
             with c3:
                 if st.button("Next"):
+                    self.settings = get_selected_stations_at_channel_level(self.settings)
                     self.station_components.sync_df_markers_with_df_edit()
                     self.station_components.update_selected_data()
                     if self.station_components.settings.station.selected_invs is not None and len(self.station_components.settings.station.selected_invs) > 0:                                       
+                        self.settings = get_selected_stations_at_channel_level(self.settings) 
                         self.next_stage()   
                     else :
                         st.error("Please select a station to proceed to the next step.")
@@ -168,7 +173,8 @@ class CombinedBasedWorkflow:
                 if st.button("Next"):
                     self.event_components.sync_df_markers_with_df_edit()
                     self.event_components.update_selected_data()
-                    if len(self.event_components.settings.event.selected_catalogs)>0 :                    
+                    if len(self.event_components.settings.event.selected_catalogs)>0 :                        
+                        self.settings = get_selected_stations_at_channel_level(self.settings)                  
                         self.next_stage()   
                     else :
                         st.error("Please select an event to proceed to the next step.")
@@ -184,6 +190,7 @@ class CombinedBasedWorkflow:
 
 
         if self.settings.selected_workflow == WorkflowType.CONTINUOUS:
+            self.settings = get_selected_stations_at_channel_level(self.settings)
             with c2:
                 st.write("### Step 2: Get Waveforms")
             with c1:
@@ -213,7 +220,7 @@ class CombinedBasedWorkflow:
                     selected_idx = self.event_components.get_selected_idx()
                     self.event_components.refresh_map(selected_idx=selected_idx,clear_draw=True)
                     self.previous_stage()
-                
+
         self.waveform_components.render()
 
 

@@ -148,11 +148,21 @@ def add_data_points(df, cols_to_disp, step: Steps, selected_idx=[], col_color=No
             colorbar.ax.tick_params(labelsize=14)
 
         else:
-            unique_categories = df[col_color].unique()
-            colors = cm.get_cmap('tab10', len(unique_categories))
-            category_color_map = {category: mcolors.rgb2hex(colors(i)[:3]) for i, category in enumerate(unique_categories)}
+            max_display_categories = 15
 
-            fig, ax = plt.subplots(figsize=(2, len(unique_categories) * 0.5))
+            unique_categories = df[col_color].unique()
+
+            if len(unique_categories) > max_display_categories:
+                display_cats = unique_categories[:max_display_categories]
+                display_cats.append("...")
+            else:
+                display_cats = unique_categories
+
+            colors = cm.get_cmap('tab10', len(display_cats))
+            category_color_map = {category: mcolors.rgb2hex(colors(i)[:3]) for i, category in enumerate(display_cats)}
+
+
+            fig, ax = plt.subplots(figsize=(2, len(display_cats) * 0.5))
             ax.axis('off')  # Hide the axis for categories
             legend_labels = [plt.Line2D([0], [0], color=color, lw=4) for color in category_color_map.values()]
             legend = ax.legend(legend_labels, category_color_map.keys(), loc='center', ncol=1, fontsize=24)

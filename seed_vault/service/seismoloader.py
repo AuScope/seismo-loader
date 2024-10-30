@@ -763,6 +763,34 @@ def convert_degrees_to_radius_meter(radius_degree):
     return convert_degress_to_radius_km(radius_degree) * 1000
 
 
+
+def get_selected_stations_at_channel_level(settings: SeismoLoaderSettings):
+    waveform_client = Client(settings.waveform.client.value)
+    if settings.station and settings.station.client: # config['STATION']['client']:
+        station_client = Client(settings.station.client.value) # Client(config['STATION']['client'])
+    else:
+        station_client = waveform_client
+
+    invs = Inventory()
+    for network in settings.station.selected_invs:
+        for station in network:
+            try:
+                updated_inventory = station_client.get_stations(
+                    network=network.code,
+                    station=station.code,
+                    level="channel"
+                )
+                
+                invs += updated_inventory
+                
+            except Exception as e:
+                print(f"Error updating station {station.code}: {e}")
+
+    settings.station.selected_invs = invs
+
+    return settings
+
+
 def get_stations(settings: SeismoLoaderSettings):
     """
     Refine input args to what is needed for get_stations

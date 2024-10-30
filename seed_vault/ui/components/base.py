@@ -224,8 +224,12 @@ class BaseComponent:
                                             key="event-pg-client-event")
                 self.settings.event.client = SeismoClients[selected_client]
 
-                self.settings.event.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-event")
-                self.settings.event.date_config.end_time = st.date_input("End Date", end_time, key="event-pg-end-date-event")
+                c1, c2 = st.columns([1,1])
+
+                with c1:
+                    self.settings.event.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-event")
+                with c2:
+                    self.settings.event.date_config.end_time = st.date_input("End Date", end_time, key="event-pg-end-date-event")
 
                 if self.settings.event.date_config.start_time > self.settings.event.date_config.end_time:
                     st.error("Error: End Date must fall after Start Date.")
@@ -270,16 +274,26 @@ class BaseComponent:
                                             key="event-pg-client-station")
                 self.settings.station.client = SeismoClients[selected_client]
 
-                self.settings.station.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-station")
-                self.settings.station.date_config.end_time = st.date_input("End Date", end_time, key="event-pg-end-date-station")
+                c11, c12 = st.columns([1,1])
+                with c11:
+                    self.settings.station.date_config.start_time = st.date_input("Start Date", start_time, key="event-pg-start-date-station")
+                with c12:
+                    self.settings.station.date_config.end_time = st.date_input("End Date", end_time, key="event-pg-end-date-station")
 
                 if self.settings.station.date_config.start_time > self.settings.station.date_config.end_time:
                     st.error("Error: End Date must fall after Start Date.")
 
-                self.settings.station.network = st.text_input("Enter Network",   self.settings.station.network, key="event-pg-net-txt-station")
-                self.settings.station.station = st.text_input("Enter Station",   self.settings.station.station, key="event-pg-sta-txt-station")
-                self.settings.station.location = st.text_input("Enter Location", self.settings.station.location, key="event-pg-loc-txt-station")
-                self.settings.station.channel = st.text_input("Enter Channel",   self.settings.station.channel, key="event-pg-cha-txt-station")
+                c21, c22 = st.columns([1,1])
+                c31, c32 = st.columns([1,1])
+
+                with c21:
+                    self.settings.station.network = st.text_input("Network",   self.settings.station.network, key="event-pg-net-txt-station")
+                with c22:
+                    self.settings.station.station = st.text_input("Station",   self.settings.station.station, key="event-pg-sta-txt-station")
+                with c31:
+                    self.settings.station.location = st.text_input("Location", self.settings.station.location, key="event-pg-loc-txt-station")
+                with c32:
+                    self.settings.station.channel = st.text_input("Channel",   self.settings.station.channel, key="event-pg-cha-txt-station")
 
                 self.settings.station.include_restricted = st.checkbox(
                     "Include Restricted Data", 
@@ -287,13 +301,7 @@ class BaseComponent:
                     key="event-pg-include-restricted-station"
                 )
 
-                level_options = [f.name for f in Levels]
-                selected_level = st.selectbox(
-                    "Select Data Level", level_options, 
-                    index=level_options.index(self.settings.station.level.name), 
-                    key="event-pg-level-station"
-                )
-                self.settings.station.level = Levels[selected_level]  
+                self.settings.station.level = Levels.STATION  
 
             c2_export = self.import_export()
 
