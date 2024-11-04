@@ -28,6 +28,9 @@ https://github.com/whitphx/stlite
 ## Auto UI generation from Pydantic Models
 https://st-pydantic.streamlit.app/
 
+## CSS Styling
+https://www.youtube.com/watch?v=jbJpAdGlKVY
+
 
 # FSDN
 

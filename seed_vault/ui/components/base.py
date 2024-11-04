@@ -119,7 +119,7 @@ class BaseComponent:
         self.step_type      = step_type
         self.prev_step_type = prev_step_type
         self.stage          = stage
-        self.map_id         = str(uuid.uuid4())
+        self.map_id         = f"map_{step_type.value}_{prev_step_type.value}_{stage}" if prev_step_type else f"map_{step_type.value}_no_prev_{stage}"   # str(uuid.uuid4())
         self.map_disp       = create_map(map_id=self.map_id)
         self.TXT            = BaseComponentTexts(step_type)
 
@@ -404,8 +404,11 @@ class BaseComponent:
         st.rerun()
 
 
-    def refresh_map(self, reset_areas = False, selected_idx = None, clear_draw = False, rerun = False, get_data = True):
+    def refresh_map(self, reset_areas = False, selected_idx = None, clear_draw = False, rerun = False, get_data = True, recreate_map = False):
         geo_constraint = self.get_geo_constraint()
+
+        if recreate_map:
+            self.map_disp = create_map(map_id=self.map_id)
         
         if clear_draw:
             clear_map_draw(self.map_disp)
@@ -718,7 +721,7 @@ class BaseComponent:
                 self.refresh_map(reset_areas=True, clear_draw=True, rerun=True, get_data=False)
 
         if st.button("Reload", help="Reloads the map"):
-            self.refresh_map(get_data=False, rerun=True)
+            self.refresh_map(get_data=False, rerun=True, recreate_map=True)
         st.info("Use **Reload** button if the map is collapsed or some layers are missing.")
         st.info(f"Use **map tools** to search **{self.TXT.STEP}s** in confined areas.")
 

@@ -150,10 +150,10 @@ class CombinedBasedWorkflow:
         if self.settings.selected_workflow == WorkflowType.EVENT_BASED: 
             with c3:
                 if st.button("Next"):
-                    self.settings = get_selected_stations_at_channel_level(self.settings)
                     self.station_components.sync_df_markers_with_df_edit()
                     self.station_components.update_selected_data()
-                    if self.station_components.settings.station.selected_invs is not None and len(self.station_components.settings.station.selected_invs) > 0:                                       
+                    if self.station_components.settings.station.selected_invs is not None and len(self.station_components.settings.station.selected_invs) > 0:    
+                        self.settings = get_selected_stations_at_channel_level(self.settings)                                   
                         self.settings = get_selected_stations_at_channel_level(self.settings) 
                         self.next_stage()   
                     else :
