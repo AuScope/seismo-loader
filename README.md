@@ -19,8 +19,6 @@ For a quick start follow these steps:
 ```
 git clone https://github.com/AuScope/seed-vault.git
 cd seed-vault
-sudo apt update
-sudo apt install python3.12-venv 
 source setup.sh
 source run.sh
 ```
