@@ -14,8 +14,14 @@ fi
 # Activate virtual environment
 source .venv/bin/activate
 
+# Install required packages
+echo "Installing toml package..."
+pip install --upgrade pip
+pip install toml
+
 # Generate requirements.txt
-python gen_req.py
+echo "Running gen_req.py to generate requirements.txt..."
+python gen_req.py || { echo "Failed to run gen_req.py"; exit 1; }
 
 # Install dependencies
 echo "Installing dependencies..."
