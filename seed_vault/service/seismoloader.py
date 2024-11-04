@@ -27,7 +27,6 @@ from seed_vault.models.config import SeismoLoaderSettings, SeismoQuery
 from seed_vault.enums.config import DownloadType, GeoConstraintType
 from seed_vault.service.utils import is_in_enum
 from seed_vault.service.db import DatabaseManager
-#from seed_vault.service.db import setup_database, safe_db_connection # legacy imports, can soon remove
 from seed_vault.service.waveform import get_local_waveform, stream_to_dataframe
 
 ### request status codes (TBD more:
@@ -466,7 +465,7 @@ def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=2
             if fetched_arrivals:
                 p_time,s_time = fetched_arrivals # timestamps
                 t_start = p_time - abs(before_p_sec)
-                t_end = s_time + abs(after_p_sec)
+                t_end = p_time + abs(after_p_sec)
                 # add the already-fetched arrivals to our dictionary
                 p_arrivals[f"{net.code}.{sta.code}"] = p_time
             else:
@@ -474,18 +473,23 @@ def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=2
                                              sta.latitude,sta.longitude)
                 dist_m,azi,backazi = gps2dist_azimuth(origin.latitude,origin.longitude,\
                                              sta.latitude,sta.longitude)
-                # if dist_deg < min_dist_deg or dist_deg > max_dist_deg:
-                #     continue
                 
                 p_time, s_time = get_p_s_times(eq,dist_deg,model)
                 if p_time is None:
-                    print(f"Warning: Unable to calculate P time for {net.code}.{sta.code}")
+                    print(f"Warning: Unable to calculate any first arrival for {net.code}.{sta.code}. Something seems wrong...")
                     continue
+
+                if s_time is None:
+                    s_time_timestamp = None
+                else:
+                    s_time_timestamp = s_time.timestamp
+
                 t_start = p_time - abs(before_p_sec) #not timestamps!
                 t_end = p_time + abs(after_p_sec)
                 p_arrivals[f"{net.code}.{sta.code}"] = p_time.timestamp
                 t_start = t_start.timestamp
                 t_end = t_end.timestamp
+
                 # Add to our arrival database
                 arrivals_per_eq.append((str(eq.preferred_origin_id),
                                     eq.magnitudes[0].mag,
@@ -494,7 +498,7 @@ def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=2
                                     net.code,sta.code,sta.latitude,sta.longitude,sta.elevation/1000,
                                     sta_start,sta_end,
                                     dist_deg,dist_m/1000,azi,p_time.timestamp,
-                                    s_time.timestamp,settings.event.model))
+                                    s_time_timestamp,settings.event.model))
             # Add to our requests
             for cha in sta: # TODO will have to had filtered channels prior to this, else will grab them all
                 requests_per_eq.append((
@@ -610,13 +614,14 @@ def prune_requests(requests, db_manager, min_request_window=3):
 
 def archive_request(request, waveform_clients, sds_path, db_manager):
     """ Send a request to an FDSN center, parse it, save to archive, and update database """
+    #bug here. waveform_clients should be a dictionary of waveform data clients for each auth key. but it is the earthquake client!
     try:
-        # if request[0] in waveform_clients.keys():  # Per-network authentication
-        #     wc = waveform_clients[request[0]]
-        # elif request[0]+'.'+request[1] in waveform_clients.keys():  # Per-station e.g. NN.SSSSS
-        #     wc = waveform_clients[request[0]+'.'+request[1]]
-        # else:
-        #     wc = waveform_clients['open']
+        if request[0] in waveform_clients.keys():  # Per-network authentication
+            wc = waveform_clients[request[0]]
+        elif request[0]+'.'+request[1] in waveform_clients.keys():  # Per-station e.g. NN.SSSSS
+            wc = waveform_clients[request[0]+'.'+request[1]]
+        else:
+            wc = waveform_clients['open']
 
         kwargs = {
             'network':request[0],
@@ -633,11 +638,11 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
             split_stations = request[1].split(',')
             for s in split_stations:
                 try:
-                    st += waveform_clients.get_waveforms(station=s, **{k: v for k, v in kwargs.items() if k != 'station'})
+                    st += wc.get_waveforms(station=s, **{k: v for k, v in kwargs.items() if k != 'station'})
                 except Exception as e:
                     print(f"Error fetching data for station {s}: {str(e)}")
         else:
-            st = waveform_clients.get_waveforms(**kwargs)
+            st = wc.get_waveforms(**kwargs)
 
     except Exception as e:
         print(f"Error fetching data ---------------: {request} {str(e)}")
@@ -1037,7 +1042,7 @@ def run_continuous(settings: SeismoLoaderSettings):
 
     starttime = UTCDateTime(settings.station.date_config.start_time)
     endtime = UTCDateTime(settings.station.date_config.end_time)
-    waveform_client = Client(settings.waveform.client.value) # note we may have three different clients here: waveform, station, and event. be careful to keep track
+    waveform_client = Client(settings.waveform.client.value)
 
     # Collect requests
     requests = collect_requests(settings.station.selected_invs,starttime,endtime,
@@ -1062,21 +1067,21 @@ def run_continuous(settings: SeismoLoaderSettings):
             continue
         try:
             new_client = Client(settings.waveform.client,user=cred.username,password=cred.password)
+            waveform_clients.update({cred.nslc_code:new_client})
         except:
             print("Issue creating client: %s %s via %s:%s" % (settings.waveform.client,cred.nslc_code,cred.username,cred.password))
             continue
-        waveform_clients.update({cred.nslc_code:new_client})
 
     # Archive to disk and updated database
     for request in combined_requests:
         print(request)
         time.sleep(0.05) #to help ctrl-C out if needed
         try: 
-            archive_request(request, waveform_clients, settings.sds_path, db_manager) # think should this be waveform_clientS plural ?
+            archive_request(request, waveform_clients, settings.sds_path, db_manager)
         except Exception as e:
             print("Continuous request not successful: ",request, " with exception: ", e)
 
-    # Goint through all original requests //// ** not sure what this does from here on
+    # Goint through all original requests
     time_series = []
     for req in requests:
         data = pd.DataFrame()
