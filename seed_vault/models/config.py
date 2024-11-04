@@ -295,7 +295,7 @@ class SeismoLoaderSettings(BaseModel):
             )
 
         # Parse the WAVEFORM section
-        client = SeismoClients[config.get('WAVEFORM', 'client', fallback='AUSPASS').upper()]
+        client = SeismoClients[config.get('WAVEFORM', 'client', fallback='IRIS').upper()]
         channel_pref = config.get('WAVEFORM', 'channel_pref', fallback='').split(',')
         location_pref = config.get('WAVEFORM', 'location_pref', fallback='').split(',')
         days_per_request = config.getint('WAVEFORM', 'days_per_request', fallback=1)

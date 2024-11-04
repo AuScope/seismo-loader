@@ -51,7 +51,8 @@ def read_config(config_file):
     for section in config.sections():
         processed_config.add_section(section)
         for key, value in config.items(section):
-            if section in ['AUTH','DATABASE','SDS','WAVEFORM']:
+            print("YYYYYYYYYY",key,value,section)
+            if section.upper() in ['AUTH','DATABASE','SDS','WAVEFORM']:
                 processed_key = key
                 processed_value = value if value is not None else None
             else:
@@ -614,11 +615,11 @@ def prune_requests(requests, db_manager, min_request_window=3):
 
 def archive_request(request, waveform_clients, sds_path, db_manager):
     """ Send a request to an FDSN center, parse it, save to archive, and update database """
-    #bug here. waveform_clients should be a dictionary of waveform data clients for each auth key. but it is the earthquake client!
+
     try:
         if request[0] in waveform_clients.keys():  # Per-network authentication
             wc = waveform_clients[request[0]]
-        elif request[0]+'.'+request[1] in waveform_clients.keys():  # Per-station e.g. NN.SSSSS
+        elif request[0]+'.'+request[1] in waveform_clients.keys():  # Per-station e.g. NN.SSSSS (not currently working TODO)
             wc = waveform_clients[request[0]+'.'+request[1]]
         else:
             wc = waveform_clients['open']
@@ -647,7 +648,7 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
     except Exception as e:
         print(f"Error fetching data ---------------: {request} {str(e)}")
         # >> TODO add failure & denied to database also? will require DB structuring and logging HTTP error response
-        return
+        return 
 
     # A means to group traces by day to avoid slowdowns with highly fractured data
     traces_by_day = defaultdict(obspy.Stream)
@@ -1058,16 +1059,19 @@ def run_continuous(settings: SeismoLoaderSettings):
     # Combine these into fewer (but larger) requests
     combined_requests = combine_requests(pruned_requests)
 
-    waveform_clients= {'open':waveform_client}
+    waveform_clients= {'open':waveform_client} #now a dictionary
     requested_networks = [ele[0] for ele in combined_requests]
 
-    ######## lets double check this.. not sure if it will follow NN.SSSS as well as NN
+    ## cred structure is: AuthConfig(nslc_code='2P', username='username', password='password_for_2P')
+    # right now this probably only works for network-based credentials only (TODO)
     for cred in settings.auths:
-        if cred.nslc_code not in requested_networks:
+        cred_net = cred.nslc_code.split('.')[0].upper()
+        print("warning! implementing forced uppercase cred hack until can figure out why they're lowercase")
+        if cred_net not in requested_networks:
             continue
         try:
-            new_client = Client(settings.waveform.client,user=cred.username,password=cred.password)
-            waveform_clients.update({cred.nslc_code:new_client})
+            new_client = Client(settings.waveform.client,user=cred.username.upper(),password=cred.password)
+            waveform_clients.update({cred_net:new_client})
         except:
             print("Issue creating client: %s %s via %s:%s" % (settings.waveform.client,cred.nslc_code,cred.username,cred.password))
             continue
@@ -1076,10 +1080,11 @@ def run_continuous(settings: SeismoLoaderSettings):
     for request in combined_requests:
         print(request)
         time.sleep(0.05) #to help ctrl-C out if needed
-        try: 
+        try:
             archive_request(request, waveform_clients, settings.sds_path, db_manager)
         except Exception as e:
             print("Continuous request not successful: ",request, " with exception: ", e)
+            continue
 
     # Goint through all original requests
     time_series = []
@@ -1152,12 +1157,6 @@ def run_event(settings: SeismoLoaderSettings):
         print("Issue loading TauPyModel ",settings.event.model, e, "defaulting to IASP91")
         ttmodel = TauPyModel('IASP91')
 
-    # @FIXME: Below line seems to be redundant as in above lines, event_client was set.
-    # event_client = Client(config['EVENT']['client'])
-
-    # minradius = settings.event.min_radius # float(config['EVENT']['minradius'])
-    # maxradius = settings.event.max_radius # float(config['EVENT']['maxradius'])
-
     #now loop through events
     # NOTE: Why "inv" collections from STATION block is included in EVENTS?
     #       Isn't it the STATIONS have their own searching settings?
@@ -1193,57 +1192,60 @@ def run_event(settings: SeismoLoaderSettings):
         # Add additional clients if user is requesting any restricted data
         waveform_clients= {'open':waveform_client}
         requested_networks = [ele[0] for ele in combined_requests]
+        print('settings.waveform.client:', settings.waveform.client)
 
-        ## may have to review this part va line 1264 seedfault.0.40.py
+        ## cred structure is: AuthConfig(nslc_code='2P', username='username', password='password_for_2P')
+        # right now this probably only works for network-based credentials only
         for cred in settings.auths:
-            if cred.nslc_code not in requested_networks:
+            cred_net = cred.nslc_code.split('.')[0].upper()
+            print("warning! implementing forced uppercase cred hack until can figure out why they're lowercase")            
+            if cred_net not in requested_networks:
                 continue
             try:
-                new_client = Client(settings.waveform.client,user=cred.username,password=cred.password)
+                new_client = Client(settings.waveform.client,user=cred.username.upper(),password=cred.password)
+                waveform_clients.update({cred_net:new_client})
             except:
                 print("Issue creating client: %s %s via %s:%s" % (settings.waveform.client,cred.nslc_code,cred.username,cred.password))
-                continue
-            waveform_clients.update({cred.nslc_code:new_client})
 
         # Archive to disk and update database
         for request in combined_requests:
             time.sleep(0.05) #to help ctrl-C out if needed
             print(request)
             try: 
-                archive_request(request,waveform_client,settings.sds_path,db_manager)
+                archive_request(request,waveform_clients,settings.sds_path,db_manager)
             except Exception as e:
                 print("Event request not successful: ",request, str(e))
         
-        ### unsure what below does
-        time_series = []
-        for req in requests:
-            data = pd.DataFrame()
-            query = SeismoQuery(
-                network = req[0],
-                station = req[1],
-                location = req[2],
-                channel = req[3],
-                starttime = req[4],
-                endtime = req[5]
-            )
-            try:
-                data = stream_to_dataframe(get_local_waveform(query, settings))
-            except Exception as e:
-                print(str(e))
-            
-            # Get P arrival time for this waveform
-            station_id = f"{query.network}.{query.station}"
-            p_arrival = p_arrivals.get(station_id)
-            time_series.append({
-                'Network': query.network,
-                'Station': query.station,
-                'Location': query.location,
-                'Channel': query.channel,
-                'Data': data,
-                'P_Arrival': p_arrival
-            })
+    # The below is for plotting (?) PLEASE REVIEW!
+    time_series = []
+    for req in requests:
+        data = pd.DataFrame()
+        query = SeismoQuery(
+            network = req[0],
+            station = req[1],
+            location = req[2],
+            channel = req[3],
+            starttime = req[4],
+            endtime = req[5]
+        )
+        try:
+            data = stream_to_dataframe(get_local_waveform(query, settings))
+        except Exception as e:
+            print(str(e))
         
-        return time_series
+        # Get P arrival time for this waveform
+        station_id = f"{query.network}.{query.station}"
+        p_arrival = p_arrivals.get(station_id)
+        time_series.append({
+            'Network': query.network,
+            'Station': query.station,
+            'Location': query.location,
+            'Channel': query.channel,
+            'Data': data,
+            'P_Arrival': p_arrival
+        })
+        
+    return time_series
 
 
 

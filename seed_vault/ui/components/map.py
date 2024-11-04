@@ -311,13 +311,27 @@ def clear_map_layers(map_object):
             map_object._children.pop(key)
         
 
-def get_marker_size(magnitude):
-    import math
-    base_size = 2.0
-    scaling_factor = 2.5
-    size = base_size + scaling_factor * math.log(magnitude + 1)
-    return min(13.0, max(base_size, size))
+#def get_marker_size(magnitude):
+#    import math
+#    base_size = 2.0
+#    scaling_factor = 2.5
+#    size = base_size + scaling_factor * math.log(magnitude + 1)
+#    return min(13.0, max(base_size, size))
 
+def get_marker_size(magnitude):
+    if magnitude < 2:
+        return 0.5
+    if magnitude < 3:
+        return 1.0
+    elif magnitude < 4:
+        return 1.5
+    if magnitude <= 5:
+        return 2.0
+    elif magnitude >= 8:
+        return 14.0
+    else:
+        x = (magnitude - 5) / 3
+        return 2 + 12 * x**2
 
 
 def get_marker_color(magnitude):
