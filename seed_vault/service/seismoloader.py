@@ -28,6 +28,7 @@ from seed_vault.enums.config import DownloadType, GeoConstraintType
 from seed_vault.service.utils import is_in_enum
 from seed_vault.service.db import DatabaseManager
 from seed_vault.service.waveform import get_local_waveform, stream_to_dataframe
+from obspy.clients.fdsn.header import URL_MAPPINGS
 
 ### request status codes (TBD more:
 # 204 = no data
@@ -773,9 +774,9 @@ def convert_degrees_to_radius_meter(radius_degree):
 
 
 def get_selected_stations_at_channel_level(settings: SeismoLoaderSettings):
-    waveform_client = Client(settings.waveform.client.value)
+    waveform_client = Client(settings.waveform.client)
     if settings.station and settings.station.client: # config['STATION']['client']:
-        station_client = Client(settings.station.client.value) # Client(config['STATION']['client'])
+        station_client = Client(settings.station.client) # Client(config['STATION']['client'])
     else:
         station_client = waveform_client
 
@@ -807,9 +808,9 @@ def get_stations(settings: SeismoLoaderSettings):
 
     starttime = UTCDateTime(settings.station.date_config.start_time)
     endtime = UTCDateTime(settings.station.date_config.end_time)
-    waveform_client = Client(settings.waveform.client.value)
+    waveform_client = Client(settings.waveform.client)
     if settings.station and settings.station.client: # config['STATION']['client']:
-        station_client = Client(settings.station.client.value) # Client(config['STATION']['client'])
+        station_client = Client(settings.station.client) # Client(config['STATION']['client'])
     else:
         station_client = waveform_client
 
@@ -902,7 +903,7 @@ def get_stations(settings: SeismoLoaderSettings):
                     level=settings.station.level.value
                 )
             except:
-                print("Could not find requested station %s at %s" % (f"{n}.{s}",settings.station.client.value))
+                print("Could not find requested station %s at %s" % (f"{n}.{s}",settings.station.client))
                 continue
 
     return inv
@@ -915,9 +916,9 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
     starttime = UTCDateTime(settings.event.date_config.start_time)
     endtime = UTCDateTime(settings.event.date_config.end_time)
 
-    waveform_client = Client(settings.waveform.client.value)
+    waveform_client = Client(settings.waveform.client)
     if settings.event and settings.event.client:
-        event_client = Client(settings.event.client.value)
+        event_client = Client(settings.event.client)
     else:
         event_client = waveform_client
 
@@ -959,7 +960,7 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
             cat = event_client.get_events(
                 **kwargs
             )
-            print("Global Search of Events. Found %d events from %s" % (len(cat),settings.event.client.value))
+            print("Global Search of Events. Found %d events from %s" % (len(cat),settings.event.client))
             catalog.extend(cat)
         except:
             print("No events found!") #TODO elaborate
@@ -976,7 +977,7 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
                     maxradius= geo.coords.max_radius,
                     **kwargs
                 )
-                print("Found %d events from %s" % (len(cat),settings.event.client.value))
+                print("Found %d events from %s" % (len(cat),settings.event.client))
                 catalog.extend(cat)
             except:
                 print("No events found!") #TODO elaborate
@@ -990,7 +991,7 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
                     maxlongitude = geo.coords.max_lng,
                     **kwargs
                 )
-                print("Found %d events from %s" % (len(cat),settings.event.client.value))
+                print("Found %d events from %s" % (len(cat),settings.event.client))
                 catalog.extend(cat)
             except:
                 print("No events found!") #TODO elaborate
@@ -1045,7 +1046,7 @@ def run_continuous(settings: SeismoLoaderSettings):
 
     starttime = UTCDateTime(settings.station.date_config.start_time)
     endtime = UTCDateTime(settings.station.date_config.end_time)
-    waveform_client = Client(settings.waveform.client.value)
+    waveform_client = Client(settings.waveform.client)
 
     # Collect requests
     requests = collect_requests(settings.station.selected_invs,starttime,endtime,
@@ -1151,7 +1152,7 @@ def run_event(settings: SeismoLoaderSettings):
     """
     settings, db_manager = setup_paths(settings)
 
-    waveform_client = Client(settings.waveform.client.value)
+    waveform_client = Client(settings.waveform.client)
     
     try:
         ttmodel = TauPyModel(settings.event.model)
@@ -1254,9 +1255,12 @@ def run_event(settings: SeismoLoaderSettings):
 def run_main(settings: SeismoLoaderSettings = None, from_file=None):
     if not settings and from_file:
         settings = SeismoLoaderSettings()
-        settings = settings.from_cfg_file(cfg_path = from_file)
+        settings = settings.from_cfg_file(cfg_source = from_file)
 
     settings, db_manager = setup_paths(settings)
+
+    settings.load_url_mapping()
+    URL_MAPPINGS = settings.client_url_mapping
 
     download_type = settings.download_type.value
     if not is_in_enum(download_type, DownloadType):

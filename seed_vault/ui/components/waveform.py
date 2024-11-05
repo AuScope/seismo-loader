@@ -13,11 +13,11 @@ from obspy.geodetics import degrees2kilometers
 from obspy.geodetics.base import locations2degrees
 
 ### debug missing EARTHSCOPE key in URL_MAPPINGS.. it should be there for 1.4.1!!
-from obspy import __version__ as obspyversion
-from obspy.clients.fdsn.header import URL_MAPPINGS
-if 'EARTHSCOPE' not in URL_MAPPINGS.keys():
-    print("SOMETHING IS WRONG::: 'EARTHSCOPE' not in URL_MAPPINGS for obspy version ", obspyversion)
-    URL_MAPPINGS.update({'EARTHSCOPE':'http://service.iris.edu'})
+# from obspy import __version__ as obspyversion
+# from obspy.clients.fdsn.header import URL_MAPPINGS
+# if 'EARTHSCOPE' not in URL_MAPPINGS.keys():
+#     print("SOMETHING IS WRONG::: 'EARTHSCOPE' not in URL_MAPPINGS for obspy version ", obspyversion)
+#     URL_MAPPINGS.update({'EARTHSCOPE':'http://service.iris.edu'})
 
 
 class WaveformFilterMenu:
@@ -108,7 +108,7 @@ class WaveformDisplay:
     def __init__(self, settings: SeismoLoaderSettings, filter_menu: WaveformFilterMenu):
         self.settings = settings
         self.filter_menu = filter_menu
-        self.client = Client(self.settings.waveform.client.value)
+        self.client = Client(self.settings.waveform.client)
         self.ttmodel = TauPyModel("iasp91")
         self.waveforms = []
         

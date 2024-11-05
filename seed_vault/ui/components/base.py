@@ -22,15 +22,12 @@ from seed_vault.service.seismoloader import convert_radius_to_degrees, convert_d
 from seed_vault.models.config import SeismoLoaderSettings, GeometryConstraint, EventConfig, StationConfig
 from seed_vault.models.common import CircleArea, RectangleArea
 
-from seed_vault.enums.config import GeoConstraintType, SeismoClients , Levels
+from seed_vault.enums.config import GeoConstraintType, Levels
 from seed_vault.enums.ui import Steps
 
 from seed_vault.service.utils import convert_to_date
 import io
 import os
-
-client_options = [f.name for f in SeismoClients]
-
 
 
 class BaseComponentTexts:
@@ -219,10 +216,12 @@ class BaseComponent:
         with st.sidebar:
             self.render_map_right_menu()
             with st.expander("### Filters", expanded=True):
-                selected_client = st.selectbox('Choose a client:', client_options, 
-                                            index=client_options.index(self.settings.event.client.name), 
-                                            key="event-pg-client-event")
-                self.settings.event.client = SeismoClients[selected_client]
+                client_options = list(self.settings.client_url_mapping.keys())
+                self.settings.event.client = st.selectbox(
+                    'Choose a client:', client_options, 
+                    index=client_options.index(self.settings.event.client), 
+                    key="event-pg-client-event"
+                )
 
                 c1, c2 = st.columns([1,1])
 
@@ -272,10 +271,12 @@ class BaseComponent:
             self.render_map_right_menu()
                 
             with st.expander("### Filters", expanded=True):
-                selected_client = st.selectbox('Choose a client:', client_options, 
-                                            index=client_options.index(self.settings.station.client.name), 
-                                            key="event-pg-client-station")
-                self.settings.station.client = SeismoClients[selected_client]
+                client_options = list(self.settings.client_url_mapping.keys())
+                self.settings.station.client = st.selectbox(
+                    'Choose a client:', client_options, 
+                    index=client_options.index(self.settings.station.client), 
+                    key="event-pg-client-station"
+                )
 
                 c11, c12 = st.columns([1,1])
                 with c11:
