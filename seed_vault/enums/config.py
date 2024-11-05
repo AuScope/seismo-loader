@@ -15,6 +15,7 @@ class WorkflowType(DescribedEnum):
 class SeismoClients(str, Enum):
     AUSPASS    = "AUSPASS"      # http://auspass.edu.au
     BGR        = "BGR"          # http://eida.bgr.de
+    EARTHSCOPE = 'EARTHSCOPE'   # http://service.iris.edu
     EIDA       = "EIDA"         # http://eida-federator.ethz.ch
     EMSC       = "EMSC"         # http://www.seismicportal.eu
     ETH        = "ETH"          # http://eida.ethz.ch
@@ -44,7 +45,6 @@ class SeismoClients(str, Enum):
     UIB_NORSAR = "UIB-NORSAR"   # http://eida.geo.uib.no
     USGS       = "USGS"         # http://earthquake.usgs.gov
     USP        = "USP"          # http://sismo.iag.usp.br
-    EARTHSCOPE = 'EARTHSCOPE'   # FIXME: UNKNOWN
 
 
 class GeoConstraintType(str, Enum):
