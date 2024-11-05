@@ -90,10 +90,10 @@ class SettingsComponent:
                 self.settings.sds_path = st.text_input("Local Seismic Data Storage Path", value=self.settings.sds_path, help="Do not change this path, unless necessary!")
 
             st.write("## Sync database with SDS files")
-            c1, c2, c3 = st.columns([1,1,1])
+            c1, c2, c3, c4 = st.columns([1,1,1,2])
             with c1:
                 search_patterns = st.text_input("Search Patterns", value="??.*.*.???.?.????.???", help="To input multiple values, separate your entries with comma.").strip().split(",")
-            with c3:
+            with c4:
                 c11, c22 = st.columns([1,1])
                 with c11:
                     selected_date_type = st.selectbox("Date selection", ["All", "Custom Time"], index=0)
@@ -103,16 +103,23 @@ class SettingsComponent:
                     else:
                         newer_than = st.date_input("Update Since")
             with c2:
-                num_processes = st.number_input("Number of Processors", value=0, min_value=0)
+                curr_val = int(self.settings.proccess.num_processes)
+                self.settings.proccess.num_processes = st.text_input("Number of Processors", value=curr_val, help="Number of Processors >= 0. If set to zero, the app will use all available cpu to perform the operation.")
+
+            with c3:
+                curr_val = int(self.settings.proccess.gap_tolerance)
+                self.settings.proccess.gap_tolerance = st.text_input("Gap Tolerance", value=curr_val)
 
             if st.button("Sync Database", help="Synchronizes the archive database with the available local seismic data based on the above parameters."):
                 self.reset_is_new_cred_added()
+                save_filter(self.settings)
                 populate_database_from_sds(
                     sds_path=self.settings.sds_path,
                     db_path=self.settings.db_path,
                     search_patterns=search_patterns,
                     newer_than=newer_than,
-                    num_processes=num_processes,
+                    num_processes=self.settings.proccess.num_processes,
+                    gap_tolerance=self.settings.proccess.gap_tolerance
                 )
 
 

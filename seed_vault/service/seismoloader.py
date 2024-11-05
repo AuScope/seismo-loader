@@ -122,7 +122,7 @@ def stream_to_db_element(st):
 
 def populate_database_from_sds(sds_path, db_path,
     search_patterns=["??.*.*.???.?.????.???"],
-    newer_than=None,num_processes=None):
+    newer_than=None,num_processes=None, gap_tolerance = 60):
 
     """Utility function to populate the archive_table in our database """
 
@@ -170,6 +170,8 @@ def populate_database_from_sds(sds_path, db_path,
         print("Error with bulk_insert_archive_data: ", e)    
 
     print(f"Processed {total_files} files, inserted {num_inserted} records into the database.")
+
+    db_manager.join_continuous_segments(gap_tolerance)
 
 
 #### now moved to db.py as part of DatabaseManager class
