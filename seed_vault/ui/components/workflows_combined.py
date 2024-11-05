@@ -135,7 +135,8 @@ class CombinedBasedWorkflow:
                 if st.button("Next"):
                     self.station_components.sync_df_markers_with_df_edit()
                     self.station_components.update_selected_data()
-                    if self.station_components.settings.station.selected_invs and len(self.station_components.settings.station.selected_invs)>0 :               
+                    if self.station_components.settings.station.selected_invs and len(self.station_components.settings.station.selected_invs)>0 :   
+                        self.settings.waveform.client = self.settings.station.client            
                         if self.settings.selected_workflow == WorkflowType.CONTINUOUS:
                             self.settings = get_selected_stations_at_channel_level(self.settings)
                         self.next_stage()   
@@ -153,6 +154,7 @@ class CombinedBasedWorkflow:
                     self.station_components.sync_df_markers_with_df_edit()
                     self.station_components.update_selected_data()
                     if self.station_components.settings.station.selected_invs is not None and len(self.station_components.settings.station.selected_invs) > 0:    
+                        self.settings.waveform.client = self.settings.station.client
                         self.settings = get_selected_stations_at_channel_level(self.settings)                                   
                         self.settings = get_selected_stations_at_channel_level(self.settings) 
                         self.next_stage()   

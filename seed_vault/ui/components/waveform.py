@@ -12,9 +12,7 @@ from plotly.subplots import make_subplots
 from obspy.geodetics import degrees2kilometers
 from obspy.geodetics.base import locations2degrees
 import numpy as np
-from seed_vault.enums.config import SeismoClients
 
-client_options = [f.name for f in SeismoClients]
 
 class WaveformFilterMenu:
     settings: SeismoLoaderSettings
@@ -70,6 +68,13 @@ class WaveformFilterMenu:
         self.render_standard_filters()
     def render_standard_filters(self):
         """Render the standard network/station/channel filters"""
+        with st.sidebar:
+            client_options = list(self.settings.client_url_mapping.keys())
+            self.settings.waveform.client = st.selectbox(
+                'Choose a client:', client_options, 
+                index=client_options.index(self.settings.waveform.client), 
+                key="event-pg-client-event"
+            )
         networks = ["All networks"] + list(set([inv.code for inv in self.settings.station.selected_invs]))
         self.network_filter = st.sidebar.selectbox(
             "Network:",
@@ -96,11 +101,7 @@ class WaveformFilterMenu:
             options=self.available_channels,
             index=self.available_channels.index(self.channel_filter)
         )
-        selected_client = st.sidebar.selectbox(
-            'Choose a client:', 
-            client_options, 
-            index=client_options.index(self.settings.event.client.name), 
-                                            key="event-pg-client-event")
+        
 class WaveformDisplay:
     settings: SeismoLoaderSettings
     waveforms: List[Dict] = []
