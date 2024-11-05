@@ -264,7 +264,7 @@ class SeismoLoaderSettings(BaseModel):
     @classmethod
     def from_cfg_file(cls, cfg_source: Union[str, IO])  -> "SeismoLoaderSettings":
         config = configparser.ConfigParser()
-
+        config.optionxform = str
 
         # If cfg_source is a string, assume it's a file path
         if isinstance(cfg_source, str):

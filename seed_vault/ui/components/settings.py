@@ -132,7 +132,6 @@ class SettingsComponent:
             df = pd.DataFrame([{"Client Name": k, "Url": v} for k,v in extra_clients.items()])
             if df.empty:
                 df = pd.DataFrame(columns=["Client Name", "Url"])
-            print(df)
             self.df_clients = st.data_editor(df, hide_index = True, num_rows = "dynamic")            
             # st.write(extra_clients)
         with c2:
