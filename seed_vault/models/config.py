@@ -16,7 +16,9 @@ from seed_vault.enums.config import DownloadType, WorkflowType, GeoConstraintTyp
 # TODO: Not sure if these values are controlled values
 # check to see if should we use controlled values or
 # rely on free inputs from users.
-from seed_vault.enums.stations import Channels, Stations, Locations, Networks
+from seed_vault.enums.stations import Channels, Locations
+from seed_vault.utils.clients import load_extra_client, load_original_client
+
 
 # Convert start and end times to datetime
 def parse_time(time_str):
@@ -232,6 +234,7 @@ class SeismoLoaderSettings(BaseModel):
     selected_workflow : WorkflowType                          = WorkflowType.EVENT_BASED
     proccess          : ProcessingConfig                      = None
     client_url_mapping: Optional[dict]                        = {}
+    extra_clients     : Optional[dict]                        = {}
     auths             : Optional        [List[AuthConfig]]    = []
     waveform          : WaveformConfig                        = None
     station           : StationConfig                         = None
@@ -239,28 +242,13 @@ class SeismoLoaderSettings(BaseModel):
     predictions       : Dict            [str, PredictionData] = {}
 
 
-    # def __init__(self):
-    #     self.load_url_mapping()
-
-
     def load_url_mapping(self):
         from obspy.clients.fdsn.header import URL_MAPPINGS
-        self.client_url_mapping = URL_MAPPINGS
-        if os.path.exists("client_url_mapping.json"):
-            with open("client_url_mapping.json", "r") as f:
-                extra_clients = json.load(f)
-                self.client_url_mapping.update(extra_clients)
-                URL_MAPPINGS = self.client_url_mapping
+        self.client_url_mapping = load_original_client()
+        self.extra_clients = load_extra_client()
+        self.client_url_mapping.update(self.extra_clients)
+        URL_MAPPINGS.update(self.client_url_mapping)
 
-
-    def save_url_mapping(self):
-        from obspy.clients.fdsn.header import URL_MAPPINGS
-        extra_clients = {key: value for key, value in self.client_url_mapping.items() if key not in URL_MAPPINGS}
-        with open("client_url_mapping.json", "w") as f:
-            json.dump(extra_clients, f, indent=4)
-    
-
-    # main: Union[EventConfig, StationConfig] = None
 
     def set_download_type_from_workflow(self):
         if (
