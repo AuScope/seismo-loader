@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+import json
 from typing import IO, Dict, Optional, List, Union, Any
 from datetime import date, timedelta, datetime
 from enum import Enum
@@ -8,16 +9,16 @@ from configparser import ConfigParser
 import pickle
 
 from obspy import UTCDateTime
-from obspy.core.inventory import Inventory
-from obspy.core.event import Catalog
 
 from .common import RectangleArea, CircleArea
-from seed_vault.enums.config import DownloadType, WorkflowType, SeismoClients, GeoConstraintType, Levels, EventModels
+from seed_vault.enums.config import DownloadType, WorkflowType, GeoConstraintType, Levels, EventModels
 
 # TODO: Not sure if these values are controlled values
 # check to see if should we use controlled values or
 # rely on free inputs from users.
-from seed_vault.enums.stations import Channels, Stations, Locations, Networks
+from seed_vault.enums.stations import Channels, Locations
+from seed_vault.utils.clients import load_extra_client, load_original_client
+
 
 # Convert start and end times to datetime
 def parse_time(time_str):
@@ -113,7 +114,7 @@ class DateConfig(BaseModel):
 
 
 class WaveformConfig(BaseModel):
-    client           : Optional     [SeismoClients]   = SeismoClients.IRIS
+    client           : Optional     [str]   = "IRIS"
     channel_pref     : Optional     [List[Channels]]  = [
         Channels.CH, Channels.HH, Channels.BH, Channels.EH,
         Channels.HN, Channels.EN, Channels.SH, Channels.LH
@@ -144,7 +145,7 @@ class GeometryConstraint(BaseModel):
 
 
 class StationConfig(BaseModel):
-    client             : Optional   [ SeismoClients] = SeismoClients.IRIS
+    client             : Optional   [ str] = "IRIS"
     force_stations     : Optional   [ List          [SeismoQuery]] = []
     exclude_stations   : Optional   [ List          [SeismoQuery]] = []
     date_config        : DateConfig                                = DateConfig(
@@ -182,7 +183,7 @@ class StationConfig(BaseModel):
     # channel = CH,HH,BH,EH
 
 class EventConfig(BaseModel):
-    client              : Optional   [SeismoClients] = SeismoClients.IRIS
+    client              : Optional   [str] = "IRIS"
     date_config         : DateConfig                 = DateConfig(
         start_time=datetime(2024, 8, 20),
         end_time=datetime(2024, 9, 20)
@@ -232,14 +233,22 @@ class SeismoLoaderSettings(BaseModel):
     download_type     : DownloadType                          = DownloadType.EVENT
     selected_workflow : WorkflowType                          = WorkflowType.EVENT_BASED
     proccess          : ProcessingConfig                      = None
+    client_url_mapping: Optional[dict]                        = {}
+    extra_clients     : Optional[dict]                        = {}
     auths             : Optional        [List[AuthConfig]]    = []
     waveform          : WaveformConfig                        = None
     station           : StationConfig                         = None
     event             : EventConfig                           = None
     predictions       : Dict            [str, PredictionData] = {}
-    
 
-    # main: Union[EventConfig, StationConfig] = None
+
+    def load_url_mapping(self):
+        from obspy.clients.fdsn.header import URL_MAPPINGS
+        self.client_url_mapping = load_original_client()
+        self.extra_clients = load_extra_client()
+        self.client_url_mapping.update(self.extra_clients)
+        URL_MAPPINGS.update(self.client_url_mapping)
+
 
     def set_download_type_from_workflow(self):
         if (
@@ -255,7 +264,7 @@ class SeismoLoaderSettings(BaseModel):
     @classmethod
     def from_cfg_file(cls, cfg_source: Union[str, IO])  -> "SeismoLoaderSettings":
         config = configparser.ConfigParser()
-
+        config.optionxform = str
 
         # If cfg_source is a string, assume it's a file path
         if isinstance(cfg_source, str):
@@ -295,7 +304,7 @@ class SeismoLoaderSettings(BaseModel):
             )
 
         # Parse the WAVEFORM section
-        client = SeismoClients[config.get('WAVEFORM', 'client', fallback='AUSPASS').upper()]
+        client = config.get('WAVEFORM', 'client', fallback='IRIS').upper()
         channel_pref = config.get('WAVEFORM', 'channel_pref', fallback='').split(',')
         location_pref = config.get('WAVEFORM', 'location_pref', fallback='').split(',')
         days_per_request = config.getint('WAVEFORM', 'days_per_request', fallback=1)
@@ -348,7 +357,7 @@ class SeismoLoaderSettings(BaseModel):
 
 
         station_config = StationConfig(
-            client=SeismoClients[station_client.upper()] if station_client else None,
+            client=station_client.upper() if station_client else None,
             local_inventory=config.get("STATION","local_inventory", fallback=None),
             force_stations=force_stations,
             exclude_stations=exclude_stations,
@@ -405,7 +414,7 @@ class SeismoLoaderSettings(BaseModel):
                 )
 
             event_config = EventConfig(
-                client                 = SeismoClients[event_client.upper()] if event_client else None,
+                client                 = event_client.upper() if event_client else None,
                 model                  = EventModels[model.upper()],
                 date_config            = DateConfig(
                     start_time         = parse_time(config.get('EVENT', 'starttime'  , fallback=None)),
@@ -471,7 +480,7 @@ class SeismoLoaderSettings(BaseModel):
 
         # Populate the [WAVEFORM] section
         config['WAVEFORM'] = {}
-        safe_add_to_config(config, 'WAVEFORM', 'client', self.waveform.client.value)
+        safe_add_to_config(config, 'WAVEFORM', 'client', self.waveform.client)
         safe_add_to_config(config, 'WAVEFORM', 'channel_pref', ','.join([convert_to_str(channel.value) for channel in self.waveform.channel_pref]))
         safe_add_to_config(config, 'WAVEFORM', 'location_pref', ','.join([convert_to_str(loc.value) for loc in self.waveform.location_pref]))
         safe_add_to_config(config, 'WAVEFORM', 'days_per_request', self.waveform.days_per_request)
@@ -566,13 +575,13 @@ class SeismoLoaderSettings(BaseModel):
             'download_type': self.download_type.value if self.download_type else None,
             'auths': self.auths if self.auths else [],
             'waveform': {
-                'client': self.waveform.client.value if self.waveform and self.waveform.client else None,
+                'client': self.waveform.client if self.waveform and self.waveform.client else None,
                 'channel_pref': [channel.value for channel in self.waveform.channel_pref] if self.waveform and isinstance(self.waveform.channel_pref, list) else [],
                 'location_pref': [loc.value for loc in self.waveform.location_pref] if self.waveform and isinstance(self.waveform.location_pref, list) else [],
                 'days_per_request': self.waveform.days_per_request if self.waveform and self.waveform.days_per_request is not None else None,
             },
             'station': {
-                'client': self.station.client.value if self.station and self.station.client else None,
+                'client': self.station.client if self.station and self.station.client else None,
                 'local_inventory': self.station.local_inventory if self.station else None,
                 'force_stations': [station.cmb_str for station in self.station.force_stations if station.cmb_str is not None] if self.station and isinstance(self.station.force_stations, list) else [],
                 'exclude_stations': [station.cmb_str for station in self.station.exclude_stations if station.cmb_str is not None] if self.station and isinstance(self.station.exclude_stations, list) else [],
@@ -591,7 +600,7 @@ class SeismoLoaderSettings(BaseModel):
                 'level': self.station.level.value if self.station and self.station.level else None,
             },
             'event': {
-                'client': self.event.client.value if self.event and self.event.client else None,
+                'client': self.event.client if self.event and self.event.client else None,
                 'model': self.event.model.value if self.event and self.event.model else None,
                 'before_p_sec': self.event.before_p_sec if self.event and self.event.before_p_sec is not None else None,
                 'after_p_sec': self.event.after_p_sec if self.event and self.event.after_p_sec is not None else None,

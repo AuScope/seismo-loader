@@ -11,6 +11,7 @@ import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 from obspy.geodetics import degrees2kilometers
 from obspy.geodetics.base import locations2degrees
+import numpy as np
 
 
 class WaveformFilterMenu:
@@ -46,42 +47,14 @@ class WaveformFilterMenu:
     
     def render(self, waveforms=None):
         st.sidebar.header("Waveform Filters")
-
+        
         # Update available channels if waveforms are provided
         if waveforms is not None:
             self.update_available_channels(waveforms)
-
-        # Network filter
-        networks = ["All networks"] + list(set([inv.code for inv in self.settings.station.selected_invs]))
-        self.network_filter = st.sidebar.selectbox(
-            "Network:",
-            networks,
-            index=networks.index(self.network_filter)
-        )
-        
-        # Station filter
-        stations = ["All stations"]
-        for inv in self.settings.station.selected_invs:
-            stations.extend([sta.code for sta in inv])
-        stations = list(set(stations))
-        stations.remove("All stations")
-        stations.insert(0, "All stations")  
-        self.station_filter = st.sidebar.selectbox(
-            "Station:",
-            stations,
-            index=stations.index(self.station_filter)
-        )
-
-        # Channel filter 
-        selected_channel = st.sidebar.selectbox(
-            "Channel:",
-            options=self.available_channels,
-            index=self.available_channels.index(self.channel_filter)
-        )
-        self.channel_filter = selected_channel 
-        
+            
         # Time window around P arrival
         st.sidebar.subheader("Time Window")
+        
         self.settings.event.before_p_sec = st.sidebar.number_input(
             "Start (secs before P arrival):", 
             value=20
@@ -90,18 +63,60 @@ class WaveformFilterMenu:
             "End (secs after P arrival):", 
             value=100
         )
-
+        
+        # Regular filters
+        self.render_standard_filters()
+    def render_standard_filters(self):
+        """Render the standard network/station/channel filters"""
+        with st.sidebar:
+            client_options = list(self.settings.client_url_mapping.keys())
+            self.settings.waveform.client = st.selectbox(
+                'Choose a client:', client_options, 
+                index=client_options.index(self.settings.waveform.client), 
+                key="event-pg-client-event"
+            )
+        networks = ["All networks"] + list(set([inv.code for inv in self.settings.station.selected_invs]))
+        self.network_filter = st.sidebar.selectbox(
+            "Network:",
+            networks,
+            index=networks.index(self.network_filter)
+        )
+        
+        stations = ["All stations"]
+        for inv in self.settings.station.selected_invs:
+            stations.extend([sta.code for sta in inv])
+        stations = list(set(stations))
+        stations.sort()
+        stations.remove("All stations")
+        stations.insert(0, "All stations")
+        
+        self.station_filter = st.sidebar.selectbox(
+            "Station:",
+            stations,
+            index=stations.index(self.station_filter)
+        )
+        
+        self.channel_filter = st.sidebar.selectbox(
+            "Channel:",
+            options=self.available_channels,
+            index=self.available_channels.index(self.channel_filter)
+        )
+        
 class WaveformDisplay:
     settings: SeismoLoaderSettings
     waveforms: List[Dict] = []
     ttmodel: TauPyModel = None
     prediction_data: Dict[str, any] = {}
     filter_menu: WaveformFilterMenu
-    
+    WAVEFORMS_PER_PAGE = 5
+
     def __init__(self, settings: SeismoLoaderSettings, filter_menu: WaveformFilterMenu):
         self.settings = settings
         self.filter_menu = filter_menu
-        self.client = Client(self.settings.waveform.client.value)
+        try:
+            self.client = Client(self.settings.waveform.client)
+        except ValueError as e:
+            st.error(f"Error: {str(e)} Waveform client is set to {self.settings.waveform.client}, which seems does not exists. Please navigate to the settings page and use the Clients tab to add the client or fix the stored config.cfg file.")
         self.ttmodel = TauPyModel("iasp91")
         self.waveforms = []
         
@@ -141,10 +156,9 @@ class WaveformDisplay:
             st.warning("No waveforms retrieved. Please check your selection criteria.")
 
     def display_waveform_data(self):
+        """Main waveform display function"""
         if not self.waveforms:
-            st.info(
-                "No waveforms to display. Use the 'Get Waveforms' button to retrieve waveforms."
-            )
+            st.info("No waveforms to display. Use the 'Get Waveforms' button to retrieve waveforms.")
             return
 
         # Update filter menu channels before displaying
@@ -191,7 +205,7 @@ class WaveformDisplay:
             rows=len(page_waveforms),
             cols=1,
             shared_xaxes=True,
-            vertical_spacing=0.12,
+            vertical_spacing=0.08,
             subplot_titles=[
             self.create_subplot_title(w, distances)
                 for w in page_waveforms.to_dict("records")
@@ -201,80 +215,42 @@ class WaveformDisplay:
         for i, waveform in enumerate(page_waveforms.to_dict("records"), 1):
             df = waveform["Data"]
             if df.empty:
-                st.warning(
-                    f"No data available for {waveform['Network']}.{waveform['Station']}.{waveform['Location']}.{waveform['Channel']}"
-                )
                 continue
 
-            # Ensure the data is sorted by time
-            df = df.sort_values("time")
-
-            # Create the waveform trace
-            trace = go.Scatter(
-                x=df["time"],
-                y=df["amplitude"],
-                mode="lines",
-                name=f"{waveform['Network']}.{waveform['Station']}.{waveform['Location']}.{waveform['Channel']}",
-                hovertemplate="Time: %{x}<br>Amplitude: %{y:.2f}<extra></extra>",
-                showlegend=False
-            )
+            # Calculate scaling factor
+            power = self._calculate_scaling_factor(df)
             
-            # Add P arrival time marker if available and within data range
-            if 'P_Arrival' in waveform and waveform['P_Arrival'] is not None:
-                p_arrival_time = UTCDateTime(waveform['P_Arrival'])
-                # Create window around P arrival using settings
-                window_start = p_arrival_time - self.settings.event.before_p_sec
-                window_end = p_arrival_time + self.settings.event.after_p_sec
-                
-                # Filter data to our window
-                df = df[
-                    (df['time'] >= window_start.datetime) & 
-                    (df['time'] <= window_end.datetime)
-                ]
-            # Create the waveform trace
-            trace = go.Scatter(
-                x=df["time"],
-                y=df["amplitude"],
-                mode="lines",
-                name=f"{waveform['Network']}.{waveform['Station']}.{waveform['Location']}.{waveform['Channel']}",
-                hovertemplate="Time: %{x}<br>Amplitude: %{y:.2f}<extra></extra>",
-                showlegend=False
-            )
+            # Create scaled trace
+            trace = self._create_waveform_trace(df, power)
+            fig.add_trace(trace, row=i, col=1)
 
-            # Add P arrival time marker
-            if 'P_Arrival' in waveform and waveform['P_Arrival'] is not None:
-                p_arrival_time = UTCDateTime(waveform['P_Arrival'])
-                
-                # Get y-axis range for this specific subplot
-                y_min = df['amplitude'].min()
-                y_max = df['amplitude'].max()
-                margin = (y_max - y_min) * 0.1
-                
+            # Format y-axis
+            y_min, y_max = df['amplitude'].min() / (10**power), df['amplitude'].max() / (10**power)
+            self._format_counts_axis(fig, i, power, y_min, y_max)
+
+            # Add P arrival marker if available
+            if 'P_Arrival' in waveform and waveform['P_Arrival']:
+                p_time = UTCDateTime(waveform['P_Arrival'])
                 p_line = go.Scatter(
-                    x=[p_arrival_time.datetime, p_arrival_time.datetime],
-                    y=[y_min - margin, y_max + margin],
+                    x=[p_time.datetime, p_time.datetime],
+                    y=[y_min - (y_max - y_min) * 0.1, y_max + (y_max - y_min) * 0.1],
                     mode='lines',
                     line=dict(color='red', width=1, dash='dash'),
                     showlegend=False
                 )
-                
-                fig.add_trace(trace, row=i, col=1)
                 fig.add_trace(p_line, row=i, col=1)
-                
-                # Update y-axis range for this subplot
-                fig.update_yaxes(
-                    range=[y_min - margin, y_max + margin],
-                    row=i,
-                    col=1
-                )
-            else:
-                fig.add_trace(trace, row=i, col=1)
 
         fig.update_layout(
             height=300 * len(page_waveforms),
-            title_text=f"Seismic Waveforms (Page {page + 1} of {num_pages})",
+            title=dict(
+                text=f"Seismic Waveforms (Page {page + 1} of {num_pages})",
+                y=1,
+                x=0.5,
+                xanchor='center',
+                yanchor='top'
+            ),
             plot_bgcolor="white",
-            margin=dict(l=100, r=100, t=300, b=100),
+            margin=dict(l=50, r=50, t=100, b=50),
             legend=dict(
                 yanchor="top",
                 y=1.02,
@@ -319,8 +295,403 @@ class WaveformDisplay:
             
         return title
     def render(self):
-        self.display_waveform_data()
+        # Add view selector at the top
+        view_type = st.radio(
+            "Select View Type",
+            ["Default View", "Single Event - Multiple Stations", "Single Station - Multiple Events"],
+            key="view_selector"
+        )
+        
+        if not self.waveforms:
+            st.info("No waveforms to display. Use the 'Get Waveforms' button to retrieve waveforms.")
+            return
+
+        # Update filter menu channels
         self.filter_menu.update_available_channels(self.waveforms)
+        
+        if view_type == "Default View":
+            # Use the original display function
+            self.display_waveform_data()
+        elif view_type == "Single Event - Multiple Stations":
+            events = self.settings.event.selected_catalogs
+            event_options = [
+                f"Event {i+1}: {event.origins[0].time} M{event.magnitudes[0].mag:.1f}"
+                for i, event in enumerate(events)
+            ]
+            selected_event_idx = st.selectbox(
+                "Select Event",
+                range(len(event_options)),
+                format_func=lambda x: event_options[x]
+            )
+            event = events[selected_event_idx]
+            
+            # Plot event view
+            self.plot_event_view(event, self.waveforms)
+        else:
+            # Get unique stations
+            stations = set((w['Network'], w['Station']) for w in self.waveforms)
+            station_options = sorted([f"{net}.{sta}" for net, sta in stations])
+            
+            if not station_options:
+                st.warning("No stations available.")
+                return
+                
+            # Station selector
+            selected_station = st.selectbox(
+                "Select Station",
+                station_options
+            )
+            net, sta = selected_station.split('.')
+            
+            # Filter waveforms for selected station
+            station_waveforms = [
+                w for w in self.waveforms
+                if w['Network'] == net and w['Station'] == sta
+            ]
+            
+            # Plot station view
+            self.plot_station_view(selected_station, station_waveforms)
+            
+    def get_station_coordinates(self, network_code, station_code):
+        """Get station coordinates from inventory"""
+        for network in self.settings.station.selected_invs:
+            if network.code == network_code:
+                for station in network:
+                    if station.code == station_code:
+                        return (station.latitude, station.longitude)
+        return None
+
+    def create_event_subplot_title(self, event, waveform, distance_info):
+        """Create subplot title for single event view"""
+        dist_deg = distance_info['deg']
+        dist_km = distance_info['km']
+        p_arrival = waveform.get('P_Arrival')
+        p_time = UTCDateTime(p_arrival).strftime('%H:%M:%S') if p_arrival else 'N/A'
+        
+        return (
+            f"{waveform['Network']}.{waveform['Station']} | {waveform['Channel']} | "
+            f"Δ: {dist_km:.0f} km ({dist_deg:.1f}°)<br>"
+            f"<sup>P: {p_time}</sup>"
+        )
+
+    def create_station_subplot_title(self, event, waveform):
+        """Create subplot title for single station view"""
+        magnitude = event.magnitudes[0].mag
+        depth = event.origins[0].depth/1000
+        
+        station_coords = self.get_station_coordinates(waveform['Network'], waveform['Station'])
+        if station_coords:
+            dist_deg = locations2degrees(
+                event.origins[0].latitude,
+                event.origins[0].longitude,
+                station_coords[0],
+                station_coords[1]
+            )
+            dist_km = degrees2kilometers(dist_deg)
+        else:
+            dist_deg = dist_km = "N/A"
+        
+        return (
+            f"M{magnitude:.1f} | Depth: {depth:.1f} km | Δ: {dist_km:.0f} km ({dist_deg:.1f}°)<br>"
+            f"<sup>{event.origins[0].time.strftime('%Y-%m-%d %H:%M:%S')}</sup>"
+        )
+
+    def add_pagination_to_sidebar(self, total_items):
+        """Shared pagination logic"""
+        num_pages = (total_items - 1) // self.WAVEFORMS_PER_PAGE + 1
+        page = st.sidebar.selectbox(
+            "Page Navigation", 
+            range(1, num_pages + 1), 
+            key="shared_pagination"
+        ) - 1
+        
+        start_idx = page * self.WAVEFORMS_PER_PAGE
+        end_idx = min((page + 1) * self.WAVEFORMS_PER_PAGE, total_items)
+        
+        return start_idx, end_idx, page, num_pages
+
+    def plot_event_view(self, event, waveforms):
+        """Plot single event with multiple stations"""
+        if not waveforms:
+            st.warning("No waveforms to display.")
+            return
+
+        # Calculate and sort by distances
+        distances = {}
+        for waveform in waveforms:
+            station_coords = self.get_station_coordinates(waveform['Network'], waveform['Station'])
+            if station_coords:
+                dist_deg = locations2degrees(
+                    event.origins[0].latitude,
+                    event.origins[0].longitude,
+                    station_coords[0],
+                    station_coords[1]
+                )
+                dist_km = degrees2kilometers(dist_deg)
+                distances[f"{waveform['Network']}.{waveform['Station']}"] = {
+                    'deg': round(dist_deg, 2),
+                    'km': round(dist_km, 2)
+                }
+
+        sorted_waveforms = sorted(waveforms, 
+                                key=lambda w: distances.get(f"{w['Network']}.{w['Station']}", 
+                                                         {'km': float('inf')})['km'])
+
+        # Add pagination
+        start_idx, end_idx, page, num_pages = self.add_pagination_to_sidebar(len(sorted_waveforms))
+        page_waveforms = sorted_waveforms[start_idx:end_idx]
+
+        # Create figure with paginated waveforms
+        fig = make_subplots(
+            rows=len(page_waveforms),
+            cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.08,
+            subplot_titles=[
+                self.create_event_subplot_title(
+                    event, 
+                    w, 
+                    distances[f"{w['Network']}.{w['Station']}"]
+                ) for w in page_waveforms
+            ]
+        )
+
+        # Rest of the plotting logic remains the same
+        for annotation in fig.layout.annotations:
+            annotation.update(y=annotation.y + 0.005)
+        
+        for i, waveform in enumerate(page_waveforms, 1):
+            df = waveform['Data']
+            if df.empty:
+                continue
+
+            # Calculate scaling factor
+            power = self._calculate_scaling_factor(df)
+            
+            # Create scaled trace
+            trace = self._create_waveform_trace(df, power)
+            fig.add_trace(trace, row=i, col=1)
+
+            # Format y-axis
+            y_min, y_max = df['amplitude'].min() / (10**power), df['amplitude'].max() / (10**power)
+            self._format_counts_axis(fig, i, power, y_min, y_max)
+
+            # Add P arrival marker
+            if waveform.get('P_Arrival'):
+                p_time = UTCDateTime(waveform['P_Arrival'])
+                p_line = go.Scatter(
+                    x=[p_time.datetime, p_time.datetime],
+                    y=[y_min - (y_max - y_min) * 0.1, y_max + (y_max - y_min) * 0.1],
+                    mode='lines',
+                    line=dict(color='red', width=1, dash='dash'),
+                    showlegend=False
+                )
+                fig.add_trace(p_line, row=i, col=1)
+        
+        height_per_trace = 250
+        fig.update_layout(
+            height=height_per_trace * len(page_waveforms) + 100,
+            title=dict(
+                text=(
+                    f"Event: {event.origins[0].time.strftime('%Y-%m-%d %H:%M:%S')} | "
+                    f"M{event.magnitudes[0].mag:.1f} | "
+                    f"Lat: {event.origins[0].latitude:.2f}° | "
+                    f"Lon: {event.origins[0].longitude:.2f}° | "
+                    f"Depth: {event.origins[0].depth/1000:.1f} km"
+                    f" (Page {page + 1} of {num_pages})"
+                ),
+                y=1,
+                x=0.5,
+                xanchor='center',
+                yanchor='top'
+            ),
+            showlegend=False,
+            plot_bgcolor='white',
+            margin=dict(l=50, r=50, t=100, b=50)
+        )
+
+        # Update axes
+        for i in range(1, len(page_waveforms) + 1):
+            fig.update_xaxes(
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='lightgray',
+                tickformat='%H:%M:%S',
+                row=i,
+                col=1
+            )
+        
+        st.plotly_chart(fig, use_container_width=True)
+
+    def plot_station_view(self, station_code, waveforms):
+        """Plot single station with multiple events"""
+        if not waveforms:
+            st.warning("No waveforms to display.")
+            return
+
+        # Sort waveforms by time
+        sorted_waveforms = sorted(waveforms, 
+                                key=lambda w: UTCDateTime(w.get('P_Arrival', '2099-01-01')))
+
+        # Add pagination
+        start_idx, end_idx, page, num_pages = self.add_pagination_to_sidebar(len(sorted_waveforms))
+        page_waveforms = sorted_waveforms[start_idx:end_idx]
+
+        station_coords = self.get_station_coordinates(
+            page_waveforms[0]['Network'], 
+            page_waveforms[0]['Station']
+        )
+
+        # Create figure with paginated waveforms
+        fig = make_subplots(
+            rows=len(page_waveforms),
+            cols=1,
+            vertical_spacing=0.08,
+            shared_xaxes=True,
+            subplot_titles=[
+                self.create_station_subplot_title(
+                    self.settings.event.selected_catalogs[0],
+                    w
+                ) for w in page_waveforms
+            ]
+        )
+
+        # Rest of the plotting logic remains the same
+        for annotation in fig.layout.annotations:
+            annotation.update(y=annotation.y + 0.005)
+            
+        for i, waveform in enumerate(page_waveforms, 1):
+            df = waveform['Data']
+            if df.empty:
+                continue
+
+            # Calculate scaling factor
+            power = self._calculate_scaling_factor(df)
+            
+            # Create scaled trace
+            trace = self._create_waveform_trace(df, power)
+            fig.add_trace(trace, row=i, col=1)
+
+            # Format y-axis
+            y_min, y_max = df['amplitude'].min() / (10**power), df['amplitude'].max() / (10**power)
+            self._format_counts_axis(fig, i, power, y_min, y_max)
+
+            # Add P arrival marker
+            if waveform.get('P_Arrival'):
+                p_time = UTCDateTime(waveform['P_Arrival'])
+                p_line = go.Scatter(
+                    x=[p_time.datetime, p_time.datetime],
+                    y=[y_min - (y_max - y_min) * 0.1, y_max + (y_max - y_min) * 0.1],
+                    mode='lines',
+                    line=dict(color='red', width=1, dash='dash'),
+                    showlegend=False
+                )
+                fig.add_trace(p_line, row=i, col=1)
+        
+        fig.update_layout(
+            height=250 * len(page_waveforms) + 150,
+            title=dict(
+                text=(
+                    f"Station: {station_code} | "
+                    f"Lat: {station_coords[0]:.2f}° | "
+                    f"Lon: {station_coords[1]:.2f}° "
+                    f"(Page {page + 1} of {num_pages})"
+                ),
+                y=1,
+                x=0.5,
+                xanchor='center',
+                yanchor='top'
+            ),
+            showlegend=False,
+            plot_bgcolor='white',
+            margin=dict(l=50, r=50, t=100, b=50)
+        )
+
+        for i in range(1, len(page_waveforms) + 1):
+            fig.update_xaxes(
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='lightgray',
+                tickformat='%H:%M:%S',
+                row=i,
+                col=1,
+            )
+        st.plotly_chart(fig, use_container_width=True)
+
+    def add_traces_to_figure(self, fig, waveforms):
+        """Add waveform traces and P-arrival markers to figure"""
+        for i, waveform in enumerate(waveforms, 1):
+            df = waveform['Data']
+            if df.empty:
+                continue
+
+            # Add waveform trace
+            trace = go.Scatter(
+                x=df["time"],
+                y=df["amplitude"],
+                mode="lines",
+                line=dict(width=1),
+                showlegend=False
+            )
+            fig.add_trace(trace, row=i, col=1)
+
+            # Add P arrival marker if available
+            if waveform.get('P_Arrival'):
+                p_time = UTCDateTime(waveform['P_Arrival'])
+                y_min, y_max = df['amplitude'].min(), df['amplitude'].max()
+                margin = (y_max - y_min) * 0.1
+
+                p_line = go.Scatter(
+                    x=[p_time.datetime, p_time.datetime],
+                    y=[y_min - margin, y_max + margin],
+                    mode='lines',
+                    line=dict(color='red', width=1, dash='dash'),
+                    showlegend=False
+                )
+                fig.add_trace(p_line, row=i, col=1)
+
+                # Update y-axis range
+                fig.update_yaxes(
+                    range=[y_min - margin, y_max + margin],
+                    row=i,
+                    col=1,
+                    showgrid=True,
+                    gridwidth=1,
+                    gridcolor='lightgray'
+                )
+
+    def _calculate_scaling_factor(self, data):
+        """Calculate appropriate scaling factor for the data"""
+        max_abs = max(abs(data['amplitude'].max()), abs(data['amplitude'].min()))
+        if max_abs == 0:
+            return 0
+        power = int(np.floor(np.log10(max_abs)))
+        return power
+
+    def _format_counts_axis(self, fig, row, power, y_min, y_max):
+        """Format y-axis with proper scientific notation"""
+        margin = (y_max - y_min) * 0.1
+        fig.update_yaxes(
+            title=f'Counts (×10<sup>{power}</sup>)',
+            range=[y_min - margin, y_max + margin],
+            tickformat='.1f',
+            row=row,
+            col=1,
+            gridcolor='lightgrey',
+            showgrid=True
+        )
+
+    def _create_waveform_trace(self, df, power):
+        """Create a waveform trace with scaled data"""
+        scaled_amplitude = df['amplitude'] / (10 ** power)
+        return go.Scatter(
+            x=df["time"],
+            y=scaled_amplitude,
+            mode="lines",
+            line=dict(width=1),
+            showlegend=False,
+            hovertemplate="Time: %{x}<br>Counts: %{y:.2f}×10<sup>" + str(power) + "</sup><extra></extra>"
+        )
 
 class WaveformComponents:
     settings: SeismoLoaderSettings
@@ -334,9 +705,8 @@ class WaveformComponents:
 
     def render(self):
         st.title("Waveform Analysis")
-        
         # Get Waveforms button
-        if st.button("Get Waveforms"):
+        if st.button("Get Waveforms", key="get_waveforms"):
             self.waveform_display.retrieve_waveforms()
         
         # Render filter menu
@@ -440,7 +810,6 @@ class SeismicDistanceDisplay:
     def render(self):
         """Main render function"""
         st.title("Seismic Distance Analysis")
-        
         # Calculate distances
         distances = self.calculate_distances()
         

@@ -28,6 +28,7 @@ from seed_vault.enums.config import DownloadType, GeoConstraintType
 from seed_vault.service.utils import is_in_enum
 from seed_vault.service.db import DatabaseManager
 from seed_vault.service.waveform import get_local_waveform, stream_to_dataframe
+from obspy.clients.fdsn.header import URL_MAPPINGS
 
 ### request status codes (TBD more:
 # 204 = no data
@@ -51,7 +52,8 @@ def read_config(config_file):
     for section in config.sections():
         processed_config.add_section(section)
         for key, value in config.items(section):
-            if section in ['AUTH','DATABASE','SDS','WAVEFORM']:
+            print("YYYYYYYYYY",key,value,section)
+            if section.upper() in ['AUTH','DATABASE','SDS','WAVEFORM']:
                 processed_key = key
                 processed_value = value if value is not None else None
             else:
@@ -122,7 +124,7 @@ def stream_to_db_element(st):
 
 def populate_database_from_sds(sds_path, db_path,
     search_patterns=["??.*.*.???.?.????.???"],
-    newer_than=None,num_processes=None):
+    newer_than=None,num_processes=None, gap_tolerance = 60):
 
     """Utility function to populate the archive_table in our database """
 
@@ -170,6 +172,8 @@ def populate_database_from_sds(sds_path, db_path,
         print("Error with bulk_insert_archive_data: ", e)    
 
     print(f"Processed {total_files} files, inserted {num_inserted} records into the database.")
+
+    db_manager.join_continuous_segments(gap_tolerance)
 
 
 #### now moved to db.py as part of DatabaseManager class
@@ -614,11 +618,11 @@ def prune_requests(requests, db_manager, min_request_window=3):
 
 def archive_request(request, waveform_clients, sds_path, db_manager):
     """ Send a request to an FDSN center, parse it, save to archive, and update database """
-    #bug here. waveform_clients should be a dictionary of waveform data clients for each auth key. but it is the earthquake client!
+
     try:
         if request[0] in waveform_clients.keys():  # Per-network authentication
             wc = waveform_clients[request[0]]
-        elif request[0]+'.'+request[1] in waveform_clients.keys():  # Per-station e.g. NN.SSSSS
+        elif request[0]+'.'+request[1] in waveform_clients.keys():  # Per-station e.g. NN.SSSSS (not currently working TODO)
             wc = waveform_clients[request[0]+'.'+request[1]]
         else:
             wc = waveform_clients['open']
@@ -647,7 +651,7 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
     except Exception as e:
         print(f"Error fetching data ---------------: {request} {str(e)}")
         # >> TODO add failure & denied to database also? will require DB structuring and logging HTTP error response
-        return
+        return 
 
     # A means to group traces by day to avoid slowdowns with highly fractured data
     traces_by_day = defaultdict(obspy.Stream)
@@ -770,9 +774,9 @@ def convert_degrees_to_radius_meter(radius_degree):
 
 
 def get_selected_stations_at_channel_level(settings: SeismoLoaderSettings):
-    waveform_client = Client(settings.waveform.client.value)
+    waveform_client = Client(settings.waveform.client)
     if settings.station and settings.station.client: # config['STATION']['client']:
-        station_client = Client(settings.station.client.value) # Client(config['STATION']['client'])
+        station_client = Client(settings.station.client) # Client(config['STATION']['client'])
     else:
         station_client = waveform_client
 
@@ -804,9 +808,9 @@ def get_stations(settings: SeismoLoaderSettings):
 
     starttime = UTCDateTime(settings.station.date_config.start_time)
     endtime = UTCDateTime(settings.station.date_config.end_time)
-    waveform_client = Client(settings.waveform.client.value)
+    waveform_client = Client(settings.waveform.client)
     if settings.station and settings.station.client: # config['STATION']['client']:
-        station_client = Client(settings.station.client.value) # Client(config['STATION']['client'])
+        station_client = Client(settings.station.client) # Client(config['STATION']['client'])
     else:
         station_client = waveform_client
 
@@ -899,7 +903,7 @@ def get_stations(settings: SeismoLoaderSettings):
                     level=settings.station.level.value
                 )
             except:
-                print("Could not find requested station %s at %s" % (f"{n}.{s}",settings.station.client.value))
+                print("Could not find requested station %s at %s" % (f"{n}.{s}",settings.station.client))
                 continue
 
     return inv
@@ -912,9 +916,9 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
     starttime = UTCDateTime(settings.event.date_config.start_time)
     endtime = UTCDateTime(settings.event.date_config.end_time)
 
-    waveform_client = Client(settings.waveform.client.value)
+    waveform_client = Client(settings.waveform.client)
     if settings.event and settings.event.client:
-        event_client = Client(settings.event.client.value)
+        event_client = Client(settings.event.client)
     else:
         event_client = waveform_client
 
@@ -956,7 +960,7 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
             cat = event_client.get_events(
                 **kwargs
             )
-            print("Global Search of Events. Found %d events from %s" % (len(cat),settings.event.client.value))
+            print("Global Search of Events. Found %d events from %s" % (len(cat),settings.event.client))
             catalog.extend(cat)
         except:
             print("No events found!") #TODO elaborate
@@ -973,7 +977,7 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
                     maxradius= geo.coords.max_radius,
                     **kwargs
                 )
-                print("Found %d events from %s" % (len(cat),settings.event.client.value))
+                print("Found %d events from %s" % (len(cat),settings.event.client))
                 catalog.extend(cat)
             except:
                 print("No events found!") #TODO elaborate
@@ -987,7 +991,7 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
                     maxlongitude = geo.coords.max_lng,
                     **kwargs
                 )
-                print("Found %d events from %s" % (len(cat),settings.event.client.value))
+                print("Found %d events from %s" % (len(cat),settings.event.client))
                 catalog.extend(cat)
             except:
                 print("No events found!") #TODO elaborate
@@ -1042,7 +1046,7 @@ def run_continuous(settings: SeismoLoaderSettings):
 
     starttime = UTCDateTime(settings.station.date_config.start_time)
     endtime = UTCDateTime(settings.station.date_config.end_time)
-    waveform_client = Client(settings.waveform.client.value)
+    waveform_client = Client(settings.waveform.client)
 
     # Collect requests
     requests = collect_requests(settings.station.selected_invs,starttime,endtime,
@@ -1058,16 +1062,19 @@ def run_continuous(settings: SeismoLoaderSettings):
     # Combine these into fewer (but larger) requests
     combined_requests = combine_requests(pruned_requests)
 
-    waveform_clients= {'open':waveform_client}
+    waveform_clients= {'open':waveform_client} #now a dictionary
     requested_networks = [ele[0] for ele in combined_requests]
 
-    ######## lets double check this.. not sure if it will follow NN.SSSS as well as NN
+    ## cred structure is: AuthConfig(nslc_code='2P', username='username', password='password_for_2P')
+    # right now this probably only works for network-based credentials only (TODO)
     for cred in settings.auths:
-        if cred.nslc_code not in requested_networks:
+        cred_net = cred.nslc_code.split('.')[0].upper()
+        print("warning! implementing forced uppercase cred hack until can figure out why they're lowercase")
+        if cred_net not in requested_networks:
             continue
         try:
-            new_client = Client(settings.waveform.client,user=cred.username,password=cred.password)
-            waveform_clients.update({cred.nslc_code:new_client})
+            new_client = Client(settings.waveform.client,user=cred.username.upper(),password=cred.password)
+            waveform_clients.update({cred_net:new_client})
         except:
             print("Issue creating client: %s %s via %s:%s" % (settings.waveform.client,cred.nslc_code,cred.username,cred.password))
             continue
@@ -1076,10 +1083,11 @@ def run_continuous(settings: SeismoLoaderSettings):
     for request in combined_requests:
         print(request)
         time.sleep(0.05) #to help ctrl-C out if needed
-        try: 
+        try:
             archive_request(request, waveform_clients, settings.sds_path, db_manager)
         except Exception as e:
             print("Continuous request not successful: ",request, " with exception: ", e)
+            continue
 
     # Goint through all original requests
     time_series = []
@@ -1144,19 +1152,13 @@ def run_event(settings: SeismoLoaderSettings):
     """
     settings, db_manager = setup_paths(settings)
 
-    waveform_client = Client(settings.waveform.client.value)
+    waveform_client = Client(settings.waveform.client)
     
     try:
         ttmodel = TauPyModel(settings.event.model)
     except Exception as e:
         print("Issue loading TauPyModel ",settings.event.model, e, "defaulting to IASP91")
         ttmodel = TauPyModel('IASP91')
-
-    # @FIXME: Below line seems to be redundant as in above lines, event_client was set.
-    # event_client = Client(config['EVENT']['client'])
-
-    # minradius = settings.event.min_radius # float(config['EVENT']['minradius'])
-    # maxradius = settings.event.max_radius # float(config['EVENT']['maxradius'])
 
     #now loop through events
     # NOTE: Why "inv" collections from STATION block is included in EVENTS?
@@ -1193,66 +1195,72 @@ def run_event(settings: SeismoLoaderSettings):
         # Add additional clients if user is requesting any restricted data
         waveform_clients= {'open':waveform_client}
         requested_networks = [ele[0] for ele in combined_requests]
+        print('settings.waveform.client:', settings.waveform.client)
 
-        ## may have to review this part va line 1264 seedfault.0.40.py
+        ## cred structure is: AuthConfig(nslc_code='2P', username='username', password='password_for_2P')
+        # right now this probably only works for network-based credentials only
         for cred in settings.auths:
-            if cred.nslc_code not in requested_networks:
+            cred_net = cred.nslc_code.split('.')[0].upper()
+            print("warning! implementing forced uppercase cred hack until can figure out why they're lowercase")            
+            if cred_net not in requested_networks:
                 continue
             try:
-                new_client = Client(settings.waveform.client,user=cred.username,password=cred.password)
+                new_client = Client(settings.waveform.client,user=cred.username.upper(),password=cred.password)
+                waveform_clients.update({cred_net:new_client})
             except:
                 print("Issue creating client: %s %s via %s:%s" % (settings.waveform.client,cred.nslc_code,cred.username,cred.password))
-                continue
-            waveform_clients.update({cred.nslc_code:new_client})
 
         # Archive to disk and update database
         for request in combined_requests:
             time.sleep(0.05) #to help ctrl-C out if needed
             print(request)
             try: 
-                archive_request(request,waveform_client,settings.sds_path,db_manager)
+                archive_request(request,waveform_clients,settings.sds_path,db_manager)
             except Exception as e:
                 print("Event request not successful: ",request, str(e))
         
-        ### unsure what below does
-        time_series = []
-        for req in requests:
-            data = pd.DataFrame()
-            query = SeismoQuery(
-                network = req[0],
-                station = req[1],
-                location = req[2],
-                channel = req[3],
-                starttime = req[4],
-                endtime = req[5]
-            )
-            try:
-                data = stream_to_dataframe(get_local_waveform(query, settings))
-            except Exception as e:
-                print(str(e))
-            
-            # Get P arrival time for this waveform
-            station_id = f"{query.network}.{query.station}"
-            p_arrival = p_arrivals.get(station_id)
-            time_series.append({
-                'Network': query.network,
-                'Station': query.station,
-                'Location': query.location,
-                'Channel': query.channel,
-                'Data': data,
-                'P_Arrival': p_arrival
-            })
+    # The below is for plotting (?) PLEASE REVIEW!
+    time_series = []
+    for req in requests:
+        data = pd.DataFrame()
+        query = SeismoQuery(
+            network = req[0],
+            station = req[1],
+            location = req[2],
+            channel = req[3],
+            starttime = req[4],
+            endtime = req[5]
+        )
+        try:
+            data = stream_to_dataframe(get_local_waveform(query, settings))
+        except Exception as e:
+            print(str(e))
         
-        return time_series
+        # Get P arrival time for this waveform
+        station_id = f"{query.network}.{query.station}"
+        p_arrival = p_arrivals.get(station_id)
+        time_series.append({
+            'Network': query.network,
+            'Station': query.station,
+            'Location': query.location,
+            'Channel': query.channel,
+            'Data': data,
+            'P_Arrival': p_arrival
+        })
+        
+    return time_series
 
 
 
 def run_main(settings: SeismoLoaderSettings = None, from_file=None):
     if not settings and from_file:
         settings = SeismoLoaderSettings()
-        settings = settings.from_cfg_file(cfg_path = from_file)
+        settings = settings.from_cfg_file(cfg_source = from_file)
 
     settings, db_manager = setup_paths(settings)
+
+    settings.load_url_mapping()
+    URL_MAPPINGS = settings.client_url_mapping
 
     download_type = settings.download_type.value
     if not is_in_enum(download_type, DownloadType):

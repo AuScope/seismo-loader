@@ -52,7 +52,7 @@ class CombinedBasedWorkflow:
         self.settings = get_app_settings()
         st.session_state["show_error"] = False
         st.session_state["error_message"] = ""
-                
+
         st.session_state.selected_flow_type = selected_flow_type
         # return True
         
@@ -129,6 +129,8 @@ class CombinedBasedWorkflow:
                 self.trigger_error("Please select a station to proceed to the next step.")
                 return False
             
+            self.settings.waveform.client = self.settings.station.client                        
+            
             # Apply the additional settings adjustment for CONTINUOUS workflow
             if workflow_type == WorkflowType.CONTINUOUS:
                 self.settings = get_selected_stations_at_channel_level(self.settings)
@@ -179,7 +181,8 @@ class CombinedBasedWorkflow:
                     self.station_components.sync_df_markers_with_df_edit()
                     self.station_components.update_selected_data()
                     selected_invs = self.station_components.settings.station.selected_invs
-                    if selected_invs is not None and len(selected_invs) > 0:    
+                    if selected_invs is not None and len(selected_invs) > 0: 
+                        self.settings.waveform.client = self.settings.station.client                           
                         self.settings = get_selected_stations_at_channel_level(self.settings)                                   
                         self.settings = get_selected_stations_at_channel_level(self.settings) 
                         self.next_stage()   
