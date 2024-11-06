@@ -29,6 +29,7 @@ class CombinedBasedWorkflow:
         self.station_components = BaseComponent(self.settings, step_type=Steps.STATION, prev_step_type=Steps.EVENT, stage=2)    
         self.waveform_components = WaveformComponents(self.settings)
 
+
     def next_stage(self):
         self.stage += 1
         st.rerun()
@@ -49,6 +50,9 @@ class CombinedBasedWorkflow:
         #     return False        
         
         self.settings = get_app_settings()
+        st.session_state["show_error"] = False
+        st.session_state["error_message"] = ""
+                
         st.session_state.selected_flow_type = selected_flow_type
         # return True
         
@@ -102,47 +106,69 @@ class CombinedBasedWorkflow:
         st.info(self.settings.selected_workflow.description)
 
 
+
+    def trigger_error(self, message):
+        """Set an error message in session state to be displayed."""
+        st.session_state["show_error"] = True
+        st.session_state["error_message"] = message
+
+    def validate_selection(self, workflow_type):
+        """Validate selection based on workflow type and return True if valid, else trigger error."""
+        if workflow_type == WorkflowType.EVENT_BASED:
+            self.event_components.sync_df_markers_with_df_edit()
+            self.event_components.update_selected_data()
+            selected_catalogs = self.event_components.settings.event.selected_catalogs
+            if selected_catalogs is None or len(selected_catalogs) <= 0:
+                self.trigger_error("Please select an event to proceed to the next step.")
+                return False
+        elif workflow_type in [WorkflowType.STATION_BASED, WorkflowType.CONTINUOUS]:
+            self.station_components.sync_df_markers_with_df_edit()
+            self.station_components.update_selected_data()
+            selected_invs = self.station_components.settings.station.selected_invs
+            if selected_invs is None or len(selected_invs) <= 0:
+                self.trigger_error("Please select a station to proceed to the next step.")
+                return False
+            
+            # Apply the additional settings adjustment for CONTINUOUS workflow
+            if workflow_type == WorkflowType.CONTINUOUS:
+                self.settings = get_selected_stations_at_channel_level(self.settings)
+
+        st.session_state["show_error"] = False
+        return True
+    
     def render_stage_1(self):
+        
         c1, c2, c3 = st.columns([1, 1, 1])
         title = "Events" if self.settings.selected_workflow == WorkflowType.EVENT_BASED else "Stations"
+
         with c1:
             if st.button("Previous"):
-                """
-                Another place to call settings clean up!?
-                """
                 self.previous_stage()
+
         with c2:
             st.write(f"### Step 1: Search & Select {title}")
 
-        if self.settings.selected_workflow == WorkflowType.EVENT_BASED: 
-            with c3:
-                if st.button("Next"):
-                    self.event_components.sync_df_markers_with_df_edit()
-                    self.event_components.update_selected_data()
-                    if len(self.event_components.settings.event.selected_catalogs)>0 :                    
-                        self.next_stage()   
-                    else :
-                        st.error("Please select an event to proceed to the next step.")
+        with c3:
+            if st.button("Next"):
+                if self.validate_selection(self.settings.selected_workflow):
+                    self.next_stage()
+
+            if st.session_state.get("show_error", False):
+                if self.settings.selected_workflow == WorkflowType.EVENT_BASED:
+                    selected_catalogs = self.event_components.settings.event.selected_catalogs
+                    if selected_catalogs is None or len(selected_catalogs) <= 0:
+                        st.error(st.session_state["error_message"])
+
+                elif self.settings.selected_workflow in [WorkflowType.STATION_BASED, WorkflowType.CONTINUOUS]:
+                    selected_invs = self.station_components.settings.station.selected_invs
+                    if selected_invs is None or len(selected_invs) <= 0:
+                        st.error(st.session_state["error_message"])                           
+
+        # Render components based on selected workflow
+        if self.settings.selected_workflow == WorkflowType.EVENT_BASED:
             self.event_components.render()
-
-
-        if (
-            self.settings.selected_workflow == WorkflowType.STATION_BASED
-            or
-            self.settings.selected_workflow == WorkflowType.CONTINUOUS
-        ):
-            with c3:
-                if st.button("Next"):
-                    self.station_components.sync_df_markers_with_df_edit()
-                    self.station_components.update_selected_data()
-                    if self.station_components.settings.station.selected_invs and len(self.station_components.settings.station.selected_invs)>0 :               
-                        if self.settings.selected_workflow == WorkflowType.CONTINUOUS:
-                            self.settings = get_selected_stations_at_channel_level(self.settings)
-                        self.next_stage()   
-                    else:
-                        st.error("Please select a station to proceed to the next step.")
+        else:
             self.station_components.render()
-
 
 
     def render_stage_2(self):
@@ -152,7 +178,8 @@ class CombinedBasedWorkflow:
                 if st.button("Next"):
                     self.station_components.sync_df_markers_with_df_edit()
                     self.station_components.update_selected_data()
-                    if self.station_components.settings.station.selected_invs is not None and len(self.station_components.settings.station.selected_invs) > 0:    
+                    selected_invs = self.station_components.settings.station.selected_invs
+                    if selected_invs is not None and len(selected_invs) > 0:    
                         self.settings = get_selected_stations_at_channel_level(self.settings)                                   
                         self.settings = get_selected_stations_at_channel_level(self.settings) 
                         self.next_stage()   
@@ -173,7 +200,8 @@ class CombinedBasedWorkflow:
                 if st.button("Next"):
                     self.event_components.sync_df_markers_with_df_edit()
                     self.event_components.update_selected_data()
-                    if len(self.event_components.settings.event.selected_catalogs)>0 :                        
+                    selected_catalogs = self.event_components.settings.event.selected_catalogs
+                    if selected_catalogs is not None and len(selected_catalogs)>0 :                        
                         self.settings = get_selected_stations_at_channel_level(self.settings)                  
                         self.next_stage()   
                     else :
