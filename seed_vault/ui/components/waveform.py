@@ -113,7 +113,10 @@ class WaveformDisplay:
     def __init__(self, settings: SeismoLoaderSettings, filter_menu: WaveformFilterMenu):
         self.settings = settings
         self.filter_menu = filter_menu
-        self.client = Client(self.settings.waveform.client)
+        try:
+            self.client = Client(self.settings.waveform.client)
+        except ValueError as e:
+            st.error(f"Error: {str(e)} Waveform client is set to {self.settings.waveform.client}, which seems does not exists. Please navigate to the settings page and use the Clients tab to add the client or fix the stored config.cfg file.")
         self.ttmodel = TauPyModel("iasp91")
         self.waveforms = []
         

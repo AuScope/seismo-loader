@@ -217,11 +217,14 @@ class BaseComponent:
             self.render_map_right_menu()
             with st.expander("### Filters", expanded=True):
                 client_options = list(self.settings.client_url_mapping.keys())
-                self.settings.event.client = st.selectbox(
-                    'Choose a client:', client_options, 
-                    index=client_options.index(self.settings.event.client), 
-                    key="event-pg-client-event"
-                )
+                try:
+                    self.settings.event.client = st.selectbox(
+                        'Choose a client:', client_options, 
+                        index=client_options.index(self.settings.event.client), 
+                        key="event-pg-client-event"
+                    )
+                except ValueError as e:
+                    st.error(f"Error: {str(e)}. Event client is set to {self.settings.event.client}, which seems does not exists. Please navigate to the settings page and use the Clients tab to add the client or fix the stored config.cfg file.")
 
                 c1, c2 = st.columns([1,1])
 
@@ -272,11 +275,14 @@ class BaseComponent:
                 
             with st.expander("### Filters", expanded=True):
                 client_options = list(self.settings.client_url_mapping.keys())
-                self.settings.station.client = st.selectbox(
-                    'Choose a client:', client_options, 
-                    index=client_options.index(self.settings.station.client), 
-                    key="event-pg-client-station"
-                )
+                try:
+                    self.settings.station.client = st.selectbox(
+                        'Choose a client:', client_options, 
+                        index=client_options.index(self.settings.station.client), 
+                        key="event-pg-client-station"
+                    )
+                except ValueError as e:
+                    st.error(f"Error: {str(e)}. Station client is set to {self.settings.station.client}, which seems does not exists. Please navigate to the settings page and use the Clients tab to add the client or fix the stored config.cfg file.")
 
                 c11, c12 = st.columns([1,1])
                 with c11:

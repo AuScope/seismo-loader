@@ -1,11 +1,24 @@
 #!/bin/bash
 
+# Update system packages
 sudo apt update
-sudo apt install python3.10-venv 
+
+# Find available Python version (e.g., 3.10, 3.11, etc.)
+PYTHON_VERSION=$(ls /usr/bin | grep -E '^python3\.[0-9]+$' | sort -V | tail -n 1)
+
+if [ -z "$PYTHON_VERSION" ]; then
+  echo "No suitable Python version found."
+  exit 1
+fi
+
+# Install venv for the selected Python version
+echo "Installing venv for Python: $PYTHON_VERSION..."
+sudo apt install "${PYTHON_VERSION}-venv" -y
+
 # Check if virtual environment already exists
-if [ ! -d "venv" ]; then
+if [ ! -d ".venv" ]; then
   echo "Creating virtual environment..."
-  python3 -m venv .venv
+  "$PYTHON_VERSION" -m venv .venv
   echo "Virtual environment created."
 else
   echo "Virtual environment already exists."
