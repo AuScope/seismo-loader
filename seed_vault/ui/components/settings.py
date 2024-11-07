@@ -45,7 +45,7 @@ class SettingsComponent:
             # st.write(f"### Credential Set {index + 1}")
 
             with c1:
-                nslc_code = st.text_input(f"n.s.l.c code", help="NSLC Code for (Network.Station.Location.Channel)", value=auth.nslc_code, key=f"nslc_{index}")
+                nslc_code = st.text_input(f"N.S.L.C. code", help="NSLC Code for (Network.Station.Location.Channel)", value=auth.nslc_code, key=f"nslc_{index}")
             with c2:
                 username = st.text_input(f"Username", value=auth.username, key=f"username_{index}")
             with c3:
@@ -78,7 +78,7 @@ class SettingsComponent:
             if self.is_new_cred_added:
                 st.success("Added a new auth. Please fill up the entries.")
             else:
-                st.error("You cannot define duplicate n.s.l.c code.")
+                st.error("You cannot define duplicate N.S.L.C code.")
 
             # self.reset_is_new_cred_added()
 
@@ -87,9 +87,10 @@ class SettingsComponent:
         c1, c2 = st.columns([1,1])
         with c1:
             self.settings.db_path = st.text_input("Database Path", value=self.settings.db_path, help="Do not change this path, unless necessary!")
-            self.settings.sds_path = st.text_input("Local Seismic Data Storage Path", value=self.settings.sds_path, help="Do not change this path, unless necessary!")
+            self.settings.sds_path = st.text_input("Local Seismic Data Archive Path in [SDS structure](https://www.seiscomp.de/seiscomp3/doc/applications/slarchive/SDS.html)",
+                                                   value=self.settings.sds_path, help="Do not change this path, unless necessary!")
 
-        st.write("## Sync database with SDS files")
+        st.write("## Sync database with existing archive")
         c1, c2, c3, c4 = st.columns([1,1,1,2])
         with c1:
             search_patterns = st.text_input("Search Patterns", value="??.*.*.???.?.????.???", help="To input multiple values, separate your entries with comma.").strip().split(",")
@@ -108,9 +109,9 @@ class SettingsComponent:
 
         with c3:
             curr_val = int(self.settings.proccess.gap_tolerance)
-            self.settings.proccess.gap_tolerance = st.text_input("Gap Tolerance", value=curr_val)
+            self.settings.proccess.gap_tolerance = st.text_input("Gap Tolerance (s)", value=curr_val)
 
-        if st.button("Sync Database", help="Synchronizes the archive database with the available local seismic data based on the above parameters."):
+        if st.button("Sync Database", help="Synchronizes your SDS archive given the above parameters."):
             self.reset_is_new_cred_added()
             save_filter(self.settings)
             populate_database_from_sds(
@@ -135,7 +136,7 @@ class SettingsComponent:
             self.df_clients = st.data_editor(df, hide_index = True, num_rows = "dynamic")            
             # st.write(extra_clients)
         with c2:
-            st.write("## Existing Clients")
+            st.write("## Existing Clients (via ObsPy)")
             st.write(orig_clients)
 
 
