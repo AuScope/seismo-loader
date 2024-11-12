@@ -126,7 +126,7 @@ class BaseComponent:
             self.df_markers = event_response_to_df(self.catalogs)
 
         if self.step_type == Steps.EVENT:
-            self.col_color = "depth"
+            self.col_color = "depth (km)"
             self.col_size  = "magnitude"
             self.config = self.settings.event
         if self.step_type == Steps.STATION:
@@ -517,7 +517,7 @@ class BaseComponent:
     def get_selected_marker_info(self):
         info = self.clicked_marker_info
         if self.step_type == Steps.EVENT:
-            return f"No {info['id']}: {info['Magnitude']}, {info['Depth']} km, {info['Place']}"
+            return f"No {info['id']}: {info['Magnitude']} ({info['Magnitude type']}), {info['Depth (km)']} km, {info['Place']}"
         if self.step_type == Steps.STATION:
             return f"No {info['id']}: {info['Network']}, {info['Station']}"
     # ===================
@@ -566,7 +566,7 @@ class BaseComponent:
             col_color = None
             col_size  = None
             if self.prev_step_type == Steps.EVENT:
-                col_color = "depth"
+                col_color = "depth (km)"
                 col_size  = "magnitude"
             
             if self.prev_step_type == Steps.STATION:
