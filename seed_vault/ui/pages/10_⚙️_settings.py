@@ -4,8 +4,8 @@ import time
 from seed_vault.utils.clients import save_original_client
 
 st.set_page_config(
-    page_title="Seismo Loader",
-    page_icon="🌎",
+    page_title="Settings",
+    page_icon="⚙️",
     layout="wide",
     initial_sidebar_state="expanded",
 )

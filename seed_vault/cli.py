@@ -10,7 +10,7 @@ def cli():
 
 @cli.command(name="run-server", help="Runs the streamlit app server.")
 def run_app():
-    path_to_run = os.path.join(dirname, "ui", "main.py")
+    path_to_run = os.path.join(dirname, "ui", "1_🌎_main.py")
     os.system(f"streamlit run {path_to_run}  --server.runOnSave=true")
 
 

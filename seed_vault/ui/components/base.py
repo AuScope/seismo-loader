@@ -831,7 +831,7 @@ class BaseComponent:
 
             if isinstance(last_clicked, str):
                 idx = int(last_clicked.splitlines()[0].split()[1])
-                step = last_clicked.splitlines()[-1].split()[1].lower()
+                step = last_clicked.splitlines()[-1].split()[1].strip().lower()
                 if step == self.step_type:
                     self.clicked_marker_info = self.marker_info[idx]
                 

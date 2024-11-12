@@ -5,6 +5,8 @@ import random
 import datetime
 from pathlib import Path
 from obspy import UTCDateTime
+import pandas as pd
+from typing import Union
 
 def to_timestamp(time_obj):
     """ Anything to timestamp helper """
@@ -290,6 +292,50 @@ class DatabaseManager:
                 print(f"SQLite error: {e}")
                 # Print the SQL statement and the data being inserted
         return
+    
+
+    def execute_query(self, query: str) -> tuple[bool, Union[pd.DataFrame, str]]:
+        """
+        Execute any SQL query and return results along with a flag indicating if it's tabular data.
+        
+        Args:
+            query (str): SQL query to execute
+            
+        Returns:
+            tuple: (is_data: bool, result: Union[pd.DataFrame, str])
+            - is_data: True if query returns tabular data, False otherwise
+            - result: DataFrame for SELECT queries, status message for other queries
+        """
+        # List of SQL commands that modify data
+        modify_commands = {'INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER', 'TRUNCATE'}
+        
+        # Check if the query is a SELECT statement or a modify command
+        first_word = query.strip().split()[0].upper()
+        is_select = first_word == 'SELECT'
+        has_error = False
+        
+        try:
+            with self.connection() as conn:
+                if is_select:
+                    # For SELECT queries, return a DataFrame
+                    df = pd.read_sql_query(query, conn)
+                    return has_error, f"Query executed successfully. {len(df)} rows returned.", df
+                else:
+                    # For other queries, execute and return status message
+                    cursor = conn.cursor()
+                    cursor.execute(query)
+                    
+                    if first_word in modify_commands:
+                        rows_affected = cursor.rowcount
+                        return has_error, f"Query executed successfully. Rows affected: {rows_affected}", None
+                    else:
+                        return has_error, "Query executed successfully.", None
+                    
+        except Exception as e:
+            error_message = f"Error executing query: {str(e)}"
+            has_error = True
+            return has_error, error_message, None
+        
 
     def bulk_insert_archive_data(self, archive_list):
         if not archive_list:

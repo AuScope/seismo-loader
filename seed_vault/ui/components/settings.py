@@ -10,7 +10,6 @@ from seed_vault.utils.clients import load_original_client, load_extra_client, sa
 
 
 
-
 class SettingsComponent:
     settings: SeismoLoaderSettings
     is_new_cred_added = None

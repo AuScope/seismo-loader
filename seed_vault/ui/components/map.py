@@ -363,6 +363,13 @@ def get_color_map(df, c, offset=0.0, cmap='viridis'):
 def create_popup(index, row, cols_to_disp, step: Steps = None):
     html_disp = f"<h4>No: {index + 1}</h4>"
     for k,v in cols_to_disp.items():
+        if k == "magnitude":
+            row[k] = f"{row[k]} {row['magnitude type']}"
+        if k == "magnitude type":
+            continue
+        if "depth" in k:
+            row[k] = f"{row[k]} km"
+            v = v.replace(" (km)", "")
         html_disp += f"<h6>{v}: {row[k]}</h6>"
     html_disp += f"<h6>Type: {step.value.title()}</h6>" if step else ""
     return f"""
