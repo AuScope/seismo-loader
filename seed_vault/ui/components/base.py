@@ -523,9 +523,9 @@ class BaseComponent:
     def get_selected_marker_info(self):
         info = self.clicked_marker_info
         if self.step_type == Steps.EVENT:
-            return f"No {info['id']}: {info['Magnitude']} ({info['Magnitude type']}), {info['Depth (km)']} km, {info['Place']}"
+            return f"Event No {info['id']}: {info['Magnitude']} {info['Magnitude type']}, {info['Depth (km)']} km, {info['Place']}"
         if self.step_type == Steps.STATION:
-            return f"No {info['id']}: {info['Network']}, {info['Station']}"
+            return f"Station No {info['id']}: {info['Network']}, {info['Station']}"
     # ===================
     # SELECT DATA
     # ===================
@@ -830,8 +830,11 @@ class BaseComponent:
             last_clicked = self.map_output['last_object_clicked_popup']
 
             if isinstance(last_clicked, str):
-                idx = int(last_clicked.splitlines()[0].split()[1])
-                step = last_clicked.splitlines()[-1].split()[1].strip().lower()
+                idx_info = last_clicked.splitlines()[-1].split()
+                step = idx_info[0].lower().replace("(", "")
+                idx  = int(idx_info[-1].lower().replace(")", ""))
+                # idx = int(last_clicked.splitlines()[0].split()[1])
+                # step = last_clicked.splitlines()[-1].split()[1].strip().lower()
                 if step == self.step_type:
                     self.clicked_marker_info = self.marker_info[idx]
                 
