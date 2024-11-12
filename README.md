@@ -1,6 +1,6 @@
 # seed-vault
 
-*Add a brief intro here*
+Seed Vault is a cross platform GUI and CLI utility to download and archive seismic miniseed data via FDSN. Users can download data via earthquake search (station to event, or event to station) as well as download continuous data in bulk. Users can also search and save earthquake catalogs and station metadata. Seed Vault also supports auth requests / accessing restricted data and syncs local SDS data archives with a local sqlite3 database to avoid redundant downloading. Parameters can also be saved an and loaded via a simple text config file. More to come!
 
 ## Clone Repository
 
