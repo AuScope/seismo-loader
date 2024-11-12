@@ -806,7 +806,7 @@ class BaseComponent:
         feature_groups = [fg for fg in [self.map_fg_area, self.map_fg_marker , self.map_fg_prev_selected_marker] if fg is not None]
         
         if self.fig_color_bar and self.step_type == Steps.EVENT:
-            st.caption("ℹ️ Marker size is associated with Earthquak magnitude")
+            st.caption("ℹ️ Marker size is associated with Earthquake magnitude")
         
         c1, c2 = st.columns([18,1])
         with c1:

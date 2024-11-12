@@ -737,10 +737,6 @@ def setup_paths(settings: SeismoLoaderSettings):
 
     # Setup database directory
     db_path = settings.db_path # config['DATABASE']['db_path'] <<<<<<< should this be settings.database.db_path?
-    if not db_path:
-        if not os.path.exists(db_path):
-            os.makedirs(db_path)
-        db_path = os.path.join(sds_path,"database.sql")
 
     # Setup database
     #if not os.path.exists(db_path):
