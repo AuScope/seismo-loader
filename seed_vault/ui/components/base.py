@@ -376,6 +376,12 @@ class BaseComponent:
 
 
     def update_selected_data(self):
+
+        if self.df_data_edit is None or self.df_data_edit.empty:
+            if 'is_selected' not in self.df_markers.columns:
+                self.df_markers['is_selected'] = False
+            return
+                                  
         if self.step_type == Steps.EVENT:
             self.settings.event.selected_catalogs = Catalog(events=None)
             for i, event in enumerate(self.catalogs):
