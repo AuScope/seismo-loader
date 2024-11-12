@@ -7,9 +7,9 @@ class DownloadType(str, Enum):
 
 
 class WorkflowType(DescribedEnum):
-    EVENT_BASED = ("Event Based - Starting from Selecting Events", "Here, add a paragraph describing the Event-Based workflow")
-    STATION_BASED = ("Station Based - Starting from Selecting Stations", "Here, add a paragraph describing the Station-Based workflow")
-    CONTINUOUS = ("Requesting Continuous Data", "Here, add a paragraph describing the Continuous workflow")
+    EVENT_BASED = ("Event Based - Starting from Selecting Events", "Search for events, then filter for pertinent stations")
+    STATION_BASED = ("Station Based - Starting from Selecting Stations", "Search for stations, then filter for pertinent events")
+    CONTINUOUS = ("Requesting Continuous Data", "Search for and download bulk continuous station data")
 
 
 class GeoConstraintType(str, Enum):

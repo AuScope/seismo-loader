@@ -56,23 +56,24 @@ def event_response_to_df(data):
         # Extract location (longitude, latitude, depth)
         longitude = origin.longitude
         latitude = origin.latitude
-        depth = origin.depth / 1000  # Convert depth to kilometers
+        depth = origin.depth / 1000 if origin.depth is not None else 0.99999  # Convert depth to kilometers
 
         # Extract the time and place
         time = origin.time.datetime
         place = event.event_descriptions[0].text if event.event_descriptions else "Unknown place"
         
         # Extract the magnitude
-        mag = magnitude.mag
-
+        mag = magnitude.mag if magnitude.mag is not None else 0.99999
+        mag_type = magnitude.magnitude_type if magnitude.magnitude_type is not None else "[-]"
         # Create the record dictionary
         record = {
             'place': place,
-            'magnitude': mag,
+            'magnitude': mag,            
+            'magnitude type': mag_type,
             'time': pd.to_datetime(time),  # Convert to pandas datetime
             'longitude': longitude,
             'latitude': latitude,
-            'depth': depth  # in kilometers
+            'depth (km)': depth,  # in kilometers
         }
         
         records.append(record)
