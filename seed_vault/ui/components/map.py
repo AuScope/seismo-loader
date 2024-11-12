@@ -61,7 +61,10 @@ def add_draw_controls(map_object):
             'marker': False,
             'circlemarker': False,
         },
-        edit_options={'edit': False},
+        edit_options={
+            'edit': False,
+            'remove': False  
+        },
         export=False
     ).add_to(map_object)
 
