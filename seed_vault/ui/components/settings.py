@@ -85,9 +85,9 @@ class SettingsComponent:
     def render_db(self):
         c1, c2 = st.columns([1,1])
         with c1:
-            self.settings.db_path = st.text_input("Database Path", value=self.settings.db_path, help="Do not change this path, unless necessary!")
+            self.settings.db_path = st.text_input("Database Path", value=self.settings.db_path, help="FULL path to your database, e.g. /archive/database.sqlite")
             self.settings.sds_path = st.text_input("Local Seismic Data Archive Path in [SDS structure](https://www.seiscomp.de/seiscomp3/doc/applications/slarchive/SDS.html)",
-                                                   value=self.settings.sds_path, help="Do not change this path, unless necessary!")
+                                                   value=self.settings.sds_path, help="ROOT path of your archive. If you change this you may have to resync your database.")
 
         st.write("## Sync database with existing archive")
         c1, c2, c3, c4 = st.columns([1,1,1,2])
