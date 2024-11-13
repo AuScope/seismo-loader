@@ -1064,8 +1064,6 @@ def run_continuous(settings: SeismoLoaderSettings):
     ## cred structure is: AuthConfig(nslc_code='2P', username='username', password='password_for_2P')
     # right now this probably only works for network-based credentials only (TODO)
     for cred in settings.auths:
-        cred_net = cred.nslc_code.split('.')[0].upper()
-        print("warning! implementing forced uppercase cred hack until can figure out why they're lowercase")
         if cred_net not in requested_networks:
             continue
         try:
@@ -1077,7 +1075,7 @@ def run_continuous(settings: SeismoLoaderSettings):
 
     # Archive to disk and updated database
     for request in combined_requests:
-        print(request)
+        print("\n Requesting: %s", request)
         time.sleep(0.05) #to help ctrl-C out if needed
         try:
             archive_request(request, waveform_clients, settings.sds_path, db_manager)

@@ -186,13 +186,13 @@ class CombinedBasedWorkflow:
         if self.settings.selected_workflow == WorkflowType.CONTINUOUS:
             with c2:
                 st.write("### Step 2: Get Waveforms")
+                
             with c1:
                 if st.button("Previous"):
                     selected_idx = self.station_components.get_selected_idx()
                     self.station_components.refresh_map(selected_idx=selected_idx,clear_draw=True)
                     self.previous_stage() 
-            
-            st.write("## Final Step for this flow is not yet Implemented!")
+            self.waveform_components.render()
         else:    
 
             title = "Stations" if self.settings.selected_workflow == WorkflowType.EVENT_BASED else "Events"
