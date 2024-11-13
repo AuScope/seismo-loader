@@ -157,7 +157,12 @@ class BaseComponent:
     # ====================
     def import_export(self):
         def reset_import_setting_processed():
-            st.session_state['import_setting_processed'] = False  
+            if uploaded_file is not None:
+                uploaded_file_info = f"{uploaded_file.name}-{uploaded_file.size}"               
+                if "uploaded_file_info" not in st.session_state or st.session_state.uploaded_file_info != uploaded_file_info:
+                    st.session_state['import_setting_processed'] = False
+                    st.session_state['uploaded_file_info'] = uploaded_file_info  
+
 
         # st.sidebar.markdown("### Import/Export Settings")
         
@@ -190,17 +195,21 @@ class BaseComponent:
                     help="Upload a config file (.cfg) to update settings." , label_visibility="collapsed"
                 )
 
-                if uploaded_file and not st.session_state.get('import_setting_processed', False):
-                    file_like_object = io.BytesIO(uploaded_file.getvalue())
-                    text_file_object = io.TextIOWrapper(file_like_object, encoding='utf-8')
-                    self.settings = SeismoLoaderSettings.from_cfg_file(text_file_object)
-                    st.session_state['import_setting_processed'] = True
-                    
-                    st.success("Settings imported successfully!")   
+                if uploaded_file:
+                    if not st.session_state.get('import_setting_processed', False):
+                        file_like_object = io.BytesIO(uploaded_file.getvalue())
+                        text_file_object = io.TextIOWrapper(file_like_object, encoding='utf-8')
 
-                    self.clear_all_data()
-                    self.refresh_map(reset_areas=True, clear_draw=True)
+                        self.clear_all_data()
+                        self.settings = SeismoLoaderSettings.from_cfg_file(text_file_object)
+                        self.settings.load_url_mapping()
 
+                        self.settings.event.geo_constraint = []
+                        self.settings.station.geo_constraint = []
+                        self.refresh_map(reset_areas=True, clear_draw=True)
+
+                        st.session_state['import_setting_processed'] = True                    
+                        st.success("Settings imported successfully!")   
             with tab2:
                 c2_export = self.render_export_import()
 
