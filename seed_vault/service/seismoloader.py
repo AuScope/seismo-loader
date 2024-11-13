@@ -283,7 +283,7 @@ def get_p_s_times(eq, dist_deg, ttmodel):
         phasearrivals = ttmodel.get_travel_times(
             source_depth_in_km=eq_depth,
             distance_in_degree=dist_deg,
-            phase_list=['ttbasic'] #can't just look for "P" and "S" as they may not be found depending on distance
+            phase_list=['ttbasic']
         )
     except Exception as e:
         print(f"Error calculating travel times: {str(e)}")
@@ -727,7 +727,7 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
 # MAIN RUN FUNCTIONS
 # ==================================================================
 def setup_paths(settings: SeismoLoaderSettings):
-    sds_path = settings.sds_path # config['SDS']['sds_path']  <<<<<<<<< should this be settings.sds.sds_path?
+    sds_path = settings.sds_path
     if not sds_path:
         raise ValueError("SDS Path not set!!!")
 
@@ -736,7 +736,7 @@ def setup_paths(settings: SeismoLoaderSettings):
         os.makedirs(sds_path)
 
     # Setup database directory
-    db_path = settings.db_path # config['DATABASE']['db_path'] <<<<<<< should this be settings.database.db_path?
+    db_path = settings.db_path
 
     # Setup database
     #if not os.path.exists(db_path):
@@ -771,8 +771,8 @@ def convert_degrees_to_radius_meter(radius_degree):
 
 def get_selected_stations_at_channel_level(settings: SeismoLoaderSettings):
     waveform_client = Client(settings.waveform.client)
-    if settings.station and settings.station.client: # config['STATION']['client']:
-        station_client = Client(settings.station.client) # Client(config['STATION']['client'])
+    if settings.station and settings.station.client:
+        station_client = Client(settings.station.client)
     else:
         station_client = waveform_client
 
@@ -805,8 +805,8 @@ def get_stations(settings: SeismoLoaderSettings):
     starttime = UTCDateTime(settings.station.date_config.start_time)
     endtime = UTCDateTime(settings.station.date_config.end_time)
     waveform_client = Client(settings.waveform.client)
-    if settings.station and settings.station.client: # config['STATION']['client']:
-        station_client = Client(settings.station.client) # Client(config['STATION']['client'])
+    if settings.station and settings.station.client:
+        station_client = Client(settings.station.client)
     else:
         station_client = waveform_client
 
@@ -879,14 +879,14 @@ def get_stations(settings: SeismoLoaderSettings):
         inv = station_client.get_stations(**kwargs)
 
     # Remove unwanted stations or networks
-    if settings.station.exclude_stations: # config['STATION']['exclude_stations']:
+    if settings.station.exclude_stations:
         # exclude_list = config['STATION']['exclude_stations'].split(',') #format is NN.STA
         for ns in settings.station.exclude_stations:
             n,s = ns.upper().split('.') #this is necessary as format is n.s
             inv = inv.remove(network=n,station=s)
 
     # Add anything else we were told to
-    if settings.station.force_stations: # config['STATION']['force_stations']:
+    if settings.station.force_stations: 
         # add_list = config['STATION']['force_stations'].split(',') #format is NN.STA
         for ns in settings.station.force_stations:
             n,s = ns.upper().split('.')
@@ -1061,8 +1061,7 @@ def run_continuous(settings: SeismoLoaderSettings):
     waveform_clients= {'open':waveform_client} #now a dictionary
     requested_networks = [ele[0] for ele in combined_requests]
 
-    ## cred structure is: AuthConfig(nslc_code='2P', username='username', password='password_for_2P')
-    # right now this probably only works for network-based credentials only (TODO)
+    # May only work for network-wide credentials at the moment (99% use case)
     for cred in settings.auths:
         if cred_net not in requested_networks:
             continue
@@ -1154,14 +1153,8 @@ def run_event(settings: SeismoLoaderSettings):
         print("Issue loading TauPyModel ",settings.event.model, e, "defaulting to IASP91")
         ttmodel = TauPyModel('IASP91')
 
-    #now loop through events
-    # NOTE: Why "inv" collections from STATION block is included in EVENTS?
-    #       Isn't it the STATIONS have their own searching settings?
-    #       If the search settings such as map search and time search are the
-    #       same, why separate parameters are defined for events?
+    # Loop through events
     for i,eq in enumerate(settings.event.selected_catalogs):
-        print("--> Downloading event (%d/%d) %s (%.4f lat %.4f lon %.1f km dep) ...\n" % (i+1,len(settings.event.selected_catalogs),
-            eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))
 
         # Collect requests
         requests,new_arrivals,p_arrivals = collect_requests_event(
@@ -1181,6 +1174,9 @@ def run_event(settings: SeismoLoaderSettings):
             print("--> Event already downloaded (%d/%d) %s (%.4f lat %.4f lon %.1f km depth) ...\n" % (i+1,len(settings.event.selected_catalogs),
             eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))
             continue
+        else:
+            print("--> Downloading event (%d/%d) %s (%.4f lat %.4f lon %.1f km dep) ...\n" % (i+1,len(settings.event.selected_catalogs),
+            eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))            
 
         # Combine these into fewer (but larger) requests
         # this probably makes little for sense EVENTS, but its inexpensive and good for testing purposes
@@ -1191,11 +1187,8 @@ def run_event(settings: SeismoLoaderSettings):
         requested_networks = [ele[0] for ele in combined_requests]
         print('settings.waveform.client:', settings.waveform.client)
 
-        ## cred structure is: AuthConfig(nslc_code='2P', username='username', password='password_for_2P')
         # right now this probably only works for network-based credentials only
-        for cred in settings.auths:
-            cred_net = cred.nslc_code.split('.')[0].upper()
-            print("warning! implementing forced uppercase cred hack until can figure out why they're lowercase")            
+        for cred in settings.auths:          
             if cred_net not in requested_networks:
                 continue
             try:
@@ -1275,7 +1268,8 @@ def run_main(settings: SeismoLoaderSettings = None, from_file=None):
 
 
 
-################ end function declarations, start program
+# # # # # # # # # # # # # # # # # # #
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python3 seismoloader.py input.cfg")
