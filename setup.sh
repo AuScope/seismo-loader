@@ -12,8 +12,17 @@ fi
 PYTHON_VERSION=$(ls /usr/bin | grep -E '^python3\.[0-9]+$' | sort -V | tail -n 1)
 
 if [ -z "$PYTHON_VERSION" ]; then
-  echo "No suitable Python version found."
-  exit 1
+  echo "Error: No suitable Python version found."
+  return
+fi
+
+# Check if the Python version is above 3.10
+PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | grep -oE '[0-9]+' | head -n 1)
+PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | grep -oE '[0-9]+' | sed -n 2p)
+
+if [ "$PYTHON_MAJOR_VERSION" -lt 3 ] || ( [ "$PYTHON_MAJOR_VERSION" -eq 3 ] && [ "$PYTHON_MINOR_VERSION" -lt 10 ] ); then
+  echo "Error: Python version must be 3.10 or higher. Found: $PYTHON_VERSION"
+  return
 fi
 
 # Install venv for the selected Python version (macOS uses Homebrew for installations)

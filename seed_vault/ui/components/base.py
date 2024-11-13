@@ -320,7 +320,7 @@ class BaseComponent:
                     key="event-pg-include-restricted-station"
                 )
 
-                self.settings.station.level = Levels.STATION
+                self.settings.station.level = Levels.CHANNEL
 
                 if st.button(f"Update {self.TXT.STEP.title()}s", key=self.get_key_element(f"Update {self.TXT.STEP}s")):
                     self.refresh_map(reset_areas=False, clear_draw=False, rerun=False)
@@ -833,30 +833,24 @@ class BaseComponent:
                 st.pyplot(self.fig_color_bar)
 
         self.watch_all_drawings(get_selected_areas(self.map_output))
-        # self.all_current_drawings = get_selected_areas(self.map_output)
+
+        # @IMPORTANT NOTE: Streamlit-Folium does not provide a direct way to tag a Marker with
+        #                  some metadata, including adding an id. The options are using PopUp
+        #                  window or tooltips. Here, we have embedded a line at the bottom of the
+        #                  popup to be able to get the Event/Station Ids as well as the type of 
+        #                  the marker, ie, event or station.
         if self.map_output and self.map_output.get('last_object_clicked') is not None:
-            # last_clicked = self.map_output['last_object_clicked']
             last_clicked = self.map_output['last_object_clicked_popup']
 
             if isinstance(last_clicked, str):
                 idx_info = last_clicked.splitlines()[-1].split()
-                step = idx_info[0].lower().replace("(", "")
-                idx  = int(idx_info[-1].lower().replace(")", ""))
-                # idx = int(last_clicked.splitlines()[0].split()[1])
-                # step = last_clicked.splitlines()[-1].split()[1].strip().lower()
+                step = idx_info[0].lower()
+                idx  = int(idx_info[1])
                 if step == self.step_type:
                     self.clicked_marker_info = self.marker_info[idx]
                 
-            # if isinstance(last_clicked, dict):
-            #     clicked_lat_lng = (last_clicked.get('lat'), last_clicked.get('lng'))
-            # elif isinstance(last_clicked, list):
-            #     clicked_lat_lng = (last_clicked[0], last_clicked[1])
             else:
                 self.clicked_marker_info = None
-                # clicked_lat_lng = (None, None)
-
-            # if clicked_lat_lng in self.marker_info:
-            #     self.clicked_marker_info = self.marker_info[clicked_lat_lng]
 
         if self.warning:
             st.warning(self.warning)

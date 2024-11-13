@@ -5,7 +5,6 @@ import pandas as pd
 
 from seed_vault.enums.ui import Steps
 from seed_vault.models.config import SeismoLoaderSettings, DownloadType, WorkflowType
-from seed_vault.service.seismoloader import get_selected_stations_at_channel_level
 
 from seed_vault.ui.components.base import BaseComponent
 from seed_vault.ui.pages.helpers.common import get_app_settings
@@ -42,20 +41,13 @@ class CombinedBasedWorkflow:
     def init_settings(self, selected_flow_type):
         """
         See description in render_stage_0.
-        """
-        # if (
-        #     'selected_flow_type' in st.session_state and
-        #     st.session_state.selected_flow_type == selected_flow_type
-        # ):
-        #     return False        
+        """      
         
         self.settings = get_app_settings()
         st.session_state["show_error"] = False
         st.session_state["error_message"] = ""
 
         st.session_state.selected_flow_type = selected_flow_type
-        # return True
-        
 
 
     def render_stage_0(self):
@@ -68,9 +60,6 @@ class CombinedBasedWorkflow:
         (we actually may need to keep the filters as is).
         """
         c1, c2 = st.columns([1,2])
-        # with c1:
-        #     st.write("## Select the Seismic Data Request Flow")
-        # with c2:
         with c1:
             selected_flow_type = st.selectbox(
                 "Select the Seismic Data Request Flow", 
@@ -133,9 +122,6 @@ class CombinedBasedWorkflow:
                 
                 self.settings.waveform.client = self.settings.station.client                        
                 
-                # Apply the additional settings adjustment for CONTINUOUS workflow
-                if workflow_type == WorkflowType.CONTINUOUS:
-                    self.settings = get_selected_stations_at_channel_level(self.settings)
 
         if self.stage == 2:
             if workflow_type == WorkflowType.EVENT_BASED: 
@@ -143,8 +129,7 @@ class CombinedBasedWorkflow:
                 self.station_components.update_selected_data()
                 selected_invs = self.station_components.settings.station.selected_invs
                 if selected_invs is not None and len(selected_invs) > 0: 
-                    self.settings.waveform.client = self.settings.station.client                           
-                    self.settings = get_selected_stations_at_channel_level(self.settings)                                   
+                    self.settings.waveform.client = self.settings.station.client                                               
                 else:
                     self.trigger_error("Please select a station to proceed to the next step.")
                     return False
@@ -153,9 +138,7 @@ class CombinedBasedWorkflow:
                 self.event_components.sync_df_markers_with_df_edit()
                 self.event_components.update_selected_data()
                 selected_catalogs = self.event_components.settings.event.selected_catalogs
-                if selected_catalogs is not None and len(selected_catalogs)>0 :                        
-                    self.settings = get_selected_stations_at_channel_level(self.settings)                  
-                else :
+                if selected_catalogs is None or len(selected_catalogs) == 0:
                     self.trigger_error("Please select an event to proceed to the next step.")
                     return False         
                                
@@ -201,7 +184,6 @@ class CombinedBasedWorkflow:
         c1, c2, c3 = st.columns([1, 1, 1])
 
         if self.settings.selected_workflow == WorkflowType.CONTINUOUS:
-            self.settings = get_selected_stations_at_channel_level(self.settings)
             with c2:
                 st.write("### Step 2: Get Waveforms")
             with c1:

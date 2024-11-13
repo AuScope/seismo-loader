@@ -14,7 +14,7 @@ git clone git@github.com:AuScope/seed-vault.git
 
 ## Quick Start
 
-For a quick start follow these steps:
+The app requires python >=3.10. For a quick start follow these steps:
 
 ```
 git clone https://github.com/AuScope/seed-vault.git

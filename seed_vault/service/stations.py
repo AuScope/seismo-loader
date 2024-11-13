@@ -78,6 +78,10 @@ def station_response_to_df(inventory):
             latitude = station.latitude
             longitude = station.longitude
             elevation = station.elevation
+            channels = ",".join([channel.code for channel in station])
+            start_date = str(station.start_date.strftime("%Y-%m-%d"))
+            end_date = str(station.end_date.strftime("%Y-%m-%d") if station.end_date else "in operation")
+
 
             record = {
                 'network': network.code,
@@ -86,6 +90,9 @@ def station_response_to_df(inventory):
                 'latitude': latitude,
                 'longitude': longitude,
                 'elevation': elevation,
+                'channels': channels,
+                'start date (UTC)': start_date,
+                'end date (UTC)': end_date
                 # 'detail': station,
             }
 

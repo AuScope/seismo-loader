@@ -3,8 +3,21 @@
 # Find Python version (assuming Python is installed and accessible in the PATH)
 $pythonVersion = &python -V 2>&1
 if ($pythonVersion -notmatch "Python 3\.\d+") {
-    Write-Output "No suitable Python version found."
-    exit 1
+    Write-Output "Error: No suitable Python version found."
+    return
+}
+
+# Check if the Python version is above 3.10
+if ($pythonVersion -match "Python 3\.(\d+)") {
+    $minorVersion = [int]$matches[1]
+    if ($minorVersion -lt 10) {
+        Write-Output "Error: Python version must be 3.10 or higher. Found: $pythonVersion"
+        return
+    }
+}
+else {
+    Write-Output "Error: Failed to determine Python version."
+    return
 }
 
 # Check if virtual environment already exists
