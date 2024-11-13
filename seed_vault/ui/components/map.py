@@ -370,13 +370,13 @@ def create_popup(index, row, cols_to_disp, step: Steps = None):
         html_disp += f"<h5>{row['magnitude']:.2f} {row['magnitude type']}</h5>"
         html_disp += f"<h5>{row['time']} (UTC)</h5>"
         html_disp += f"<h5>{row['latitude']:.2f}, {row['longitude']:.2f}, {row['depth (km)']:.2f} km</h5>"
-        html_disp += f"<p style='color:white; fontsize:2px;'>(Event No: {index + 1})</p>"
+        html_disp += f"<p style='color:black; font-size:2px; opacity:0;'>(Event No: {index + 1})</p>"
 
     if step == Steps.STATION:
         html_disp = f"<h4><b>{row['network']}.{row['station']}</b></h4>"
         html_disp += f"<h5>{row['station_name']}</h5>"
         html_disp += f"<h5>{row['latitude']:.2f}, {row['longitude']:.2f}, {row['elevation']:.2f} m</h5>"
-        html_disp += f"<p style='color:white; fontsize:2px;'>(Station No: {index + 1})</p>"
+        html_disp += f"<p style='color:black; font-size:2px; opacity:0;'>(Station No: {index + 1})</p>"
 
     return f"""
     <div>
