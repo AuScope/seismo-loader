@@ -33,17 +33,37 @@ icon = folium.DivIcon(html="""
     </svg>
 """)
 
-def create_map(map_center=[-25.0000, 135.0000], zoom_start=2, map_id = None):
+def create_map(map_center=[-25.0000, 135.0000], zoom_start=2, map_id=None):
     """
     Create a base map with controls but without dynamic layers.
     """
     m = folium.Map(
         location=map_center,
         zoom_start=zoom_start,
-        tiles='CartoDB positron',
-        attr='Map data © OpenStreetMap contributors, CartoDB',
         id=map_id,
     )
+
+    folium.TileLayer(
+        tiles='CartoDB positron',  
+        attr='Map data © OpenStreetMap contributors, CartoDB',
+        name='Mirrored Layer',
+        control=False,
+        no_wrap=False,
+        bounds = [[-90, -180], [90, 180]]
+    ).add_to(m)
+
+    # Add the main tile layer (blue) with no_wrap enabled
+    folium.TileLayer(
+        tiles='OpenStreetMap',
+        name='Main Layer',
+        control=False,
+        no_wrap=True ,
+        bounds = [[-90, -180], [90, 180]]
+    ).add_to(m)
+    
+    m.location = [0, 0]
+
+
     add_draw_controls(m)
     add_fullscreen_control(m)
     return m
@@ -515,3 +535,130 @@ class DrawEventHandler(MacroElement):
         }
         {% endmacro %}
         """)
+
+
+def normalize_bounds(geometry_constraint: GeometryConstraint) -> List[GeometryConstraint]:
+    """
+    Split bounds of a GeometryConstraint that crosses the 180° meridian or falls partly in a mirrored instance.
+    
+    Args:
+    - geometry_constraint: A GeometryConstraint instance containing RectangleArea bounds.
+    
+    Returns:
+    - A list of GeometryConstraint instances. If the rectangle crosses the 180° meridian or falls in a mirrored instance,
+      it will return one or two GeometryConstraints.
+    """
+    rect_bounds = geometry_constraint.coords
+    lat_min, lon_min = rect_bounds.min_lat, rect_bounds.min_lng
+    lat_max, lon_max = rect_bounds.max_lat, rect_bounds.max_lng
+    if lon_min >= -180 and lon_max <= 180:
+        return [geometry_constraint]
+    
+    elif lon_min < 180 and lon_max > 180:
+        left_rectangle = GeometryConstraint(
+            coords=RectangleArea(
+                min_lat=lat_min,
+                max_lat=lat_max,
+                min_lng=lon_min,
+                max_lng=180
+            )
+        )
+        
+        right_rectangle = GeometryConstraint(
+            coords=RectangleArea(
+                min_lat=lat_min,
+                max_lat=lat_max,
+                min_lng=-180,
+                max_lng=lon_max - 360
+            )
+        )
+        
+        return [left_rectangle, right_rectangle]
+
+    elif lon_min < -180 and lon_max <= 180:
+        # Normalize the left part to be within [-180, 180] range
+        left_rectangle = GeometryConstraint(
+            coords=RectangleArea(
+                min_lat=lat_min,
+                max_lat=lat_max,
+                min_lng=lon_min + 360,  
+                max_lng=180
+            )
+        )
+        
+        # Right side remains within the original range
+        main_rectangle = GeometryConstraint(
+            coords=RectangleArea(
+                min_lat=lat_min,
+                max_lat=lat_max,
+                min_lng=-180,
+                max_lng=lon_max
+            )
+        )
+        print(left_rectangle, main_rectangle)
+        return [left_rectangle, main_rectangle]
+    
+    # Case where both longitudes are less than -180 (entirely in the left mirrored instance)
+    elif lon_min < -180 and lon_max < -180:
+        normalized_rectangle = GeometryConstraint(
+            coords=RectangleArea(
+                min_lat=lat_min,
+                max_lat=lat_max,
+                min_lng=lon_min + 360,
+                max_lng=lon_max + 360
+            )
+        )
+        return [normalized_rectangle]
+    
+    # Case where both longitudes are greater than 180 (entirely in the right mirrored instance)
+    elif lon_min > 180 and lon_max > 180:
+        normalized_rectangle = GeometryConstraint(
+            coords=RectangleArea(
+                min_lat=lat_min,
+                max_lat=lat_max,
+                min_lng=lon_min - 360,
+                max_lng=lon_max - 360
+            )
+        )
+        return [normalized_rectangle]
+
+
+def normalize_circle(geometry_constraint: GeometryConstraint) -> List[GeometryConstraint]:
+    """
+    Normalize circle bounds for circles that are completely located in the left or right mirrored instance.
+    
+    Args:
+    - geometry_constraint: A GeometryConstraint instance containing CircleArea bounds.
+    
+    Returns:
+    - A list with the normalized GeometryConstraint instance. If the circle falls entirely within the left or right mirrored instance,
+      the longitude will be adjusted to bring it within the [-180, 180] range.
+    """
+    circle = geometry_constraint.coords
+    center_lat, center_lng, radius = circle.lat, circle.lng, circle.max_radius
+
+    # Case where the circle is within the main instance or partially overlaps it (no need to modify)
+    if -180 <= center_lng <= 180:
+        return [geometry_constraint]
+    
+    # Case where the circle is entirely in the left mirrored instance (center_lng < -180)
+    elif center_lng < -180:
+        normalized_circle = GeometryConstraint(
+            coords=CircleArea(
+                lat=center_lat,
+                lng=center_lng + 360,  # Normalize center_lng to be within [-180, 180]
+                max_radius=radius
+            )
+        )
+        return [normalized_circle]
+
+    # Case where the circle is entirely in the right mirrored instance (center_lng > 180)
+    elif center_lng > 180:
+        normalized_circle = GeometryConstraint(
+            coords=CircleArea(
+                lat=center_lat,
+                lng=center_lng - 360,  # Normalize center_lng to be within [-180, 180]
+                max_radius=radius
+            )
+        )
+        return [normalized_circle]

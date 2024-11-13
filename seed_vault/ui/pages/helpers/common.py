@@ -1,6 +1,7 @@
 
-from typing import List
+from typing import List, Union
 import numpy as np
+from seed_vault.ui.components.map import normalize_circle, normalize_bounds
 import streamlit as st
 import os
 
@@ -103,7 +104,7 @@ def handle_circle(geo) -> GeometryConstraint:
     )
 
 
-def get_selected_areas(map_output) -> List[RectangleArea | CircleArea ]:
+def get_selected_areas(map_output) -> List[Union[RectangleArea, CircleArea]]:
     lst_locs = []
     k = "all_drawings"
     
@@ -112,12 +113,18 @@ def get_selected_areas(map_output) -> List[RectangleArea | CircleArea ]:
             geom_type = geo.get("geometry").get('type')
             
             if geom_type == GeometryType.POLYGON:
-                lst_locs.append(handle_polygon(geo))
+                geometry_constraint = handle_polygon(geo)                
+                split_constraints = normalize_bounds(geometry_constraint)
+                for constraint in split_constraints:
+                    lst_locs.append(constraint)
                 continue
 
             if geom_type == GeometryType.POINT:
-                lst_locs.append(handle_circle(geo))
-                continue
+                geometry_constraint = handle_circle(geo)                
+                split_constraints = normalize_circle(geometry_constraint)
+                for constraint in split_constraints:
+                    lst_locs.append(constraint)
+                continue                
 
             raise ValueError(f"Geometry Type {geom_type} not supported!")
         
