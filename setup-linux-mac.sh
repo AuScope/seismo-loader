@@ -1,7 +1,12 @@
 #!/bin/bash
 
-# Update system packages
-sudo apt update
+# Update system packages (macOS doesn't need `apt update`)
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+  sudo apt update
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+  echo "Updating Homebrew packages..."
+  brew update
+fi
 
 # Find available Python version (e.g., 3.10, 3.11, etc.)
 PYTHON_VERSION=$(ls /usr/bin | grep -E '^python3\.[0-9]+$' | sort -V | tail -n 1)
@@ -11,9 +16,13 @@ if [ -z "$PYTHON_VERSION" ]; then
   exit 1
 fi
 
-# Install venv for the selected Python version
+# Install venv for the selected Python version (macOS uses Homebrew for installations)
 echo "Installing venv for Python: $PYTHON_VERSION..."
-sudo apt install "${PYTHON_VERSION}-venv" -y
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+  sudo apt install "${PYTHON_VERSION}-venv" -y
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+  brew install python@${PYTHON_VERSION:7:2}
+fi
 
 # Check if virtual environment already exists
 if [ ! -d ".venv" ]; then
