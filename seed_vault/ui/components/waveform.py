@@ -1,8 +1,11 @@
 import re
 from typing import List, Dict
+from contextlib import redirect_stdout, redirect_stderr
+from io import StringIO
 from obspy import UTCDateTime
+from seed_vault.enums.config import WorkflowType
 from seed_vault.models.config import SeismoLoaderSettings
-from seed_vault.service.seismoloader import run_event
+from seed_vault.service.seismoloader import run_continuous, run_event
 from obspy.clients.fdsn import Client
 from obspy.taup import TauPyModel
 import streamlit as st
@@ -12,7 +15,9 @@ from plotly.subplots import make_subplots
 from obspy.geodetics import degrees2kilometers
 from obspy.geodetics.base import locations2degrees
 import numpy as np
-
+import threading
+import queue
+import time
 
 class WaveformFilterMenu:
     settings: SeismoLoaderSettings
@@ -20,12 +25,14 @@ class WaveformFilterMenu:
     station_filter: str
     channel_filter: str
     available_channels: List[str]
+    display_limit: int
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
         self.network_filter = "All networks"
         self.station_filter = "All stations"
         self.channel_filter = "All channels"
         self.available_channels = ["All channels"]
+        self.display_limit = 5
         if self.settings.event.before_p_sec is None:
             self.settings.event.before_p_sec = 20  # Default to 20 seconds before
         if self.settings.event.after_p_sec is None:
@@ -46,69 +53,98 @@ class WaveformFilterMenu:
             self.channel_filter = "All channels"
     
     def render(self, waveforms=None):
-        st.sidebar.header("Waveform Filters")
+        st.sidebar.title("Waveform Controls")
         
-        # Update available channels if waveforms are provided
-        if waveforms is not None:
-            self.update_available_channels(waveforms)
+        # Step 1: Data Retrieval Settings
+        with st.sidebar.expander("Step 1: Data Source", expanded=True):
+            st.subheader("🔍 Time Window")
+            self.settings.event.before_p_sec = st.number_input(
+                "Start (secs before P arrival):", 
+                value=20,
+                help="Time window before P arrival"
+            )
+            self.settings.event.after_p_sec = st.number_input(
+                "End (secs after P arrival):", 
+                value=100,
+                help="Time window after P arrival"
+            )
             
-        # Time window around P arrival
-        st.sidebar.subheader("Time Window")
-        
-        self.settings.event.before_p_sec = st.sidebar.number_input(
-            "Start (secs before P arrival):", 
-            value=20
-        )
-        self.settings.event.after_p_sec = st.sidebar.number_input(
-            "End (secs after P arrival):", 
-            value=100
-        )
-        
-        # Regular filters
-        self.render_standard_filters()
-    def render_standard_filters(self):
-        """Render the standard network/station/channel filters"""
-        with st.sidebar:
+            st.subheader("📡 Data Source")
             client_options = list(self.settings.client_url_mapping.keys())
             self.settings.waveform.client = st.selectbox(
-                'Choose a client:', client_options, 
+                'Choose a client:', 
+                client_options, 
                 index=client_options.index(self.settings.waveform.client), 
-                key="event-pg-client-event"
+                key="event-pg-client-event",
+                help="Select the data source server"
             )
-        networks = ["All networks"] + list(set([inv.code for inv in self.settings.station.selected_invs]))
-        self.network_filter = st.sidebar.selectbox(
-            "Network:",
-            networks,
-            index=networks.index(self.network_filter)
-        )
-        
-        stations = ["All stations"]
-        for inv in self.settings.station.selected_invs:
-            stations.extend([sta.code for sta in inv])
-        stations = list(set(stations))
-        stations.sort()
-        stations.remove("All stations")
-        stations.insert(0, "All stations")
-        
-        self.station_filter = st.sidebar.selectbox(
-            "Station:",
-            stations,
-            index=stations.index(self.station_filter)
-        )
-        
-        self.channel_filter = st.sidebar.selectbox(
-            "Channel:",
-            options=self.available_channels,
-            index=self.available_channels.index(self.channel_filter)
-        )
-        
+
+        # Step 2: Display Filters (enabled after data retrieval)
+        with st.sidebar.expander("Step 2: Display Filters", expanded=True):
+            if waveforms is not None:
+                self.update_available_channels(waveforms)
+                
+                st.subheader("🎯 Waveform Filters")
+                
+                # Network filter
+                networks = ["All networks"] + list(set([inv.code for inv in self.settings.station.selected_invs]))
+                self.network_filter = st.selectbox(
+                    "Network:",
+                    networks,
+                    index=networks.index(self.network_filter),
+                    help="Filter by network"
+                )
+                
+                # Station filter
+                stations = ["All stations"]
+                for inv in self.settings.station.selected_invs:
+                    stations.extend([sta.code for sta in inv])
+                stations = list(dict.fromkeys(stations))  # Remove duplicates
+                stations.sort()
+                
+                self.station_filter = st.selectbox(
+                    "Station:",
+                    stations,
+                    index=stations.index(self.station_filter),
+                    help="Filter by station"
+                )
+                
+                # Channel filter
+                self.channel_filter = st.selectbox(
+                    "Channel:",
+                    options=self.available_channels,
+                    index=self.available_channels.index(self.channel_filter),
+                    help="Filter by channel"
+                )
+                
+                st.subheader("📊 Display Options")
+                self.display_limit = st.selectbox(
+                    "Waveforms per page:",
+                    options=[5, 10, 15],
+                    index=[5, 10, 15].index(self.display_limit),
+                    key="waveform_display_limit",
+                    help="Number of waveforms to show per page"
+                )
+                
+                # Add status information
+                if waveforms:
+                    st.sidebar.info(f"Total waveforms: {len(waveforms)}")
+                    
+                # Add reset filters button
+                if st.sidebar.button("Reset Filters"):
+                    self.network_filter = "All networks"
+                    self.station_filter = "All stations"
+                    self.channel_filter = "All channels"
+                    self.display_limit = 5
+            else:
+                st.info("Load data to enable display filters")
+
 class WaveformDisplay:
     settings: SeismoLoaderSettings
     waveforms: List[Dict] = []
     ttmodel: TauPyModel = None
     prediction_data: Dict[str, any] = {}
     filter_menu: WaveformFilterMenu
-    WAVEFORMS_PER_PAGE = 5
 
     def __init__(self, settings: SeismoLoaderSettings, filter_menu: WaveformFilterMenu):
         self.settings = settings
@@ -189,16 +225,15 @@ class WaveformDisplay:
                         'km': round(dist_km, 2)
                     }
         # Pagination (moved to sidebar)
-        waveforms_per_page = 5
-        num_pages = (len(filtered_waveforms) - 1) // waveforms_per_page + 1
+        num_pages = (len(filtered_waveforms) - 1) // self.filter_menu.display_limit + 1
         page = st.sidebar.selectbox(
             "Page Navigation", 
             range(1, num_pages + 1), 
             key="sidebar_pagination"
         ) - 1
 
-        start_idx = page * waveforms_per_page
-        end_idx = min((page + 1) * waveforms_per_page, len(filtered_waveforms))
+        start_idx = page * self.filter_menu.display_limit
+        end_idx = min((page + 1) * self.filter_menu.display_limit, len(filtered_waveforms))
         page_waveforms = filtered_waveforms.iloc[start_idx:end_idx]
 
         fig = make_subplots(
@@ -398,15 +433,15 @@ class WaveformDisplay:
 
     def add_pagination_to_sidebar(self, total_items):
         """Shared pagination logic"""
-        num_pages = (total_items - 1) // self.WAVEFORMS_PER_PAGE + 1
+        num_pages = (total_items - 1) // self.filter_menu.display_limit + 1
         page = st.sidebar.selectbox(
             "Page Navigation", 
             range(1, num_pages + 1), 
             key="shared_pagination"
         ) - 1
         
-        start_idx = page * self.WAVEFORMS_PER_PAGE
-        end_idx = min((page + 1) * self.WAVEFORMS_PER_PAGE, total_items)
+        start_idx = page * self.filter_menu.display_limit
+        end_idx = min((page + 1) * self.filter_menu.display_limit, total_items)
         
         return start_idx, end_idx, page, num_pages
 
@@ -697,30 +732,131 @@ class WaveformComponents:
     settings: SeismoLoaderSettings
     filter_menu: WaveformFilterMenu
     waveform_display: WaveformDisplay
-
     def __init__(self, settings: SeismoLoaderSettings):
         self.settings = settings
         self.filter_menu = WaveformFilterMenu(settings)
         self.waveform_display = WaveformDisplay(settings, self.filter_menu)
+        self.last_position = 0
+        self.accumulated_output = []
+        
+    def _run_with_logs(self, status_container, log_container):
+        """Run continuous processing with terminal-style logging"""
+        output_buffer = StringIO()
+        self.last_position = 0
+        self.accumulated_output = []
+        
+        def update_logs():
+            """Update logs in terminal style"""
+            output_buffer.seek(self.last_position)
+            new_output = output_buffer.read()
+            
+            if new_output:
+                # Split new output into lines and add to accumulated output
+                new_lines = new_output.splitlines()
+                self.accumulated_output.extend(new_lines)
+                
+                # Create terminal display with auto-scroll
+                log_text = (
+                    '<div class="terminal" id="log-terminal">'
+                    '<pre>{}</pre>'
+                    '</div>'
+                    '<script>'
+                    'var terminalDiv = document.getElementById("log-terminal");'
+                    'if (terminalDiv) {{'  # Note the double curly braces
+                    '    var observer = new MutationObserver(function(mutations) {{'
+                    '        terminalDiv.scrollTop = terminalDiv.scrollHeight;'
+                    '    }});'
+                    '    observer.observe(terminalDiv, {{ childList: true, subtree: true }});'
+                    '    terminalDiv.scrollTop = terminalDiv.scrollHeight;'
+                    '}}'
+                    '</script>'
+                ).format('\n'.join(self.accumulated_output))
+                
+                log_container.markdown(log_text, unsafe_allow_html=True)
+                
+                # Update buffer position
+                self.last_position = output_buffer.tell()
 
+        try:
+            with redirect_stdout(output_buffer), redirect_stderr(output_buffer):
+                print("Starting continuous processing...")
+                
+                def run_process():
+                    return run_continuous(self.settings)
+                
+                process_thread = threading.Thread(target=run_process)
+                process_thread.start()
+                
+                # Update logs while process is running
+                while process_thread.is_alive():
+                    update_logs()
+                    time.sleep(0.1)
+                
+                # Wait for process to complete
+                process_thread.join()
+                
+                # Final update to catch any remaining output
+                update_logs()
+                return True
+
+        except Exception as e:
+            with status_container:
+                st.error(f"Error in continuous processing: {str(e)}")
+            return False
+        
     def render(self):
-        st.title("Waveform Analysis")
-        # Get Waveforms button
-        if st.button("Get Waveforms", key="get_waveforms"):
-            self.waveform_display.retrieve_waveforms()
-        
-        # Render filter menu
-        self.filter_menu.render()
-        
-        # Render waveform display
-        self.waveform_display.render()
-        
-        if self.waveform_display.waveforms:
-            distance_display = SeismicDistanceDisplay(
-                self.waveform_display.waveforms,
-                self.settings
-            )
-            distance_display.render()
+        if self.settings.selected_workflow == WorkflowType.CONTINUOUS:
+            st.title("Continuous Waveform Processing")
+            
+            if st.button("Start Processing", key="start_continuous"):
+                # Create a container for the terminal-style output
+                status = st.status("Processing continuous waveform data...", expanded=True)
+                with status:
+                    # Style the terminal container
+                    st.markdown("""
+                    <style>
+                        .terminal {
+                            background-color: black;
+                            color: #00ff00;
+                            font-family: 'Courier New', Courier, monospace;
+                            padding: 10px;
+                            border-radius: 5px;
+                            height: 400px;
+                            overflow-y: auto;
+                        }
+                        .stMarkdown {
+                            overflow-y: auto;
+                            max-height: 400px;
+                        }
+                    </style>
+                """, unsafe_allow_html=True)
+                    
+                    # Create a container for logs with custom styling
+                    log_container = st.empty()
+                    log_container.markdown('<div class="terminal"></div>', unsafe_allow_html=True)
+                    
+                    # Run processing with terminal-style logs
+                    result = self._run_with_logs(status, log_container)
+                    
+                    if result:
+                        st.success("Processing completed successfully!")
+        else:
+            st.title("Waveform Analysis")
+            
+            # Always render filter menu first
+            self.filter_menu.render(self.waveform_display.waveforms)
+            
+            if st.button("Get Waveforms", key="get_waveforms"):
+                self.waveform_display.retrieve_waveforms()
+            
+            # Display waveforms if they exist
+            if self.waveform_display.waveforms:
+                self.waveform_display.render()
+                distance_display = SeismicDistanceDisplay(
+                    self.waveform_display.waveforms,
+                    self.settings
+                )
+                distance_display.render()
 
 
 class SeismicDistanceDisplay:
