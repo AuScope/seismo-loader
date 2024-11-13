@@ -19,8 +19,18 @@ For a quick start follow these steps:
 ```
 git clone https://github.com/AuScope/seed-vault.git
 cd seed-vault
+```
+
+### Linux/MacOS
+```
 source setup.sh
 source run.sh
+```
+### Windows
+Open a powershell and run following commands:
+```
+.\setup-win.ps1
+.\run-win.ps1
 ```
 
 **Note:** 

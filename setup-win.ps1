@@ -12,30 +12,34 @@ if (-not (Test-Path ".venv")) {
     Write-Output "Creating virtual environment..."
     python -m venv .venv
     Write-Output "Virtual environment created."
-} else {
+}
+else {
     Write-Output "Virtual environment already exists."
 }
 
 # Activate virtual environment
 & .\.venv\Scripts\Activate
 
+# Upgrade pip using Python
+Write-Output "Upgrading pip..."
+& .\.venv\Scripts\python.exe -m pip install --upgrade pip
+
 # Install required packages
 Write-Output "Installing toml package..."
-pip install --upgrade pip
-pip install toml
+& .\.venv\Scripts\python.exe -m pip install toml
 
 # Generate requirements.txt
 Write-Output "Running gen_req.py to generate requirements.txt..."
 try {
-    python gen_req.py
-} catch {
+    & .\.venv\Scripts\python.exe gen_req.py
+}
+catch {
     Write-Output "Failed to run gen_req.py"
     exit 1
 }
 
 # Install dependencies
 Write-Output "Installing dependencies..."
-pip install --upgrade pip
-pip install -r requirements.txt
+& .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 
 Write-Output "Environment setup is complete."
