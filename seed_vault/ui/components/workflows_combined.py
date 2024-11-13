@@ -195,13 +195,14 @@ class CombinedBasedWorkflow:
             self.settings = get_selected_stations_at_channel_level(self.settings)
             with c2:
                 st.write("### Step 2: Get Waveforms")
+                
             with c1:
                 if st.button("Previous"):
                     selected_idx = self.station_components.get_selected_idx()
                     self.station_components.refresh_map(selected_idx=selected_idx,clear_draw=True)
                     self.previous_stage() 
             
-            st.write("## Final Step for this flow is not yet Implemented!")
+            self.waveform_components.render()
 
 
     def render_stage_3(self):
