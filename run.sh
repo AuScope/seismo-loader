@@ -14,4 +14,4 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
 # Run Streamlit app
 echo "Running Streamlit app..."
-streamlit run seed_vault/ui/main.py
+streamlit run seed_vault/ui/1_🌎_main.py

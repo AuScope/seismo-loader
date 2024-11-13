@@ -157,7 +157,12 @@ class BaseComponent:
     # ====================
     def import_export(self):
         def reset_import_setting_processed():
-            st.session_state['import_setting_processed'] = False  
+            if uploaded_file is not None:
+                uploaded_file_info = f"{uploaded_file.name}-{uploaded_file.size}"               
+                if "uploaded_file_info" not in st.session_state or st.session_state.uploaded_file_info != uploaded_file_info:
+                    st.session_state['import_setting_processed'] = False
+                    st.session_state['uploaded_file_info'] = uploaded_file_info  
+
 
         # st.sidebar.markdown("### Import/Export Settings")
         
@@ -190,17 +195,21 @@ class BaseComponent:
                     help="Upload a config file (.cfg) to update settings." , label_visibility="collapsed"
                 )
 
-                if uploaded_file and not st.session_state.get('import_setting_processed', False):
-                    file_like_object = io.BytesIO(uploaded_file.getvalue())
-                    text_file_object = io.TextIOWrapper(file_like_object, encoding='utf-8')
-                    self.settings = SeismoLoaderSettings.from_cfg_file(text_file_object)
-                    st.session_state['import_setting_processed'] = True
-                    
-                    st.success("Settings imported successfully!")   
+                if uploaded_file:
+                    if not st.session_state.get('import_setting_processed', False):
+                        file_like_object = io.BytesIO(uploaded_file.getvalue())
+                        text_file_object = io.TextIOWrapper(file_like_object, encoding='utf-8')
 
-                    self.clear_all_data()
-                    self.refresh_map(reset_areas=True, clear_draw=True)
+                        self.clear_all_data()
+                        self.settings = SeismoLoaderSettings.from_cfg_file(text_file_object)
+                        self.settings.load_url_mapping()
 
+                        self.settings.event.geo_constraint = []
+                        self.settings.station.geo_constraint = []
+                        self.refresh_map(reset_areas=True, clear_draw=True)
+
+                        st.session_state['import_setting_processed'] = True                    
+                        st.success("Settings imported successfully!")   
             with tab2:
                 c2_export = self.render_export_import()
 
@@ -523,9 +532,9 @@ class BaseComponent:
     def get_selected_marker_info(self):
         info = self.clicked_marker_info
         if self.step_type == Steps.EVENT:
-            return f"No {info['id']}: {info['Magnitude']} ({info['Magnitude type']}), {info['Depth (km)']} km, {info['Place']}"
+            return f"Event No {info['id']}: {info['Magnitude']} {info['Magnitude type']}, {info['Depth (km)']} km, {info['Place']}"
         if self.step_type == Steps.STATION:
-            return f"No {info['id']}: {info['Network']}, {info['Station']}"
+            return f"Station No {info['id']}: {info['Network']}, {info['Station']}"
     # ===================
     # SELECT DATA
     # ===================
@@ -830,8 +839,11 @@ class BaseComponent:
             last_clicked = self.map_output['last_object_clicked_popup']
 
             if isinstance(last_clicked, str):
-                idx = int(last_clicked.splitlines()[0].split()[1])
-                step = last_clicked.splitlines()[-1].split()[1].lower()
+                idx_info = last_clicked.splitlines()[-1].split()
+                step = idx_info[0].lower().replace("(", "")
+                idx  = int(idx_info[-1].lower().replace(")", ""))
+                # idx = int(last_clicked.splitlines()[0].split()[1])
+                # step = last_clicked.splitlines()[-1].split()[1].strip().lower()
                 if step == self.step_type:
                     self.clicked_marker_info = self.marker_info[idx]
                 
