@@ -8,6 +8,7 @@ from seed_vault.models.config import SeismoLoaderSettings
 from seed_vault.service.seismoloader import run_continuous, run_event
 from obspy.clients.fdsn import Client
 from obspy.taup import TauPyModel
+from seed_vault.ui.components.display_log import ConsoleDisplay
 import streamlit as st
 import pandas as pd
 import plotly.graph_objs as go
@@ -736,110 +737,35 @@ class WaveformComponents:
         self.settings = settings
         self.filter_menu = WaveformFilterMenu(settings)
         self.waveform_display = WaveformDisplay(settings, self.filter_menu)
-        self.last_position = 0
-        self.accumulated_output = []
-        
-    def _run_with_logs(self, status_container, log_container):
-        """Run continuous processing with terminal-style logging"""
-        output_buffer = StringIO()
-        self.last_position = 0
-        self.accumulated_output = []
-        
-        def update_logs():
-            """Update logs in terminal style"""
-            output_buffer.seek(self.last_position)
-            new_output = output_buffer.read()
-            
-            if new_output:
-                # Split new output into lines and add to accumulated output
-                new_lines = new_output.splitlines()
-                self.accumulated_output.extend(new_lines)
-                
-                # Create terminal display with auto-scroll
-                log_text = (
-                    '<div class="terminal" id="log-terminal">'
-                    '<pre>{}</pre>'
-                    '</div>'
-                    '<script>'
-                    'var terminalDiv = document.getElementById("log-terminal");'
-                    'if (terminalDiv) {{'  # Note the double curly braces
-                    '    var observer = new MutationObserver(function(mutations) {{'
-                    '        terminalDiv.scrollTop = terminalDiv.scrollHeight;'
-                    '    }});'
-                    '    observer.observe(terminalDiv, {{ childList: true, subtree: true }});'
-                    '    terminalDiv.scrollTop = terminalDiv.scrollHeight;'
-                    '}}'
-                    '</script>'
-                ).format('\n'.join(self.accumulated_output))
-                
-                log_container.markdown(log_text, unsafe_allow_html=True)
-                
-                # Update buffer position
-                self.last_position = output_buffer.tell()
-
-        try:
-            with redirect_stdout(output_buffer), redirect_stderr(output_buffer):
-                print("Starting continuous processing...")
-                
-                def run_process():
-                    return run_continuous(self.settings)
-                
-                process_thread = threading.Thread(target=run_process)
-                process_thread.start()
-                
-                # Update logs while process is running
-                while process_thread.is_alive():
-                    update_logs()
-                    time.sleep(0.1)
-                
-                # Wait for process to complete
-                process_thread.join()
-                
-                # Final update to catch any remaining output
-                update_logs()
-                return True
-
-        except Exception as e:
-            with status_container:
-                st.error(f"Error in continuous processing: {str(e)}")
-            return False
+        self.console_display = ConsoleDisplay()
         
     def render(self):
         if self.settings.selected_workflow == WorkflowType.CONTINUOUS:
             st.title("Continuous Waveform Processing")
             
+            # Add calendar selection for start_time and end_time
+            st.sidebar.subheader("Time Selection")
+            self.settings.station.date_config.start_time = st.sidebar.date_input(
+                "Start Time",
+                value=self.settings.station.date_config.start_time,
+                help="Select the start time for processing"
+            )
+            self.settings.station.date_config.end_time = st.sidebar.date_input(
+                "End Time",
+                value=self.settings.station.date_config.end_time,
+                help="Select the end time for processing"
+            )
+            
+            st.write('settings: ', self.settings)            
             if st.button("Start Processing", key="start_continuous"):
                 # Create a container for the terminal-style output
-                status = st.status("Processing continuous waveform data...", expanded=True)
-                with status:
-                    # Style the terminal container
-                    st.markdown("""
-                    <style>
-                        .terminal {
-                            background-color: black;
-                            color: #00ff00;
-                            font-family: 'Courier New', Courier, monospace;
-                            padding: 10px;
-                            border-radius: 5px;
-                            height: 400px;
-                            overflow-y: auto;
-                        }
-                        .stMarkdown {
-                            overflow-y: auto;
-                            max-height: 400px;
-                        }
-                    </style>
-                """, unsafe_allow_html=True)
-                    
-                    # Create a container for logs with custom styling
-                    log_container = st.empty()
-                    log_container.markdown('<div class="terminal"></div>', unsafe_allow_html=True)
-                    
-                    # Run processing with terminal-style logs
-                    result = self._run_with_logs(status, log_container)
-                    
-                    if result:
-                        st.success("Processing completed successfully!")
+                result = self.console_display.run_with_logs(
+                    process_func=lambda: run_continuous(self.settings),
+                    status_message="Processing continuous waveform data..."
+                )
+                
+                if result:
+                    st.success("Processing completed successfully!")
         else:
             st.title("Waveform Analysis")
             
