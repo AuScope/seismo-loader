@@ -628,10 +628,10 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
             wc = waveform_clients['open']
 
         kwargs = {
-            'network':request[0],
-            'station':request[1],
-            'location':request[2],
-            'channel':request[3],
+            'network':request[0].upper(),
+            'station':request[1].upper(),
+            'location':request[2].upper(),
+            'channel':request[3].upper(),
             'starttime':UTCDateTime(request[4]),
             'endtime':UTCDateTime(request[5])
         }
@@ -1063,6 +1063,7 @@ def run_continuous(settings: SeismoLoaderSettings):
 
     # May only work for network-wide credentials at the moment (99% use case)
     for cred in settings.auths:
+        cred_net = cred.nslc_code.split('.')[0].upper()
         if cred_net not in requested_networks:
             continue
         try:
@@ -1087,10 +1088,10 @@ def run_continuous(settings: SeismoLoaderSettings):
     for req in requests:
         data = pd.DataFrame()
         query = SeismoQuery(
-            network = req[0],
-            station = req[1],
-            location = req[2],
-            channel = req[3],
+            network = req[0].upper(),
+            station = req[1].upper(),
+            location = req[2].upper(),
+            channel = req[3].upper(),
             starttime = req[4],
             endtime = req[5]
         )
@@ -1175,7 +1176,7 @@ def run_event(settings: SeismoLoaderSettings):
             eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))
             continue
         else:
-            print("--> Downloading event (%d/%d) %s (%.4f lat %.4f lon %.1f km dep) ...\n" % (i+1,len(settings.event.selected_catalogs),
+            print("--> Downloading event (%d/%d) %s (%.4f lat %.4f lon %.1f km depth) ...\n" % (i+1,len(settings.event.selected_catalogs),
             eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))            
 
         # Combine these into fewer (but larger) requests
