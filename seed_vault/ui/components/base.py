@@ -641,12 +641,29 @@ class BaseComponent:
             self.prev_min_radius = None
             self.prev_max_radius = None
 
+        if not hasattr(self, 'prev_marker'):
+            self.prev_marker = pd.DataFrame() 
+
+        df_has_changed = (
+            self.df_markers_prev.shape[0] != self.prev_marker.shape[0] or 
+            not self.df_markers_prev.equals(self.prev_marker) 
+        )
+
+
         # with c3:
         if st.button("Draw Area", key=self.get_key_element("Draw Area")):
-            if self.prev_min_radius is None or self.prev_max_radius is None or min_radius != self.prev_min_radius or max_radius != self.prev_max_radius:                
+            if (
+                self.prev_min_radius is None or 
+                self.prev_max_radius is None or 
+                min_radius != self.prev_min_radius or 
+                max_radius != self.prev_max_radius or 
+                df_has_changed
+            ):      
                 self.update_area_around_prev_step_selections(min_radius, max_radius)
                 self.prev_min_radius = min_radius
                 self.prev_max_radius = max_radius
+                self.prev_marker = self.df_markers_prev.copy()
+
 
             self.refresh_map(reset_areas=False, clear_draw=True)
             st.rerun()
@@ -679,6 +696,14 @@ class BaseComponent:
                 geo = GeometryConstraint(geo_type=GeoConstraintType.CIRCLE, coords=new_donut)
                 updated_constraints.append(geo)
 
+        updated_constraints = [
+            geo for geo in updated_constraints
+            if not (geo.geo_type == GeoConstraintType.CIRCLE and
+                    self.df_markers_prev[
+                        (self.df_markers_prev['latitude'] == geo.coords.lat) &
+                        (self.df_markers_prev['longitude'] == geo.coords.lng)
+                    ].empty)
+        ]
         self.set_geo_constraint(updated_constraints)
 
     # ===================
