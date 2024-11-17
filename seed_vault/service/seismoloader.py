@@ -428,8 +428,8 @@ def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=2
                                     s_time_timestamp,settings.event.model))
             # Add to our requests
             for cha in sta: # TODO will have to had filtered channels prior to this, else will grab them all
-                safe_end = min(datetime.fromtimestamp(t_end, tz=timezone.utc),
-                                datetime.now(timezone.utc) - datetime.timedelta(minutes=3)).isoformat()
+                t_end = min(t_end, datetime.datetime.now().timestamp() - 120)
+                t_start = min(t_start,t_end)
                 requests_per_eq.append((
                     net.code,
                     sta.code,
@@ -437,7 +437,7 @@ def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=2
                     cha.code,
                     # fix the time difference, it will always have 8 hours difference. (all times should be UTC by default??)
                     datetime.datetime.fromtimestamp(t_start, tz=datetime.timezone.utc).isoformat(),
-                    safe_end ))
+                    datetime.datetime.fromtimestamp(t_end,   tz=datetime.timezone.utc).isoformat() ))
 
     return requests_per_eq, arrivals_per_eq, p_arrivals
 
@@ -1121,7 +1121,8 @@ def run_event(settings: SeismoLoaderSettings):
         print('settings.waveform.client:', settings.waveform.client)
 
         # right now this probably only works for network-based credentials only
-        for cred in settings.auths:          
+        for cred in settings.auths:
+            cred_net = cred.nslc_code.split('.')[0].upper()
             if cred_net not in requested_networks:
                 continue
             try:
