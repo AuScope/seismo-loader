@@ -42,6 +42,7 @@ class CustomConfigParser(configparser.ConfigParser):
     def optionxform(self, optionstr):
         return optionstr  # Always return the original string
 
+
 def read_config(config_file):
     config = CustomConfigParser(allow_no_value=True)
     config.read(config_file)
@@ -64,6 +65,7 @@ def read_config(config_file):
             processed_config.set(section, processed_key, processed_value)
 
     return processed_config
+
 
 def to_timestamp(time_obj):
     """ Anything to timestamp helper """
@@ -103,6 +105,7 @@ def miniseed_to_db_element(file_path):
     except Exception as e:
         print(f"Error processing file {file_path}: {str(e)}")
         return None
+
 
 def stream_to_db_element(st):
     """Create a database element from a stream 
@@ -249,12 +252,17 @@ def collect_requests(inv, time0, time1, days_per_request=3):
     """ Collect all requests required to download everything in inventory, split into X-day periods """
     requests = []  # network, station, location, channel, starttime, endtime
 
+    # Sanity check request times
+    time1 = min(time1, UTCDateTime.now()-120)
+    if time0 >= time1:
+        return None
+    
     for net in inv:
         for sta in net:
             for cha in sta:
                 start_date = max(time0, cha.start_date.date)
                 if cha.end_date:
-                    end_date = min(time1 - (1/cha.sample_rate), cha.end_date.date + datetime.timedelta(days=1))
+                    end_date = min(time1 - (1/cha.sample_rate),cha.end_date.date + datetime.timedelta(days=1))
                 else:
                     end_date = time1
                 
@@ -273,10 +281,10 @@ def collect_requests(inv, time0, time1, days_per_request=3):
                     current_start = current_end
     return requests
 
+
 # Requests for shorter, event-based data
 def get_p_s_times(eq, dist_deg, ttmodel):
-    #eq_lat = eq.origins[0].latitude
-    #eq_lon = eq.origins[0].longitude
+
     eq_time = eq.origins[0].time
     eq_depth = eq.origins[0].depth / 1000  # depths are in meters for QuakeML
     try:
@@ -305,6 +313,7 @@ def get_p_s_times(eq, dist_deg, ttmodel):
         print(f"No direct S-wave arrival found for distance {dist_deg} degrees")
     return p_arrival_time, s_arrival_time
 
+
 def select_highest_samplerate(inv, time=None, minSR=10):
     """
     Where overlapping channels exist (e.g. 100 hz and 10 hz), filter out anything other than highest available samplerate.
@@ -323,6 +332,7 @@ def select_highest_samplerate(inv, time=None, minSR=10):
                 if ele.sample_rate == max(srs) and ele.sample_rate > minSR
             ]
     return inv
+
 
 # TODO function to sort by maximum available sampling rate (have written this already somewhere)
 cha_rank = ['CH','HH','BH','EH','HN','EN','SH','LH']
@@ -347,100 +357,13 @@ def TOFIX__output_best_channels(nn,sta,t):
         print("no valid channels found in output_best_channels")
         return []
 
-def collect_requests_event__OLD(eq, inv, min_dist_deg=30, max_dist_deg=90, 
-                           before_p_sec=20, after_p_sec=160, model=None):
-    """
-    Collect all requests for data in inventory for given event eq.
-    
-    Args:
-        eq: An earthquake object (one element of the array collected in a "catalog" object)
-        inv: Inventory object
-        min_dist_deg: Minimum distance in degrees
-        max_dist_deg: Maximum distance in degrees
-        before_p_sec: Seconds before P wave arrival
-        after_p_sec: Seconds after P wave arrival
-        model: Velocity model for travel time calculations
-    
-    Returns:
-        Tuple of requests_per_eq and arrivals_per_eq
-    """
-    origin = eq.origins[0]  # Default to the primary origin
-    ot = origin.time
-    sub_inv = select_highest_samplerate(inv, time=ot)
-    requests_per_eq = []
-    arrivals_per_eq = []
-
-    # Failsafe to ensure a model is loaded
-    if not model:
-        model = TauPyModel('IASP91')
-
-    for net in sub_inv:
-        for sta in net:
-            # Check if we've already calculated this event-station pair
-            fetched_arrivals = db_manager.fetch_arrivals(
-                str(eq.preferred_origin_id), net.code, sta.code
-            )
-            
-            if fetched_arrivals:
-                p_time, s_time = fetched_arrivals  # timestamps
-                t_start = p_time - abs(before_p_sec)
-                t_end = s_time + abs(after_p_sec)
-            else:
-                dist_deg = locations2degrees(
-                    origin.latitude, origin.longitude, sta.latitude, sta.longitude
-                )
-                dist_m, azi, backazi = gps2dist_azimuth(
-                    origin.latitude, origin.longitude, sta.latitude, sta.longitude
-                )
-                
-                if dist_deg < min_dist_deg or dist_deg > max_dist_deg:
-                    continue
-                
-                p_time, s_time = get_p_s_times(eq, dist_deg, sta.latitude, sta.longitude, model)
-                
-                if not p_time:
-                    continue  # TODO:need error msg also
-                
-                t_start = (p_time - abs(before_p_sec)).timestamp()
-                t_end = (p_time + abs(after_p_sec)).timestamp()
-                
-                # Add to our arrival database
-                arrivals_per_eq.append((
-                    str(eq.preferred_origin_id),
-                    eq.magnitudes[0].mag,
-                    origin.latitude, origin.longitude, origin.depth / 1000,
-                    ot.timestamp,
-                    net.code, sta.code, sta.latitude, sta.longitude, sta.elevation / 1000,
-                    sta.start_date.timestamp(), sta.end_date.timestamp(),
-                    dist_deg, dist_m / 1000, azi, p_time.timestamp(),
-                    s_time.timestamp(), settings.event.model 
-                ))
-
-            # Add to our requests
-            for cha in sta:  # TODO: will have to filter channels prior to this, else will grab them all
-                requests_per_eq.append((
-                    net.code,
-                    sta.code,
-                    cha.location_code,
-                    cha.code,
-                    datetime.datetime.fromtimestamp(t_start).isoformat() + "Z",
-                    datetime.datetime.fromtimestamp(t_end).isoformat() + "Z"
-                ))
-
-    return requests_per_eq, arrivals_per_eq
-
 
 def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=20,after_p_sec=160,model=None,settings=None):
     """ 
-    @Review: Rob please review this
-    
-    This method is revised as followings:
-
-    1. No more need for params: `min_dist_deg` and `max_dist_deg`. This function will accept a shortlist of selected 
-    events and stations.
+    Collect requests for event eq for stations in inv 
     """
     settings, db_manager = setup_paths(settings)
-    origin = eq.origins[0] # default to the primary I suppose (possible TODO but don't see why anyone would want anything else)
+    origin = eq.origins[0] # default to the primary I suppose
     ot = origin.time
     sub_inv = inv.select(time = ot) # Loose filter to select only stations that were running during the earthquake start
     before_p_sec = settings.event.before_p_sec
@@ -449,7 +372,7 @@ def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=2
     if not model:
         model = TauPyModel('IASP91')
 
-    # TODO: further filter by selecting best available channels
+    # TODO: further filter by selecting highest samplerate channels automatically
 
     requests_per_eq = []
     arrivals_per_eq = []
@@ -465,12 +388,12 @@ def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=2
                 sta_end = None
             # Check if we've already calculated this event-station pair
             fetched_arrivals = db_manager.fetch_arrivals(str(eq.preferred_origin_id), \
-                               net.code,sta.code) #TODO also check models are consistent? not critical. in fact we might be better off just forcing everything to IASP91
+                               net.code,sta.code) #TODO also check models are consistent? not critical..
             if fetched_arrivals:
                 p_time,s_time = fetched_arrivals # timestamps
                 t_start = p_time - abs(before_p_sec)
                 t_end = p_time + abs(after_p_sec)
-                # add the already-fetched arrivals to our dictionary
+                # Add the already-fetched arrivals to our dictionary
                 p_arrivals[f"{net.code}.{sta.code}"] = p_time
             else:
                 dist_deg = locations2degrees(origin.latitude,origin.longitude,\
@@ -505,14 +428,16 @@ def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=2
                                     s_time_timestamp,settings.event.model))
             # Add to our requests
             for cha in sta: # TODO will have to had filtered channels prior to this, else will grab them all
+                safe_end = min(datetime.fromtimestamp(t_end, tz=timezone.utc),
+                                datetime.now(timezone.utc) - datetime.timedelta(minutes=3)).isoformat()
                 requests_per_eq.append((
                     net.code,
                     sta.code,
                     cha.location_code,
                     cha.code,
-                    # fix the time difference, it will always have 8 hours difference. 
+                    # fix the time difference, it will always have 8 hours difference. (all times should be UTC by default??)
                     datetime.datetime.fromtimestamp(t_start, tz=datetime.timezone.utc).isoformat(),
-                    datetime.datetime.fromtimestamp(t_end, tz=datetime.timezone.utc).isoformat() ))
+                    safe_end ))
 
     return requests_per_eq, arrivals_per_eq, p_arrivals
 
@@ -550,6 +475,7 @@ def combine_requests(requests):
         ))
     
     return combined_requests
+
 
 def prune_requests(requests, db_manager, min_request_window=3):
     """
@@ -664,7 +590,7 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
         starttime = tr.stats.starttime
         endtime = tr.stats.endtime
 
-        # address instances where trace start leaks into previous date
+        # Address instances where trace start leaks into previous date
         day_boundary = UTCDateTime(starttime.date + datetime.timedelta(days=1))
         if (day_boundary - starttime) <= tr.stats.delta:
             starttime = day_boundary
@@ -738,12 +664,7 @@ def setup_paths(settings: SeismoLoaderSettings):
     # Setup database directory
     db_path = settings.db_path
 
-    # Setup database
-    #if not os.path.exists(db_path):
-    #    setup_database(db_path)
-
     # Setup database manager (& database if non-existent)
-    # ******** is this the best place to do this???
     db_manager = DatabaseManager(db_path)
 
     settings.sds_path = sds_path
@@ -756,7 +677,7 @@ def setup_paths(settings: SeismoLoaderSettings):
 from obspy.geodetics import kilometer2degrees, degrees2kilometers
 
 def convert_radius_to_degrees(radius_meters):
-    #Convert radius from meters to degrees.
+    # Convert radius from meters to degrees.
     kilometers = radius_meters / 1000
     degrees = kilometers / 111.32
     return degrees
@@ -767,9 +688,10 @@ def convert_degress_to_radius_km(radius_degree):
 def convert_degrees_to_radius_meter(radius_degree):
     return convert_degress_to_radius_km(radius_degree) * 1000
 
-
-
 def get_selected_stations_at_channel_level(settings: SeismoLoaderSettings):
+    
+    print("Running get_selected_stations_at_channel_level")
+    
     waveform_client = Client(settings.waveform.client)
     if settings.station and settings.station.client:
         station_client = Client(settings.station.client)
@@ -784,7 +706,7 @@ def get_selected_stations_at_channel_level(settings: SeismoLoaderSettings):
                     network=network.code,
                     station=station.code,
                     level="channel"
-                )
+                ) ### it will be faster to also filter start/end times here (review needed)
                 
                 invs += updated_inventory
                 
@@ -800,7 +722,7 @@ def get_stations(settings: SeismoLoaderSettings):
     """
     Refine input args to what is needed for get_stations
     """
-    print("Running get_stations") #debug for now
+    print("Running get_stations")
 
     starttime = UTCDateTime(settings.station.date_config.start_time)
     endtime = UTCDateTime(settings.station.date_config.end_time)
@@ -907,7 +829,7 @@ def get_stations(settings: SeismoLoaderSettings):
 
 def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
 
-    print("Running get_events") #debug for now
+    print("Running get_events")
 
     starttime = UTCDateTime(settings.event.date_config.start_time)
     endtime = UTCDateTime(settings.event.date_config.end_time)
@@ -1038,11 +960,19 @@ def run_continuous(settings: SeismoLoaderSettings):
     - The function logs detailed information about the processing steps and errors to aid
       in debugging and monitoring of data retrieval processes.
     """
+    print("Running run_continuous")
+    
     settings, db_manager = setup_paths(settings)
 
     starttime = UTCDateTime(settings.station.date_config.start_time)
     endtime = UTCDateTime(settings.station.date_config.end_time)
     waveform_client = Client(settings.waveform.client)
+
+    # Sanity check times
+    endtime = min(endtime, UTCDateTime.now()-120)
+    if starttime >= endtime:
+        print("Starttime greater than than endtime!")
+        return
 
     # Collect requests
     requests = collect_requests(settings.station.selected_invs,starttime,endtime,
@@ -1144,6 +1074,8 @@ def run_event(settings: SeismoLoaderSettings):
     - Care should be taken when modifying settings and handling authentication to ensure the integrity and security
       of data access and retrieval.
     """
+    print("Running run_event")
+    
     settings, db_manager = setup_paths(settings)
 
     waveform_client = Client(settings.waveform.client)
@@ -1273,7 +1205,7 @@ def run_main(settings: SeismoLoaderSettings = None, from_file=None):
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python3 seismoloader.py input.cfg")
+        print("Usage: python3 seismoloader.py input.cfg") ### I assume this needs updating to new -cli version
         sys.exit(1)
     
     config_file = sys.argv[1]
@@ -1283,6 +1215,3 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Error occured while running: {str(e)}")
         raise e
-
-    
-
