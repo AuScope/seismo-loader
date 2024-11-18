@@ -318,21 +318,21 @@ def add_marker_to_cluster(fg, latitude, longitude, color, edge_color, size, fill
     #     #     # fill_color=color,
     #     #     # fill_opacity=fill_opacity,
     #     # ))
-         
-            
+                   
 def clear_map_layers(map_object):
     """
     Remove all FeatureGroup layers from the map object.
     """
     if map_object is not None:
-        layers_to_remove = []
-        for key, layer in map_object._children.items():
-            if isinstance(layer, (folium.map.FeatureGroup)):
-                layers_to_remove.append(key)
-        
-        for key in layers_to_remove:
-            map_object._children.pop(key)
-        
+        try:
+            layers_to_remove = [
+                key for key, layer in map_object._children.items()
+                if isinstance(layer, folium.map.FeatureGroup)
+            ]
+            for key in layers_to_remove:
+                map_object._children.pop(key)
+        except Exception as e:
+            print(f"Error clearing map layers: {e}")     
 
 #def get_marker_size(magnitude):
 #    import math
