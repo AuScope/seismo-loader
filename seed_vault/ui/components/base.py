@@ -62,7 +62,7 @@ class BaseComponentTexts:
             self.BTN_GET_DATA = "Get Stations"
             self.SELECT_DATA_TITLE = "Select Stations from Map or Table"
             self.SELECT_MARKER_TITLE = "#### Select Stations from map"
-            self.SELECT_MARKER_MSG   = "Select an station from map and Add to Selection."
+            self.SELECT_MARKER_MSG   = "Select a station from map and Add to Selection."
             self.SELECT_DATA_TABLE_TITLE = "Select Stations from table"
             self.SELECT_DATA_TABLE_MSG = "Tick stations from the table to view your selected stations on the map."
 
