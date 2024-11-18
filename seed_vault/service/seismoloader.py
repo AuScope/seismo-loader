@@ -358,21 +358,24 @@ def TOFIX__output_best_channels(nn,sta,t):
         return []
 
 
-def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,before_p_sec=20,after_p_sec=160,model=None,settings=None):
+def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,
+                           before_p_sec=20,after_p_sec=160,
+                           model=None,settings=None,highest_sr_only=True):
     """ 
     Collect requests for event eq for stations in inv 
     """
     settings, db_manager = setup_paths(settings)
     origin = eq.origins[0] # default to the primary I suppose
     ot = origin.time
-    sub_inv = inv.select(time = ot) # Loose filter to select only stations that were running during the earthquake start
+    if highest_sr_only:
+        sub_inv = select_highest_samplerate(inv,time=ot,minSR=5) #filter by time and also select highest samplerate
+    else:
+        sub_inv = inv.select(time = ot) #only filter by time
     before_p_sec = settings.event.before_p_sec
     after_p_sec = settings.event.after_p_sec
     # Failsafe to ensure a model is loaded
     if not model:
         model = TauPyModel('IASP91')
-
-    # TODO: further filter by selecting highest samplerate channels automatically
 
     requests_per_eq = []
     arrivals_per_eq = []
