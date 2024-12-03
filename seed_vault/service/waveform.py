@@ -36,8 +36,18 @@ def check_is_archived(cursor, req: SeismoQuery):
         return False
     return True
 
-
+#this is a simpler version.. if the data doesn't exist it just returns an empty stream
 def get_local_waveform(req: SeismoQuery, settings: SeismoLoaderSettings):
+    client = LocalClient(settings.sds_path)
+    st = client.get_waveforms(network=req.network,station=req.station,
+                            location=req.location,channel=req.channel,
+                            starttime=UTCDateTime(req.starttime),endtime=UTCDateTime(req.endtime))
+    if not st:
+        raise NotFoundError("Not Found: the requested data was not found in local archived database.")
+    return st
+
+
+def get_local_waveform_OLD(req: SeismoQuery, settings: SeismoLoaderSettings):
     with safe_db_connection(settings.db_path) as conn:
         cursor = conn.cursor()
         if check_is_archived(cursor, req):
