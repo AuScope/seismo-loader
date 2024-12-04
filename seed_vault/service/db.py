@@ -438,6 +438,19 @@ class DatabaseManager:
                 return (result[0], result[1])
         return None
 
+    # expanded version of the above to include distances and azimth
+    def fetch_arrivals_distances(self, event_id, netcode, stacode):
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT p_arrival, s_arrival, dist_km, dist_deg, azimuth 
+                FROM arrival_data 
+                WHERE event_id = ? AND s_netcode = ? AND s_stacode = ?
+            ''', (event_id, netcode, stacode))
+            result = cursor.fetchone()
+            if result:
+                return (result[0], result[1], result[2], result[3], result[4])
+        return None
 
 
 
