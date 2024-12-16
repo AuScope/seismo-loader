@@ -1086,95 +1086,92 @@ def run_event(settings: SeismoLoaderSettings):
     try:
         ttmodel = TauPyModel(settings.event.model)
     except Exception as e:
-        print("Issue loading TauPyModel ",settings.event.model, e, "defaulting to IASP91")
         ttmodel = TauPyModel('IASP91')
+    event_streams = []
 
-    # Loop through events
-    for i,eq in enumerate(settings.event.selected_catalogs):
-
+    for i, eq in enumerate(settings.event.selected_catalogs):
         # Collect requests
-        requests,new_arrivals,p_arrivals = collect_requests_event(
+        requests, new_arrivals, p_arrivals = collect_requests_event(
             eq, settings.station.selected_invs,
             model=ttmodel,
             settings=settings
         )
 
-        # Import any new arrival info into our database
+        # Import any new arrival info into database
         if new_arrivals:
             db_manager.bulk_insert_arrival_data(new_arrivals)
-            print(" ~ %d new arrivals added to database" % len(new_arrivals))        
-        # Remove any for data we already have (requires db be updated)
-        pruned_requests= prune_requests(requests, db_manager)
 
-        if len(pruned_requests) < 1:
-            print("--> Event already downloaded (%d/%d) %s (%.4f lat %.4f lon %.1f km depth) ...\n" % (i+1,len(settings.event.selected_catalogs),
-            eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))
-            continue
-        else:
-            print("--> Downloading event (%d/%d) %s (%.4f lat %.4f lon %.1f km depth) ...\n" % (i+1,len(settings.event.selected_catalogs),
-            eq.origins[0].time,eq.origins[0].latitude,eq.origins[0].longitude,eq.origins[0].depth/1000))            
+        # Remove requests for data we already have
+        pruned_requests = prune_requests(requests, db_manager)
 
-        # Combine these into fewer (but larger) requests
-        # this probably makes little for sense EVENTS, but its inexpensive and good for testing purposes
-        combined_requests = combine_requests(pruned_requests)
+        # Process new data if needed
+        if pruned_requests:
+            combined_requests = combine_requests(pruned_requests)
+            
+            # Setup clients for restricted data
+            waveform_clients = {'open': waveform_client}
+            requested_networks = [ele[0] for ele in combined_requests]
+            
+            for cred in settings.auths:
+                cred_net = cred.nslc_code.split('.')[0].upper()
+                if cred_net not in requested_networks:
+                    continue
+                try:
+                    new_client = Client(settings.waveform.client, 
+                                     user=cred.username.upper(),
+                                     password=cred.password)
+                    waveform_clients.update({cred_net: new_client})
+                except Exception as e:
+                    print(f"Issue creating client for {cred_net}: {str(e)}")
 
-        # Add additional clients if user is requesting any restricted data
-        waveform_clients= {'open':waveform_client}
-        requested_networks = [ele[0] for ele in combined_requests]
-        print('settings.waveform.client:', settings.waveform.client)
+            # Archive new data
+            for request in combined_requests:
+                try:
+                    archive_request(request, waveform_clients, settings.sds_path, db_manager)
+                except Exception as e:
+                    print(f"Error archiving request {request}: {str(e)}")
 
-        # right now this probably only works for network-based credentials only
-        for cred in settings.auths:
-            cred_net = cred.nslc_code.split('.')[0].upper()
-            if cred_net not in requested_networks:
-                continue
+        # Now read all data for this event using get_local_waveform
+        event_stream = obspy.Stream()
+        for req in requests:  # Use original requests to get all data
+            query = SeismoQuery(
+                network=req[0],
+                station=req[1],
+                location=req[2],
+                channel=req[3],
+                starttime=req[4],
+                endtime=req[5]
+            )
+            
             try:
-                new_client = Client(settings.waveform.client,user=cred.username.upper(),password=cred.password)
-                waveform_clients.update({cred_net:new_client})
-            except:
-                print("Issue creating client: %s %s via %s:%s" % (settings.waveform.client,cred.nslc_code,cred.username,cred.password))
-
-        # Archive to disk and update database
-        for request in combined_requests:
-            time.sleep(0.05) #to help ctrl-C out if needed
-            print(request)
-            try: 
-                archive_request(request,waveform_clients,settings.sds_path,db_manager)
+                st = get_local_waveform(query, settings)
+                if st:
+                    # Get arrival information from database
+                    arrivals = db_manager.fetch_arrivals_distances(
+                        str(eq.preferred_origin_id),
+                        query.network,
+                        query.station
+                    )
+                    
+                    if arrivals:
+                        # Add metadata to each trace
+                        for tr in st:
+                            tr.stats.event_id = str(eq.resource_id)
+                            tr.stats.p_arrival = arrivals[0]
+                            tr.stats.s_arrival = arrivals[1]
+                            tr.stats.distance_km = arrivals[2]
+                            tr.stats.distance_deg = arrivals[3]
+                            tr.stats.azimuth = arrivals[4]
+                    
+                    event_stream += st
             except Exception as e:
-                print("Event request not successful: ",request, str(e))
-        
-    # The below is for plotting (?) PLEASE REVIEW!
-    time_series = []
-    for req in requests:
-        data = pd.DataFrame()
-        query = SeismoQuery(
-            network = req[0],
-            station = req[1],
-            location = req[2],
-            channel = req[3],
-            starttime = req[4],
-            endtime = req[5]
-        )
-        try:
-            data = stream_to_dataframe(get_local_waveform(query, settings))
-        except Exception as e:
-            print(str(e))
-        
-        # Get P arrival time for this waveform
-        station_id = f"{query.network}.{query.station}"
-        p_arrival = p_arrivals.get(station_id)
-        time_series.append({
-            'Network': query.network,
-            'Station': query.station,
-            'Location': query.location,
-            'Channel': query.channel,
-            'Data': data,
-            'P_Arrival': p_arrival
-        })
-        
-    return time_series
+                print(f"Error reading data for {query.network}.{query.station}: {str(e)}")
+                continue
 
+        if len(event_stream) > 0:
+            event_streams.append(event_stream)
 
+    return event_streams
 
 def run_main(settings: SeismoLoaderSettings = None, from_file=None):
     if not settings and from_file:
