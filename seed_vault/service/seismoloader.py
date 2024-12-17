@@ -28,7 +28,7 @@ from seed_vault.enums.config import DownloadType, GeoConstraintType
 from seed_vault.service.utils import is_in_enum
 from seed_vault.service.db import DatabaseManager
 from seed_vault.service.waveform import get_local_waveform, stream_to_dataframe
-from obspy.clients.fdsn.header import URL_MAPPINGS
+from obspy.clients.fdsn.header import URL_MAPPINGS, FDSNNoDataException
 
 ### request status codes (TBD more:
 # 204 = no data
@@ -779,33 +779,44 @@ def get_stations(settings: SeismoLoaderSettings):
 
     elif (not inventory and settings.station.geo_constraint):
         for geo in settings.station.geo_constraint:
-            if geo.geo_type == GeoConstraintType.BOUNDING:
-                ## TODO Test if all variables exist / error if not
-                curr_inv = station_client.get_stations(
-                    minlatitude =geo.coords.min_lat,
-                    maxlatitude =geo.coords.max_lat,
-                    minlongitude=geo.coords.min_lng,
-                    maxlongitude=geo.coords.max_lng,
-                    **kwargs
-                )
-            elif geo.geo_type == GeoConstraintType.CIRCLE:
-                ## TODO Test if all variables exist / error if not
-                curr_inv = station_client.get_stations(
-                    minradius=geo.coords.min_radius,
-                    maxradius=geo.coords.max_radius,
-                    latitude=geo.coords.lat,
-                    longitude=geo.coords.lng,
-                    **kwargs
-                )
-            else:
-                print(f"Unknown Geometry type: {geo.geo_type}")
+            curr_inv = None
+            try:
+                if geo.geo_type == GeoConstraintType.BOUNDING:
+                    ## TODO Test if all variables exist / error if not
+                    curr_inv = station_client.get_stations(
+                        minlatitude =geo.coords.min_lat,
+                        maxlatitude =geo.coords.max_lat,
+                        minlongitude=geo.coords.min_lng,
+                        maxlongitude=geo.coords.max_lng,
+                        **kwargs
+                    )
+                elif geo.geo_type == GeoConstraintType.CIRCLE:
+                    ## TODO Test if all variables exist / error if not
+                    curr_inv = station_client.get_stations(
+                        minradius=geo.coords.min_radius,
+                        maxradius=geo.coords.max_radius,
+                        latitude=geo.coords.lat,
+                        longitude=geo.coords.lng,
+                        **kwargs
+                    )
+                else:
+                    print(f"Unknown Geometry type: {geo.geo_type}")
+            except FDSNNoDataException:
+                print(f"No stations found in {station_client.base_url} with given geographic bounds")
+                pass
 
-            if inv:
-                inv += curr_inv
-            else:
-                inv = curr_inv
+            if curr_inv is not None:
+                if inv:
+                    inv += curr_inv
+                else:
+                    inv = curr_inv
     else: # No geographic constraint, search via inventory alone
-        inv = station_client.get_stations(**kwargs)
+        try:
+            inv = station_client.get_stations(**kwargs)
+        except FDSNNoDataException:
+            print(f"No stations found in {station_client.base_url} with given parameters")
+            return None
+
 
     # Remove unwanted stations or networks
     if settings.station.exclude_stations:
