@@ -866,26 +866,30 @@ class BaseComponent:
             if 'is_selected' not in self.df_markers.columns:
                 self.df_markers['is_selected'] = False
                 
-            if self.df_markers.loc[self.clicked_marker_info['id'] - 1, 'is_selected']:
-                st.success(selected_data)
-            else:
-                st.warning(selected_data)
+            try:
+                if self.df_markers.loc[self.clicked_marker_info['id'] - 1, 'is_selected']:
+                    st.success(selected_data)
+                else:
+                    st.warning(selected_data)
 
-            if self.clicked_marker_info['step'] == self.step_type:
-                if st.button("Add to Selection", key=self.get_key_element("Add to Selection")):                    
-                    self.sync_df_markers_with_df_edit()
-                    self.df_markers.loc[self.clicked_marker_info['id'] - 1, 'is_selected'] = True
-                    self.refresh_map_selection()
-                    return
+                if self.clicked_marker_info['step'] == self.step_type:
+                    if st.button("Add to Selection", key=self.get_key_element("Add to Selection")):
+                        self.sync_df_markers_with_df_edit()
+                        self.df_markers.loc[self.clicked_marker_info['id'] - 1, 'is_selected'] = True
+                        self.refresh_map_selection()
+                        return
             
 
-            if self.df_markers.loc[self.clicked_marker_info['id'] - 1, 'is_selected']:
-                if st.button("Unselect", key=self.get_key_element("Unselect")):
-                    self.df_markers.loc[self.clicked_marker_info['id'] - 1, 'is_selected'] = False
-                    # map_component.clicked_marker_info = None
-                    # map_component.map_output["last_object_clicked"] = None
-                    self.refresh_map_selection()
-                    return
+                if self.df_markers.loc[self.clicked_marker_info['id'] - 1, 'is_selected']:
+                    if st.button("Unselect", key=self.get_key_element("Unselect")):
+                        self.df_markers.loc[self.clicked_marker_info['id'] - 1, 'is_selected'] = False
+                        # map_component.clicked_marker_info = None
+                        # map_component.map_output["last_object_clicked"] = None
+                        self.refresh_map_selection()
+                        return
+
+            except KeyError:
+                print("Selected map marker not found")
 
         def map_tools_card():
             if not self.df_markers.empty:
