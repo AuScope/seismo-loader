@@ -763,9 +763,13 @@ def get_stations(settings: SeismoLoaderSettings):
     if 'station' not in station_client.services.keys():
         print("Station service not available at %s, no stations returned" % station_client.base_url)
         return None
+
+    # Remove kwargs keys not in station_client
+    new_kwargs = kwargs.copy()
     for key in kwargs.keys():
         if key not in station_client.services['station'].keys():
-            del kwargs[key]
+            del new_kwargs[key]
+    kwargs = new_kwargs
 
     inv = None
     inventory = settings.station.local_inventory
