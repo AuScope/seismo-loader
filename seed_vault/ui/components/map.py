@@ -164,7 +164,7 @@ def add_data_points(df, cols_to_disp, step: Steps, selected_idx=[], col_color=No
             # If too many categories then truncate
             if len(unique_categories) > max_display_categories:
                 display_cats = unique_categories[:max_display_categories]
-                np.append(display_cats, "...")
+                display_cats = np.append(display_cats, "...")
             else:
                 display_cats = unique_categories
 
