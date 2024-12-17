@@ -872,9 +872,13 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
     if 'event' not in event_client.services.keys():
         print("Event service not available at %s, no events returned" % event_client.base_url)
         return catalog
+
+    # Remove kwargs entries not in event_client
+    new_kwargs = kwargs.copy()
     for key in kwargs.keys():
         if key not in event_client.services['event'].keys():
-            del kwargs[key]
+            del new_kwargs[key]
+    kwargs = new_kwargs
 
     if len(settings.event.geo_constraint) == 0:
         try:
