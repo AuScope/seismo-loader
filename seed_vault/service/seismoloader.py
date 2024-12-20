@@ -81,6 +81,8 @@ def to_timestamp(time_obj):
 
 def miniseed_to_db_element(file_path):
     "Create a database element from a miniseed file"
+    if not os.path.isfile(file_path):
+        return None
     try:
         file = os.path.basename(file_path)
         parts = file.split('.')
@@ -775,7 +777,7 @@ def get_stations(settings: SeismoLoaderSettings):
     inventory = settings.station.local_inventory
     if inventory:
         # User has specified this specific pre-existing (filepath) inventory to use
-        inv = obspy.read_inventory(inventory)
+        inv = obspy.read_inventory(inventory,level='channel')
 
     elif (not inventory and settings.station.geo_constraint):
         for geo in settings.station.geo_constraint:
