@@ -252,7 +252,7 @@ class DatabaseManager:
                         # Extend the current segment
                         current_segment[6] = max(endtime, UTCDateTime(current_segment[6])).isoformat()
                         # Keep the latest importtime
-                        current_segment[7] = max(importtime, current_segment[7])
+                        current_segment[7] = max(importtime, current_segment[7]) ### bug if database was deleted and both are None
                         to_delete.append(id)
                     else:
                         # Start a new segment
@@ -455,7 +455,7 @@ class DatabaseManager:
 
 
 ###### Legacy functions below
-
+"""
 def setup_database(db_path):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -480,7 +480,7 @@ def setup_database(db_path):
 
 @contextlib.contextmanager
 def safe_db_connection(db_path, max_retries=3, initial_delay=1):
-    """Context manager for safe database connections with retry mechanism."""
+    #Context manager for safe database connections with retry mechanism.
     retry_count = 0
     delay = initial_delay
     while retry_count < max_retries:
@@ -503,3 +503,4 @@ def safe_db_connection(db_path, max_retries=3, initial_delay=1):
         finally:
             if 'conn' in locals():
                 conn.close()
+"""                

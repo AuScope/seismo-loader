@@ -5,7 +5,6 @@ from obspy import UTCDateTime
 from obspy.clients.filesystem.sds import Client as LocalClient
 
 from seed_vault.models.config import SeismoLoaderSettings, SeismoQuery
-from seed_vault.service.db import safe_db_connection
 from seed_vault.models.exception import NotFoundError
 
 def stream_to_dataframe(stream):
@@ -45,20 +44,3 @@ def get_local_waveform(req: SeismoQuery, settings: SeismoLoaderSettings):
     if not st:
         raise NotFoundError("Not Found: the requested data was not found in local archived database.")
     return st
-
-
-def get_local_waveform_OLD(req: SeismoQuery, settings: SeismoLoaderSettings):
-    with safe_db_connection(settings.db_path) as conn:
-        cursor = conn.cursor()
-        if check_is_archived(cursor, req):
-            # TODO: An error handle is required for when the data is not available
-            # in sds localtion.
-            client = LocalClient(settings.sds_path)
-            st = client.get_waveforms(network=req.network,station=req.station,
-                            location=req.location,channel=req.channel,
-                            starttime=UTCDateTime(req.starttime),endtime=UTCDateTime(req.endtime))
-            return st
-        
-        raise NotFoundError("Not Found: the requested data was not found in local archived database.")
-
-

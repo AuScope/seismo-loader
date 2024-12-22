@@ -9,7 +9,7 @@ import multiprocessing
 import configparser
 import pandas as pd
 from tqdm import tqdm
-from tabulate import tabulate # non-standard. this is just to display the db contents
+## NOT USED ANYMORE from tabulate import tabulate # non-standard. this is just to display the db contents
 import random
 from typing import List
 from collections import defaultdict
@@ -53,7 +53,7 @@ def read_config(config_file):
     for section in config.sections():
         processed_config.add_section(section)
         for key, value in config.items(section):
-            print("YYYYYYYYYY",key,value,section)
+
             if section.upper() in ['AUTH','DATABASE','SDS','WAVEFORM']:
                 processed_key = key
                 processed_value = value if value is not None else None
@@ -68,7 +68,7 @@ def read_config(config_file):
 
 
 def to_timestamp(time_obj):
-    """ Anything to timestamp helper """
+    """ Anything to timestamp helper. """
     if isinstance(time_obj, (int, float)):
         return float(time_obj)
     elif isinstance(time_obj, datetime):
@@ -80,7 +80,7 @@ def to_timestamp(time_obj):
 
 
 def miniseed_to_db_element(file_path):
-    "Create a database element from a miniseed file"
+    """ Create a database element from a miniseed file. """
     if not os.path.isfile(file_path):
         return None
     try:
@@ -110,10 +110,10 @@ def miniseed_to_db_element(file_path):
 
 
 def stream_to_db_element(st):
-    """Create a database element from a stream 
+    """ Create a database element from a stream 
     (assuming all traces have same NSLC!)
     just a bit faster than re-opening the file 
-    again via miniseed_to_db_element"""
+    again via miniseed_to_db_element. """
 
     if len(st) == 0:
         print(f"Warning: No traces found in {file_path}")
@@ -129,14 +129,14 @@ def stream_to_db_element(st):
 
 def populate_database_from_sds(sds_path, db_path,
     search_patterns=["??.*.*.???.?.????.???"],
-    newer_than=None,num_processes=None, gap_tolerance = 60):
+    newer_than=None, num_processes=None, gap_tolerance = 60):
 
-    """Utility function to populate the archive_table in our database """
+    """ Utility function to populate the archive_table in our database. """
 
     db_manager = DatabaseManager(db_path)
 
     # Set to possibly the maximum number of CPUs!
-    if num_processes is None or num_processes == 0:
+    if num_processes is None or num_processes <= 0:
         num_processes = multiprocessing.cpu_count()
     
     # Convert newer_than (means to filter only new files) to timestamp
@@ -181,77 +181,60 @@ def populate_database_from_sds(sds_path, db_path,
     db_manager.join_continuous_segments(gap_tolerance)
 
 
-#### now moved to db.py as part of DatabaseManager class
-def join_continuous_segments(db_manager, gap_tolerance=60):
-    """
-    Join continuous data segments in the database, even across day boundaries.
-    
-    :param db_manager: DatabaseManager instance
-    :param gap_tolerance: Maximum allowed gap (in seconds) to still consider segments continuous
-    """
-    with db_manager.connection() as conn:
-        cursor = conn.cursor()
-        
-        # Fetch all data sorted by network, station, location, channel, and starttime
-        cursor.execute('''
-            SELECT id, network, station, location, channel, starttime, endtime
-            FROM archive_data
-            ORDER BY network, station, location, channel, starttime
-        ''')
-        
-        all_data = cursor.fetchall()
-        
-        to_delete = []
-        to_update = []
-        current_segment = None
-        
-        for row in all_data:
-            id, network, station, location, channel, starttime, endtime = row
-            starttime = UTCDateTime(starttime)
-            endtime = UTCDateTime(endtime)
+## maybe this simple version is fine enough... 
+def populate_database_from_files_dumb(cursor, file_paths=[]):
+    """ Quickly insert/update a few SDS archive files into the SQL database. Assume cursor already open! """
+    now = int(datetime.datetime.now().timestamp())
+    for fp in file_paths:
+        result  = miniseed_to_db_element(fp)
+        if result:
+            result = result + (now,)
+            cursor.execute('''
+                INSERT OR REPLACE INTO archive_data
+                (network, station, location, channel, starttime, endtime, importtime)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', result)
+
+
+def populate_database_from_files(cursor, file_paths=[]):
+    """ Quickly insert/update a few SDS archive files into the SQL database. """
+    now = int(datetime.datetime.now().timestamp())
+    for fp in file_paths:
+        result = miniseed_to_db_element(fp)
+        if result:
+            network, station, location, channel, start_timestamp, end_timestamp = result
             
-            if current_segment is None:
-                current_segment = list(row)
-            else:
-                # Check if this segment is continuous with the current one
-                if (network == current_segment[1] and
-                    station == current_segment[2] and
-                    location == current_segment[3] and
-                    channel == current_segment[4] and
-                    starttime - UTCDateTime(current_segment[6]) <= gap_tolerance):
-                    
-                    # Extend the current segment
-                    current_segment[6] = max(endtime, UTCDateTime(current_segment[6])).isoformat()
-                    to_delete.append(id)
-                else:
-                    # Start a new segment
-                    to_update.append(tuple(current_segment))
-                    current_segment = list(row)
-        
-        # Don't forget the last segment
-        if current_segment:
-            to_update.append(tuple(current_segment))
-        
-        # Perform the updates
-        cursor.executemany('''
-            UPDATE archive_data
-            SET endtime = ?
-            WHERE id = ?
-        ''', [(row[6], row[0]) for row in to_update])
-        
-        # Delete the merged segments
-        if to_delete:
-            cursor.execute(f'''
-                DELETE FROM archive_data
-                WHERE id IN ({','.join('?' * len(to_delete))})
-            ''', to_delete)
-        
-    print(f"Joined segments. Deleted {len(to_delete)} rows, updated {len(to_update)} rows.")
+            # First check for existing overlapping spans
+            cursor.execute('''
+                SELECT starttime, endtime FROM archive_data
+                WHERE network = ? AND station = ? AND location = ? AND channel = ?
+                AND NOT (endtime < ? OR starttime > ?)
+            ''', (network, station, location, channel, start_timestamp, end_timestamp))
+            
+            overlaps = cursor.fetchall()
+            if overlaps:
+                # Merge with existing spans
+                start_timestamp = min(start_timestamp, min(row[0] for row in overlaps))
+                end_timestamp = max(end_timestamp, max(row[1] for row in overlaps))
+                
+                # Delete overlapping spans
+                cursor.execute('''
+                    DELETE FROM archive_data
+                    WHERE network = ? AND station = ? AND location = ? AND channel = ?
+                    AND NOT (endtime < ? OR starttime > ?)
+                ''', (network, station, location, channel, start_timestamp, end_timestamp))
+            
+            # Insert the new or merged span
+            cursor.execute('''
+                INSERT INTO archive_data
+                (network, station, location, channel, starttime, endtime, importtime)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (network, station, location, channel, start_timestamp, end_timestamp, now))
 
 
 # Requests for Continuous Data
 def collect_requests(inv, time0, time1, days_per_request=3):
-    """ Collect all requests required to download everything in inventory, split into X-day periods """
+    """ Collect all requests required to download everything in inventory, split into X-day periods. """
     requests = []  # network, station, location, channel, starttime, endtime
 
     # Sanity check request times
@@ -286,9 +269,11 @@ def collect_requests(inv, time0, time1, days_per_request=3):
 
 # Requests for shorter, event-based data
 def get_p_s_times(eq, dist_deg, ttmodel):
+    """ Get first P/S arrivals given an earthquake object, distance, and traveltime model. """
 
     eq_time = eq.origins[0].time
     eq_depth = eq.origins[0].depth / 1000  # depths are in meters for QuakeML
+
     try:
         phasearrivals = ttmodel.get_travel_times(
             source_depth_in_km=eq_depth,
@@ -298,21 +283,25 @@ def get_p_s_times(eq, dist_deg, ttmodel):
     except Exception as e:
         print(f"Error calculating travel times: {str(e)}")
         return None, None
+
     p_arrival_time = None
     s_arrival_time = None
-    # "P" is Whatever the first arrival is.. not necessarily literally uppercase P
+    # "P" is whatever the first arrival is.. not necessarily literally uppercase P
     if phasearrivals[0]:
         p_arrival_time = eq_time + phasearrivals[0].time
-    # Now get S... (or s for local)... (or nothing if > 100deg)
+
+    # Now get "S"...
     for arrival in phasearrivals:
         if arrival.name.upper() == 'S' and s_arrival_time is None:
             s_arrival_time = eq_time + arrival.time
         if p_arrival_time and s_arrival_time:
             break
+
     if p_arrival_time is None:
         print(f"No direct P-wave arrival found for distance {dist_deg} degrees")
     if s_arrival_time is None:
         print(f"No direct S-wave arrival found for distance {dist_deg} degrees")
+
     return p_arrival_time, s_arrival_time
 
 
@@ -336,6 +325,7 @@ def select_highest_samplerate(inv, time=None, minSR=10):
     return inv
 
 
+### probably cut this function entirely for now
 # TODO function to sort by maximum available sampling rate (have written this already somewhere)
 cha_rank = ['CH','HH','BH','EH','HN','EN','SH','LH']
 loc_rank = ['','10','00','20'] # sort of dangerous as no one does these in the same way
@@ -363,18 +353,18 @@ def TOFIX__output_best_channels(nn,sta,t):
 def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,
                            before_p_sec=20,after_p_sec=160,
                            model=None,settings=None,highest_sr_only=True):
-    """ 
-    Collect requests for event eq for stations in inv 
-    """
+    """ Collect requests for event eq for stations in inv. """
     settings, db_manager = setup_paths(settings)
-    origin = eq.origins[0] # default to the primary I suppose
+    origin = eq.origins[0] # defaulting to preferred origin
     ot = origin.time
+    
     if highest_sr_only:
         sub_inv = select_highest_samplerate(inv,time=ot,minSR=5) #filter by time and also select highest samplerate
     else:
         sub_inv = inv.select(time = ot) #only filter by time
     before_p_sec = settings.event.before_p_sec
     after_p_sec = settings.event.after_p_sec
+
     # Failsafe to ensure a model is loaded
     if not model:
         model = TauPyModel('IASP91')
@@ -431,6 +421,7 @@ def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,
                                     sta_start,sta_end,
                                     dist_deg,dist_m/1000,azi,p_time.timestamp,
                                     s_time_timestamp,settings.event.model))
+
             # Add to our requests
             for cha in sta: # TODO will have to had filtered channels prior to this, else will grab them all
                 t_end = min(t_end, datetime.datetime.now().timestamp() - 120)
@@ -440,7 +431,7 @@ def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,
                     sta.code,
                     cha.location_code,
                     cha.code,
-                    # fix the time difference, it will always have 8 hours difference. (all times should be UTC by default??)
+                    # NEED REVIEW: not sure if this is needed, all times should be assumed UTC
                     datetime.datetime.fromtimestamp(t_start, tz=datetime.timezone.utc).isoformat(),
                     datetime.datetime.fromtimestamp(t_end,   tz=datetime.timezone.utc).isoformat() ))
 
@@ -448,9 +439,7 @@ def collect_requests_event(eq,inv,min_dist_deg=30,max_dist_deg=90,
 
 
 def combine_requests(requests):
-    """
-    Combine requests to reduce the volume of requests to the server
-    """
+    """ Combine requests for efficiency. """
 
     # Group requests by network and time range
     groups = defaultdict(list)
@@ -481,8 +470,23 @@ def combine_requests(requests):
     
     return combined_requests
 
+def get_sds_filenames(n, s, l, c, time_start, time_end, sds_path):
+    current_time = time_start
+    filenames = []
+    while current_time <= time_end:
+        year = str(current_time.year)
+        doy = str(current_time.julday).zfill(3)
+        
+        path = f"{sds_path}/{year}/{n}/{s}/{c}.D/{n}.{s}.{l}.{c}.D.{year}.{doy}"
+        
+        filenames.append(path)
+        
+        current_time += 86400
+    
+    return filenames
 
-def prune_requests(requests, db_manager, min_request_window=3):
+
+def prune_requests(requests, db_manager, sds_path, min_request_window=3):
     """
     Remove any overlapping requests where already-archived data may exist.
     Ignore requests that are less than min_request_window seconds.
@@ -504,6 +508,10 @@ def prune_requests(requests, db_manager, min_request_window=3):
             network, station, location, channel, start_time, end_time = req
             start_time = UTCDateTime(start_time)
             end_time = UTCDateTime(end_time)
+
+            # Check if target filenames exist already.. may need to do a quick database update
+            existing_filenames = get_sds_filenames(network, station, location, channel, 
+                start_time, end_time, sds_path)
             
             # Query the database for existing data
             cursor.execute('''
@@ -514,9 +522,24 @@ def prune_requests(requests, db_manager, min_request_window=3):
             ''', (network, station, location, channel, start_time.isoformat(), end_time.isoformat()))
             
             existing_data = cursor.fetchall()
+
+
+            # If SDS filenames are there, but database is empty.. need to update db before continuing
+            if existing_filenames and len(existing_data) < len(existing_filenames):
+                populate_database_from_files(cursor, file_paths=existing_filenames)
+                
+                # RE-Query the newly-updated database
+                cursor.execute('''
+                    SELECT starttime, endtime FROM archive_data
+                    WHERE network = ? AND station = ? AND location = ? AND channel = ?
+                    AND endtime >= ? AND starttime <= ?
+                    ORDER BY starttime
+                ''', (network, station, location, channel, start_time.isoformat(), end_time.isoformat()))
+                
+                existing_data = cursor.fetchall()
             
-            if not existing_data:
-                # If no existing data, keep the entire request
+            if not existing_data and not existing_filenames:
+                # If no evidence we have this data already, keep the entire request
                 pruned_requests.append(req)
             else:
                 # Process gaps in existing data
@@ -549,8 +572,8 @@ def prune_requests(requests, db_manager, min_request_window=3):
 
 def archive_request(request, waveform_clients, sds_path, db_manager):
     """ Send a request to an FDSN center, parse it, save to archive, and update database """
-
     try:
+        time0 = time.time()
         if request[0] in waveform_clients.keys():  # Per-network authentication
             wc = waveform_clients[request[0]]
         elif request[0]+'.'+request[1] in waveform_clients.keys():  # Per-station e.g. NN.SSSSS (not currently working TODO)
@@ -566,8 +589,8 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
             'starttime':UTCDateTime(request[4]),
             'endtime':UTCDateTime(request[5])
         }
-        # issue here if any of these array values are too long (probably station list)
-        # if so, break them apart
+
+        # If the request is too long, break it apart 
         if len(request[1]) > 24:  # Assuming station is the field that might be too long
             st = obspy.Stream()
             split_stations = request[1].split(',')
@@ -579,9 +602,14 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
         else:
             st = wc.get_waveforms(**kwargs)
 
+        # Download info
+        download_time = time.time() - time0
+        download_size = sum(tr.data.nbytes for tr in st)/1024**2 # MB
+        print(f"      Downloaded {download_size:.2f} MB @ {download_size/download_time:.2f} MB/s")    
+
     except Exception as e:
-        print(f"Error fetching data ---------------: {request} {str(e)}")
-        # >> TODO add failure & denied to database also? will require DB structuring and logging HTTP error response
+        print(f" Error fetching data ---------------: {request} {str(e)}")
+        # TODO add failure & denied to database also? will require DB structuring and logging HTTP error response
         return 
 
     # A means to group traces by day to avoid slowdowns with highly fractured data
@@ -631,22 +659,23 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
                 continue
             existing_st += day_stream
             existing_st.merge(method=-1, fill_value=None)
-            existing_st._cleanup()
+            existing_st._cleanup(misalignment_threshold=0.25)
             if existing_st:
-                print(f"  merging {full_path}")
+                print(f"  ... Merging {full_path}")
         else:
             existing_st = day_stream
             if existing_st:
-                print(f"  writing {full_path}")
+                print(f"  ... Writing {full_path}")
 
         existing_st = obspy.Stream([tr for tr in existing_st if len(tr.data) > 0])
 
         if existing_st:
             try:
-                existing_st.write(full_path, format="MSEED", encoding='STEIM2') #MSEED/STEIM2 are normal but users may want to change these... someday
+                existing_st.write(full_path, format="MSEED", encoding='STEIM2') # MSEED/STEIM2 are very sensible defaults
                 to_insert_db.append(stream_to_db_element(existing_st))
             except Exception as e:
                 print(f"! Could not write {full_path}: {e}")
+
     # Update database
     try:
         num_inserted = db_manager.bulk_insert_archive_data(to_insert_db)
@@ -657,6 +686,7 @@ def archive_request(request, waveform_clients, sds_path, db_manager):
 
 # MAIN RUN FUNCTIONS
 # ==================================================================
+
 def setup_paths(settings: SeismoLoaderSettings):
     sds_path = settings.sds_path
     if not sds_path:
@@ -678,7 +708,7 @@ def setup_paths(settings: SeismoLoaderSettings):
     return settings, db_manager
 
 
-## ***use ObsPy for the below functions
+## TODO TODO  ***use ObsPy for the below functions
 from obspy.geodetics import kilometer2degrees, degrees2kilometers
 
 def convert_radius_to_degrees(radius_meters):
@@ -724,9 +754,7 @@ def get_selected_stations_at_channel_level(settings: SeismoLoaderSettings):
 
 
 def get_stations(settings: SeismoLoaderSettings):
-    """
-    Refine input args to what is needed for get_stations
-    """
+    """ Refine input args to what is needed for get_stations. """
     print("Running get_stations")
 
     starttime = UTCDateTime(settings.station.date_config.start_time)
@@ -812,6 +840,7 @@ def get_stations(settings: SeismoLoaderSettings):
                     inv += curr_inv
                 else:
                     inv = curr_inv
+
     else: # No geographic constraint, search via inventory alone
         try:
             inv = station_client.get_stations(**kwargs)
@@ -836,8 +865,8 @@ def get_stations(settings: SeismoLoaderSettings):
                 inv += station_client.get_stations(
                     network=n,
                     station=s,
-                    location='*',
-                    channel='[FGDCESHBML][HN]?',
+                    location='*', # may be an issue... should probably follow the location filter NEEDS REVIEW
+                    channel='[FGDCESHBML][HN]?', # we are somewhat dangerously assuming that seismic data follows conventional channel naming... think it's OK though
                     level=settings.station.level.value
                 )
             except:
@@ -872,7 +901,7 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
 
     catalog = Catalog(events=None)
 
-    # todo add more e.g. catalog, contributor
+    # TODO add more e.g. catalog, contributor
     kwargs = {
         'starttime':starttime,
         'endtime':endtime,
@@ -885,7 +914,7 @@ def get_events(settings: SeismoLoaderSettings) -> List[Catalog]:
         'includearrivals':settings.event.include_arrivals,
     }
 
-    # check event_client for compatibility
+    # Check event_client for compatibility
     if 'event' not in event_client.services.keys():
         print("Event service not available at %s, no events returned" % event_client.base_url)
         return catalog
@@ -999,11 +1028,11 @@ def run_continuous(settings: SeismoLoaderSettings):
         return
 
     # Collect requests
-    requests = collect_requests(settings.station.selected_invs,starttime,endtime,
-        days_per_request=settings.waveform.days_per_request)
+    requests = collect_requests(settings.station.selected_invs, 
+        starttime, endtime, days_per_request=settings.waveform.days_per_request)
 
     # Remove any for data we already have (requires updated db)
-    pruned_requests= prune_requests(requests, db_manager)
+    pruned_requests= prune_requests(requests, db_manager, settings.sds_path)
 
     # Break if nothing to do
     if len(pruned_requests) < 1:
@@ -1021,15 +1050,17 @@ def run_continuous(settings: SeismoLoaderSettings):
         if cred_net not in requested_networks:
             continue
         try:
-            new_client = Client(settings.waveform.client,user=cred.username.upper(),password=cred.password)
+            new_client = Client(settings.waveform.client, 
+                user=cred.username.upper(), password=cred.password)
             waveform_clients.update({cred_net:new_client})
         except:
-            print("Issue creating client: %s %s via %s:%s" % (settings.waveform.client,cred.nslc_code,cred.username,cred.password))
+            print("Issue creating client: %s %s via %s:%s" % (settings.waveform.client, 
+                cred.nslc_code, cred.username, cred.password))
             continue
 
     # Archive to disk and updated database
     for request in combined_requests:
-        print("\n Requesting: %s", request)
+        print("\n Requesting: ", request)
         time.sleep(0.05) #to help ctrl-C out if needed
         try:
             archive_request(request, waveform_clients, settings.sds_path, db_manager)
@@ -1063,7 +1094,6 @@ def run_continuous(settings: SeismoLoaderSettings):
         })
 
     return time_series
-
 
 
 def run_event(settings: SeismoLoaderSettings):
@@ -1227,7 +1257,7 @@ def run_main(settings: SeismoLoaderSettings = None, from_file=None):
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python3 seismoloader.py input.cfg") ### I assume this needs updating to new -cli version
+        print("Usage: python3 seismoloader.py input.cfg") ### TODO / REVIEW I assume this needs updating to new -cli version
         sys.exit(1)
     
     config_file = sys.argv[1]
